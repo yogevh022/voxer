@@ -1,4 +1,5 @@
 mod texture;
+mod mat;
 
 use crate::texture::{Texture, TextureAtlas};
 use std::mem;
