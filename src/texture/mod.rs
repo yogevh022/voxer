@@ -1,5 +1,7 @@
 mod atlas;
 mod uv;
+pub use atlas::TextureAtlas;
+pub use atlas::helpers;
 
 #[repr(usize)]
 #[derive(Debug, Copy, Clone)]
@@ -15,7 +17,6 @@ pub struct TextureData {
     pub(crate) kind: Texture,
     pub(crate) source: &'static str,
 }
-
 
 pub const TEXTURE_DIM: u32 = 16;
 pub const TEXTURE_COUNT: usize = Texture::__Count as usize;

@@ -1,5 +1,6 @@
 mod texture;
 
+use crate::texture::{Texture, TextureAtlas};
 use std::mem;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -120,9 +121,8 @@ impl State<'_> {
         };
         surface.configure(&device, &config);
 
-        let img = image::open("textures/images/yoad.png").expect("failed to load yoad.png");
-        let rgba = img.to_rgba8();
-        let (width, height) = rgba.dimensions();
+        let atlas_rgba = get_atlas_image();
+        let (width, height) = atlas_rgba.dimensions();
 
         let texture_size = wgpu::Extent3d {
             width,
@@ -148,7 +148,7 @@ impl State<'_> {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &rgba,
+            &atlas_rgba,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * width),
@@ -164,8 +164,8 @@ impl State<'_> {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
@@ -278,6 +278,15 @@ impl State<'_> {
             texture_bind_group,
         }
     }
+    
+    fn update_vertex_buffer(&mut self, vertices: &[Vertex]) {
+        self.vertex_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(vertices),
+            usage: wgpu::BufferUsages::VERTEX,       
+        });
+        self.num_vertices = vertices.len() as u32;
+    }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let frame = self.surface.get_current_texture()?;
@@ -325,6 +334,12 @@ struct App<'a> {
     state: Option<State<'a>>,
 }
 
+impl<'a> App<'a> {
+    fn test(&mut self, vert: &[Vertex]) {
+        self.state.as_mut().unwrap_or_else(|| panic!("rex")).update_vertex_buffer(vert);
+    }
+}
+
 impl<'a> winit::application::ApplicationHandler for App<'a> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {
@@ -335,7 +350,12 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             let arc_window = Arc::new(window.unwrap());
             self.window = Some(arc_window.clone());
 
+            let atlas = texture::helpers::generate_texture_atlas();
+            _ = atlas.image.save("src/texture/images/atlas.png");
+
             self.state = Some(pollster::block_on(State::new(arc_window)));
+            
+            self.test(&quad_verts_for(Texture::Idk, &atlas));
         }
     }
 
@@ -366,14 +386,42 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
         }
     }
 }
+
+fn quad_verts_for(texture: Texture, atlas: &TextureAtlas) -> [Vertex; 4] {
+    let uv_offset = atlas.uv(texture).offset;
+    [
+        Vertex {
+            position: [-0.5, -0.5, 0.0],
+            tex_coords: [uv_offset[0], uv_offset[1] + atlas.tile_dim],
+        },
+        Vertex {
+            position: [0.5, -0.5, 0.0],
+            tex_coords: [uv_offset[0] + atlas.tile_dim, uv_offset[1] + atlas.tile_dim],
+        },
+        Vertex {
+            position: [0.5, 0.5, 0.0],
+            tex_coords: [uv_offset[0] + atlas.tile_dim, uv_offset[1]],
+        },
+        Vertex {
+            position: [-0.5, 0.5, 0.0],
+            tex_coords: [uv_offset[0], uv_offset[1]],
+        },
+    ]
+}
+
+fn get_atlas_image() -> image::RgbaImage {
+    let atlas_image =
+        image::open("src/texture/images/atlas.png").expect("failed to load atlas.png");
+    atlas_image.to_rgba8()
+}
+
 fn main() {
-    // let atlas = tex_atlas::generate_texture_atlas();
-    // _ = atlas.image.save("textures/images/atlas.png");
-    // let event_loop = winit::event_loop::EventLoop::new().unwrap();
-    //
-    // let mut app = App {
-    //     window: None,
-    //     state: None,
-    // };
-    // event_loop.run_app(&mut app).unwrap();
+    let event_loop = winit::event_loop::EventLoop::new().unwrap();
+
+    let mut app = App {
+        window: None,
+        state: None,
+    };
+    
+    event_loop.run_app(&mut app).unwrap();
 }

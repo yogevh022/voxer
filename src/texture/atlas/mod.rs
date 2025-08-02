@@ -1,28 +1,30 @@
 use crate::texture::uv::TextureUV;
-use crate::texture::{Texture, TEXTURE_COUNT, TEXTURE_DIM};
+use crate::texture::{TEXTURE_COUNT, TEXTURE_DIM, Texture};
 
-pub use self::_TextureAtlas as TextureAtlas;
 pub mod helpers;
 
-pub struct _TextureAtlas {
-    pub cell_dim: u32,
+pub struct TextureAtlas {
+    pub tiles_per_dim: f32,
     pub dim: f32,
+    pub tile_dim: f32,
     pub textures: [TextureUV; TEXTURE_COUNT],
     pub image: image::RgbaImage,
 }
 
-impl _TextureAtlas {
+impl TextureAtlas {
     fn new() -> Self {
-        let cell_dim = (TEXTURE_COUNT as f32).sqrt().ceil() as u32;
-        let dim = TEXTURE_DIM as f32 * cell_dim as f32;
+        let tiles_per_dim = (TEXTURE_COUNT as f32).sqrt().ceil();
+        let dim = TEXTURE_DIM as f32 * tiles_per_dim;
+        let tile_dim = TEXTURE_DIM as f32 / dim;
         Self {
-            cell_dim,
+            tiles_per_dim,
             dim,
+            tile_dim,
             textures: [TextureUV::default(); TEXTURE_COUNT],
             image: image::RgbaImage::new(dim as u32, dim as u32),
         }
     }
-    
+
     pub fn uv(&self, texture: Texture) -> &TextureUV {
         &self.textures[texture as usize]
     }
