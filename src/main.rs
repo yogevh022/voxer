@@ -1,9 +1,11 @@
+mod texture;
+
 use std::mem;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
+use winit::event::*;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
-use winit::event::*;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -34,10 +36,22 @@ impl Vertex {
 }
 
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.5, -0.5, 0.0], tex_coords: [0.0, 1.0] }, // 0
-    Vertex { position: [ 0.5, -0.5, 0.0], tex_coords: [1.0, 1.0] }, // 1
-    Vertex { position: [ 0.5,  0.5, 0.0], tex_coords: [1.0, 0.0] }, // 2
-    Vertex { position: [-0.5,  0.5, 0.0], tex_coords: [0.0, 0.0] }, // 3
+    Vertex {
+        position: [-0.5, -0.5, 0.0],
+        tex_coords: [0.0, 1.0],
+    }, // 0
+    Vertex {
+        position: [0.5, -0.5, 0.0],
+        tex_coords: [1.0, 1.0],
+    }, // 1
+    Vertex {
+        position: [0.5, 0.5, 0.0],
+        tex_coords: [1.0, 0.0],
+    }, // 2
+    Vertex {
+        position: [-0.5, 0.5, 0.0],
+        tex_coords: [0.0, 0.0],
+    }, // 3
 ];
 
 const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
@@ -106,7 +120,7 @@ impl State<'_> {
         };
         surface.configure(&device, &config);
 
-        let img = image::open("src/textures/yoad.png").expect("failed to load yoad.png");
+        let img = image::open("textures/images/yoad.png").expect("failed to load yoad.png");
         let rgba = img.to_rgba8();
         let (width, height) = rgba.dimensions();
 
@@ -137,14 +151,15 @@ impl State<'_> {
             &rgba,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(4* width),
+                bytes_per_row: Some(4 * width),
                 rows_per_image: Some(height),
             },
             texture_size,
         );
-        
-        let diffuse_texture_view = diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
+
+        let diffuse_texture_view =
+            diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -155,27 +170,28 @@ impl State<'_> {
             ..Default::default()
         });
 
-        let texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("texture_bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("texture_bind_group_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
 
         let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("texture_bind_group"),
@@ -188,8 +204,8 @@ impl State<'_> {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
-                }
-            ]
+                },
+            ],
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -340,20 +356,24 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                             }
                         }
                     }
-                    WindowEvent::CursorMoved { device_id: _, position: _ } => {}
+                    WindowEvent::CursorMoved {
+                        device_id: _,
+                        position: _,
+                    } => {}
                     _ => println!("{:?}", event),
                 }
             }
         }
     }
 }
-
 fn main() {
-    let event_loop = winit::event_loop::EventLoop::new().unwrap();
-
-    let mut app = App {
-        window: None,
-        state: None,
-    };
-    event_loop.run_app(&mut app).unwrap();
+    // let atlas = tex_atlas::generate_texture_atlas();
+    // _ = atlas.image.save("textures/images/atlas.png");
+    // let event_loop = winit::event_loop::EventLoop::new().unwrap();
+    //
+    // let mut app = App {
+    //     window: None,
+    //     state: None,
+    // };
+    // event_loop.run_app(&mut app).unwrap();
 }
