@@ -7,6 +7,7 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
+use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 pub struct App<'a> {
@@ -75,8 +76,8 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                     let key_code =
                         input::keycode::get_keycode(event.physical_key).expect("unknown key");
                     match event.state {
-                        ElementState::Pressed => self.input.write().press(key_code),
-                        ElementState::Released => self.input.write().release(key_code),
+                        ElementState::Pressed => self.input.write().keyboard.press(key_code),
+                        ElementState::Released => self.input.write().keyboard.release(key_code),
                     }
                 }
                 _ => {}
@@ -95,17 +96,38 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
         };
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                self.camera_controller.look(delta);
-                self.camera.transform.rotation = self.camera_controller.get_rotation();
+                self.input.write().mouse.set_delta(delta);
             }
             _ => {}
         }
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        let Some(window) = &self.window else {
-            return;
-        };
-        window.request_redraw();
+        self.update();
+        self.input.write().mouse.set_delta((0.0, 0.0));
+        
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+}
+
+impl<'a> App<'a> {
+    fn update(&mut self) {
+        let input = self.input.read();
+        
+        self.camera_controller.look(input.mouse.delta.into());
+        self.camera.transform.rotation = self.camera_controller.get_rotation();
+        
+        let forward_input =
+            input.keyboard.key_down(KeyCode::KeyW) as i8
+            - input.keyboard.key_down(KeyCode::KeyS) as i8;
+        let right_input =
+            input.keyboard.key_down(KeyCode::KeyD) as i8
+            - input.keyboard.key_down(KeyCode::KeyA) as i8;
+        let move_vec = 
+            forward_input as f32 * self.camera.transform.forward()
+            + right_input as f32 * self.camera.transform.right();
+        self.camera.transform.position += move_vec * 0.01;
     }
 }
