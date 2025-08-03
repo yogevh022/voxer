@@ -1,5 +1,4 @@
 mod app;
-mod constants;
 mod input;
 mod mat;
 mod render;
@@ -44,8 +43,9 @@ fn main() {
             ),
         ],
     };
-    let camera = types::Camera {
-        target: Vec3::new(0.0, 0.0, -1.0),
+    let camera = types::Camera::default();
+    let camera_controller = types::CameraController {
+        sensitivity: 0.002f32,
         ..Default::default()
     };
 
@@ -55,6 +55,7 @@ fn main() {
         input: Arc::new(RwLock::new(Input::default())),
         scene,
         camera,
+        camera_controller,
     };
 
     event_loop.run_app(&mut app).unwrap();

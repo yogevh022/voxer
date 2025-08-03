@@ -25,7 +25,7 @@ pub fn quad_verts_for(texture: Texture, atlas: &TextureAtlas) -> [Vertex; 4] {
 }
 
 pub fn plane_model_for(ci: &mut u16, texture: Texture, atlas: &TextureAtlas) -> Model {
-    let indices = Vec::from([*ci+0, *ci+2, *ci+1, *ci+0, *ci+3, *ci+2]);
+    let indices = Vec::from([*ci + 0, *ci + 2, *ci + 1, *ci + 0, *ci + 3, *ci + 2]);
     *ci += 4;
     let vertices = quad_verts_for(texture, atlas);
     let mesh = Mesh {
@@ -37,7 +37,12 @@ pub fn plane_model_for(ci: &mut u16, texture: Texture, atlas: &TextureAtlas) -> 
     Model { mesh, texture }
 }
 
-pub fn scene_plane(curr_index: &mut u16, atlas: &TextureAtlas, texture: Texture, transform: Transform) -> SceneObject {
+pub fn scene_plane(
+    curr_index: &mut u16,
+    atlas: &TextureAtlas,
+    texture: Texture,
+    transform: Transform,
+) -> SceneObject {
     let model = plane_model_for(curr_index, texture, atlas);
     SceneObject { model, transform }
 }

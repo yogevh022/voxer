@@ -2,9 +2,10 @@ use crate::input::Input;
 use crate::render::RendererState;
 use crate::render::types::Vertex;
 use crate::{input, texture, types, utils};
+use glam::{Quat, Vec3};
 use parking_lot::RwLock;
 use std::sync::Arc;
-use winit::event::{ElementState, WindowEvent};
+use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
@@ -14,6 +15,7 @@ pub struct App<'a> {
     pub input: Arc<RwLock<Input>>,
     pub scene: types::Scene,
     pub camera: types::Camera,
+    pub camera_controller: types::CameraController,
 }
 
 impl<'a> App<'a> {
@@ -79,6 +81,24 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                 }
                 _ => {}
             }
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        let Some(window) = &self.window else {
+            return;
+        };
+        match event {
+            DeviceEvent::MouseMotion { delta } => {
+                self.camera_controller.look(delta);
+                self.camera.transform.rotation = self.camera_controller.get_rotation();
+            }
+            _ => {}
         }
     }
 

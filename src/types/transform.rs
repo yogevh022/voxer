@@ -1,4 +1,3 @@
-use crate::constants;
 use glam;
 use std::default::Default;
 
@@ -10,7 +9,11 @@ pub struct Transform {
 
 impl Transform {
     pub fn up(&self) -> glam::Vec3 {
-        self.rotation * constants::vec3::WORLD_UP
+        self.rotation * glam::Vec3::Y
+    }
+
+    pub fn forward(&self) -> glam::Vec3 {
+        self.rotation * glam::Vec3::Z
     }
 
     pub fn from_vec3(vec: glam::Vec3) -> Self {

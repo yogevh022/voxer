@@ -168,7 +168,7 @@ impl RendererState<'_> {
         let mut all_vertices = Vec::new();
         let mut all_indices = Vec::new();
         let vp = camera.get_view_projection();
-        
+
         for (i, so) in scene.objects.iter_mut().enumerate() {
             let uni = (vp * so.model_matrix()).to_cols_array_2d();
             self.queue.write_buffer(
@@ -180,7 +180,7 @@ impl RendererState<'_> {
             all_vertices.extend_from_slice(&so.model.mesh.vertices);
             all_indices.extend_from_slice(&so.model.mesh.indices);
         }
-        
+
         self.queue
             .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&all_vertices));
         self.queue
