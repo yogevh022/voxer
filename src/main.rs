@@ -1,41 +1,20 @@
-mod texture;
+mod app;
+mod constants;
 mod mat;
+mod render;
+mod texture;
+mod types;
+mod utils;
 
+use crate::mat::model_to_world_matrix;
+use crate::render::types::Vertex;
 use crate::texture::{Texture, TextureAtlas};
-use std::mem;
+use glam::{Mat4, Vec3};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::event::*;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 3],
-    tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-            ],
-        }
-    }
-}
 
 const VERTICES: &[Vertex] = &[
     Vertex {
@@ -56,12 +35,12 @@ const VERTICES: &[Vertex] = &[
     }, // 3
 ];
 
-const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
+const INDICES: &[u16] = &[0, 2, 1, 0, 3, 2];
 
 const VERT_SHADER: &str = include_str!("shaders/vert.wgsl");
 const FRAG_SHADER: &str = include_str!("shaders/frag.wgsl");
 
-struct State<'window> {
+struct RendererState<'window> {
     surface: wgpu::Surface<'window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -71,17 +50,19 @@ struct State<'window> {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    uniform_buffer: wgpu::Buffer,
     num_vertices: u32,
     num_indices: u32,
 
-    diffuse_texture: wgpu::Texture,
-    diffuse_texture_view: wgpu::TextureView,
-    diffuse_sampler: wgpu::Sampler,
+    atlas_texture: wgpu::Texture,
+    atlas_texture_view: wgpu::TextureView,
+    atlas_sampler: wgpu::Sampler,
 
     texture_bind_group: wgpu::BindGroup,
+    uniform_bind_group: wgpu::BindGroup,
 }
 
-impl State<'_> {
+impl RendererState<'_> {
     async fn new(window: Arc<Window>) -> Self {
         let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window.clone()).unwrap();
@@ -122,145 +103,33 @@ impl State<'_> {
         };
         surface.configure(&device, &config);
 
-        let atlas_rgba = get_atlas_image();
-        let (width, height) = atlas_rgba.dimensions();
+        let atlas_rgba = utils::temp::get_atlas_image();
 
-        let texture_size = wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        };
+        let atlas_texture = render::texture::create_diffuse(&device, &queue, &atlas_rgba);
+        let atlas_texture_view = atlas_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let atlas_sampler = render::texture::diffuse_sampler(&device);
 
-        let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Diffuse Texture"),
-            size: texture_size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
+        let uniform_buffer = render::uniform::create_buffer(&device);
+        let vertex_buffer = render::vertex::create_buffer(&device, VERTICES);
+        let index_buffer = render::index::create_buffer(&device, INDICES);
 
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &diffuse_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &atlas_rgba,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * width),
-                rows_per_image: Some(height),
-            },
-            texture_size,
+        let bg_entries = render::bind_group::index_based_entries([
+            // the index of the resource in this array is the index of the binding
+            wgpu::BindingResource::TextureView(&atlas_texture_view),
+            wgpu::BindingResource::Sampler(&atlas_sampler),
+        ]);
+
+        let (tex_bg_layout, tex_bg) = render::texture::create_bind_group(&device, &bg_entries);
+        let (uniform_bg_layout, uniform_bg) =
+            render::uniform::create_bind_group(&device, uniform_buffer.as_entire_binding());
+
+        let shader = render::shader::create(&device, render::shader::main_shader_source().into());
+        let render_pipeline = render::pipeline::create(
+            &device,
+            &[&tex_bg_layout, &uniform_bg_layout],
+            &shader,
+            surface_format,
         );
-
-        let diffuse_texture_view =
-            diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
-
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("texture_bind_group_layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
-
-        let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("texture_bind_group"),
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
-                },
-            ],
-        });
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(format!("{}\n{}", VERT_SHADER, FRAG_SHADER).into()),
-        });
-
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout],
-                push_constant_ranges: &[],
-            });
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: Default::default(),
-                buffers: &[Vertex::desc()],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: surface_format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
 
         Self {
             surface,
@@ -270,26 +139,34 @@ impl State<'_> {
             render_pipeline,
             vertex_buffer,
             index_buffer,
+            uniform_buffer,
             num_vertices: VERTICES.len() as u32,
             num_indices: INDICES.len() as u32,
-            diffuse_texture,
-            diffuse_texture_view,
-            diffuse_sampler,
+            atlas_texture,
+            atlas_texture_view,
+            atlas_sampler,
             size,
-            texture_bind_group,
+            texture_bind_group: tex_bg,
+            uniform_bind_group: uniform_bg,
         }
     }
-    
+
     fn update_vertex_buffer(&mut self, vertices: &[Vertex]) {
-        self.vertex_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(vertices),
-            usage: wgpu::BufferUsages::VERTEX,       
-        });
+        self.vertex_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
         self.num_vertices = vertices.len() as u32;
     }
 
-    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    fn render(
+        &mut self,
+        camera: &types::Camera,
+        scene: &types::Scene,
+    ) -> Result<(), wgpu::SurfaceError> {
         let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture
@@ -299,6 +176,23 @@ impl State<'_> {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
+
+        let model = model_to_world_matrix(Vec3::new(0f32, 0f32, -5f32), 0f32, 2f32);
+        let view_m = Mat4::look_to_rh(
+            camera.transform.position,
+            camera.target,
+            camera.transform.up(),
+        );
+        let proj = Mat4::perspective_rh(
+            camera.properties.fov,
+            camera.properties.aspect_ratio,
+            camera.properties.near,
+            camera.properties.far,
+        );
+
+        let uniform = (proj * view_m * model).to_cols_array_2d();
+        self.queue
+            .write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&uniform));
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -317,6 +211,7 @@ impl State<'_> {
                 occlusion_query_set: None,
             });
             render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
@@ -330,99 +225,28 @@ impl State<'_> {
     }
 }
 
-struct App<'a> {
-    window: Option<Arc<Window>>,
-    state: Option<State<'a>>,
-}
-
-impl<'a> App<'a> {
-    fn test(&mut self, vert: &[Vertex]) {
-        self.state.as_mut().unwrap_or_else(|| panic!("rex")).update_vertex_buffer(vert);
-    }
-}
-
-impl<'a> winit::application::ApplicationHandler for App<'a> {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_none() {
-            let attributes = Window::default_attributes()
-                .with_title("Tech")
-                .with_inner_size(winit::dpi::PhysicalSize::new(1280, 720));
-            let window = event_loop.create_window(attributes);
-            let arc_window = Arc::new(window.unwrap());
-            self.window = Some(arc_window.clone());
-
-            let atlas = texture::helpers::generate_texture_atlas();
-            _ = atlas.image.save("src/texture/images/atlas.png");
-
-            self.state = Some(pollster::block_on(State::new(arc_window)));
-            
-            self.test(&quad_verts_for(Texture::Idk, &atlas));
-        }
-    }
-
-    fn window_event(
-        &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
-        window_id: winit::window::WindowId,
-        event: winit::event::WindowEvent,
-    ) {
-        if let Some(window) = &self.window {
-            if window.id() == window_id {
-                match event {
-                    WindowEvent::CloseRequested => event_loop.exit(),
-                    WindowEvent::RedrawRequested => {
-                        if let Some(state) = &mut self.state {
-                            if let Err(e) = state.render() {
-                                println!("{:?}", e);
-                            }
-                        }
-                    }
-                    WindowEvent::CursorMoved {
-                        device_id: _,
-                        position: _,
-                    } => {}
-                    _ => println!("{:?}", event),
-                }
-            }
-        }
-    }
-}
-
-fn quad_verts_for(texture: Texture, atlas: &TextureAtlas) -> [Vertex; 4] {
-    let uv_offset = atlas.uv(texture).offset;
-    [
-        Vertex {
-            position: [-0.5, -0.5, 0.0],
-            tex_coords: [uv_offset[0], uv_offset[1] + atlas.tile_dim],
-        },
-        Vertex {
-            position: [0.5, -0.5, 0.0],
-            tex_coords: [uv_offset[0] + atlas.tile_dim, uv_offset[1] + atlas.tile_dim],
-        },
-        Vertex {
-            position: [0.5, 0.5, 0.0],
-            tex_coords: [uv_offset[0] + atlas.tile_dim, uv_offset[1]],
-        },
-        Vertex {
-            position: [-0.5, 0.5, 0.0],
-            tex_coords: [uv_offset[0], uv_offset[1]],
-        },
-    ]
-}
-
-fn get_atlas_image() -> image::RgbaImage {
-    let atlas_image =
-        image::open("src/texture/images/atlas.png").expect("failed to load atlas.png");
-    atlas_image.to_rgba8()
-}
-
 fn main() {
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
 
-    let mut app = App {
+    let scene = types::Scene::default();
+    let camera = types::Camera {
+        target: Vec3::new(0.0, 0.0, -1.0),
+        ..Default::default()
+    };
+
+    let mut app = app::App {
         window: None,
         state: None,
+        scene,
+        camera,
     };
-    
+
     event_loop.run_app(&mut app).unwrap();
 }
+
+// for object in &scene.objects {
+//     let mvp = projection * view * object.model_matrix;
+//     queue.write_buffer(&uniform_buffer, 0, bytemuck::cast_slice(&[mvp]));
+//     render_pass.set_bind_group(0, &uniform_bind_group, &[]);
+//     render_pass.draw_indexed(object.index_range.clone(), 0, 0..1);
+// }
