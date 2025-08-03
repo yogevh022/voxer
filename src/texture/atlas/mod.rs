@@ -3,6 +3,7 @@ use crate::texture::{TEXTURE_COUNT, TEXTURE_DIM, Texture};
 
 pub mod helpers;
 
+#[derive(Debug)]
 pub struct TextureAtlas {
     pub tiles_per_dim: f32,
     pub dim: f32,

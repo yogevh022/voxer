@@ -1,20 +1,24 @@
+use crate::input::Input;
+use crate::render::RendererState;
 use crate::render::types::Vertex;
-use crate::{RendererState, texture, types, utils};
+use crate::{input, texture, types, utils};
+use parking_lot::RwLock;
 use std::sync::Arc;
-use winit::event::WindowEvent;
+use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
 pub struct App<'a> {
     pub window: Option<Arc<Window>>,
-    pub state: Option<RendererState<'a>>,
-    pub camera: types::Camera,
+    pub renderer_state: Option<RendererState<'a>>,
+    pub input: Arc<RwLock<Input>>,
     pub scene: types::Scene,
+    pub camera: types::Camera,
 }
 
 impl<'a> App<'a> {
     fn test(&mut self, vert: &[Vertex]) {
-        self.state
+        self.renderer_state
             .as_mut()
             .unwrap_or_else(|| panic!("rex"))
             .update_vertex_buffer(vert);
@@ -35,45 +39,53 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                 arc_window.inner_size().width as f32 / arc_window.inner_size().height as f32,
             );
 
-            let atlas = texture::helpers::generate_texture_atlas();
-            _ = atlas.image.save("src/texture/images/atlas.png");
-
-            self.state = Some(pollster::block_on(RendererState::new(arc_window)));
-
-            self.test(&utils::temp::quad_verts_for(texture::Texture::Idk, &atlas));
+            self.renderer_state = Some(pollster::block_on(RendererState::new(
+                arc_window,
+                &self.scene.objects,
+            )));
         }
     }
 
     fn window_event(
         &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
+        event_loop: &ActiveEventLoop,
         window_id: winit::window::WindowId,
-        event: winit::event::WindowEvent,
+        event: WindowEvent,
     ) {
-        if let Some(window) = &self.window {
-            if window.id() == window_id {
-                match event {
-                    WindowEvent::CloseRequested => event_loop.exit(),
-                    WindowEvent::RedrawRequested => {
-                        if let Some(state) = &mut self.state {
-                            if let Err(e) = state.render(&self.camera, &self.scene) {
-                                println!("{:?}", e);
-                            }
+        let Some(window) = &self.window else {
+            return;
+        };
+        if window.id() == window_id {
+            match event {
+                WindowEvent::CloseRequested => event_loop.exit(),
+                WindowEvent::RedrawRequested => {
+                    if let Some(state) = &mut self.renderer_state {
+                        if let Err(e) = state.render(&self.camera, &mut self.scene) {
+                            println!("{:?}", e);
                         }
                     }
-                    WindowEvent::Resized(new_size) => {
-                        self.camera
-                            .set_aspect_ratio(new_size.width as f32 / new_size.height as f32);
-                    }
-                    WindowEvent::CursorMoved {
-                        device_id,
-                        position,
-                    } => {
-                        // self.camera.target = Vec3::new(position.x as f32, position.y as f32, 0.0);
-                    }
-                    _ => {}
                 }
+                WindowEvent::Resized(new_size) => {
+                    self.camera
+                        .set_aspect_ratio(new_size.width as f32 / new_size.height as f32);
+                }
+                WindowEvent::KeyboardInput { event, .. } => {
+                    let key_code =
+                        input::keycode::get_keycode(event.physical_key).expect("unknown key");
+                    match event.state {
+                        ElementState::Pressed => self.input.write().press(key_code),
+                        ElementState::Released => self.input.write().release(key_code),
+                    }
+                }
+                _ => {}
             }
         }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let Some(window) = &self.window else {
+            return;
+        };
+        window.request_redraw();
     }
 }

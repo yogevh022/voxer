@@ -1,14 +1,9 @@
-use crate::render::types::Uniforms;
-use glam::Mat4;
-use wgpu::util::DeviceExt;
-
-pub fn create_buffer(device: &wgpu::Device) -> wgpu::Buffer {
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+pub fn create_buffer(device: &wgpu::Device, size: u64) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("uniform_buffer"),
-        contents: bytemuck::cast_slice(&[Uniforms {
-            mvp: Mat4::IDENTITY.to_cols_array_2d(), // initialized with identity
-        }]),
+        size,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     })
 }
 
@@ -16,6 +11,8 @@ pub fn create_bind_group(
     device: &wgpu::Device,
     buffer_binding_resource: wgpu::BindingResource,
 ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
+    let min_binding_size = std::num::NonZeroU64::new(64);
+
     let uniform_bind_group_layout =
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("uniform_bind_group_layout"),
@@ -24,8 +21,8 @@ pub fn create_bind_group(
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+                    has_dynamic_offset: true,
+                    min_binding_size,
                 },
                 count: None,
             }],

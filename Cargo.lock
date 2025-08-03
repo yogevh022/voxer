@@ -2243,6 +2243,7 @@ dependencies = [
  "bytemuck",
  "glam",
  "image",
+ "parking_lot",
  "pollster",
  "wgpu",
  "winit",

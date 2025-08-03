@@ -1,10 +1,8 @@
-use crate::render::types::Vertex;
-use wgpu::util::DeviceExt;
-
-pub fn create_buffer(device: &wgpu::Device, vertices: &[Vertex]) -> wgpu::Buffer {
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+pub fn create_buffer(device: &wgpu::Device, size: u64) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("vertex_buffer"),
-        contents: bytemuck::cast_slice(vertices),
-        usage: wgpu::BufferUsages::VERTEX,
+        size,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     })
 }

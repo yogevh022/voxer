@@ -1,9 +1,8 @@
-use wgpu::util::DeviceExt;
-
-pub fn create_buffer(device: &wgpu::Device, indices: &[u16]) -> wgpu::Buffer {
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+pub fn create_buffer(device: &wgpu::Device, size: u64) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("index_buffer"),
-        contents: bytemuck::cast_slice(indices),
-        usage: wgpu::BufferUsages::INDEX,
+        size,
+        usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     })
 }
