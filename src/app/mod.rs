@@ -105,7 +105,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         self.update();
         self.input.write().mouse.set_delta((0.0, 0.0));
-        
+
         if let Some(window) = &self.window {
             window.request_redraw();
         }
@@ -115,18 +115,15 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
 impl<'a> App<'a> {
     fn update(&mut self) {
         let input = self.input.read();
-        
+
         self.camera_controller.look(input.mouse.delta.into());
         self.camera.transform.rotation = self.camera_controller.get_rotation();
-        
-        let forward_input =
-            input.keyboard.key_down(KeyCode::KeyW) as i8
+
+        let forward_input = input.keyboard.key_down(KeyCode::KeyW) as i8
             - input.keyboard.key_down(KeyCode::KeyS) as i8;
-        let right_input =
-            input.keyboard.key_down(KeyCode::KeyD) as i8
+        let right_input = input.keyboard.key_down(KeyCode::KeyD) as i8
             - input.keyboard.key_down(KeyCode::KeyA) as i8;
-        let move_vec = 
-            forward_input as f32 * self.camera.transform.forward()
+        let move_vec = forward_input as f32 * self.camera.transform.forward()
             + right_input as f32 * self.camera.transform.right();
         self.camera.transform.position += move_vec * 0.01;
     }

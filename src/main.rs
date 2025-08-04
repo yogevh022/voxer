@@ -5,44 +5,20 @@ mod render;
 mod texture;
 mod types;
 mod utils;
+mod worldgen;
 
 use crate::input::Input;
+use crate::render::types::Model;
+use crate::types::SceneObject;
 use glam::Vec3;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use winit::event_loop::ControlFlow;
 
-fn main() {
-    let event_loop = winit::event_loop::EventLoop::new().unwrap();
-    event_loop.set_control_flow(ControlFlow::Poll);
-
+fn run_app(scene: types::Scene) {
     let atlas = texture::helpers::generate_texture_atlas();
     _ = atlas.image.save("src/texture/images/atlas.png");
 
-    let mut curr_index = 0u16; // temp, track indices
-
-    let scene = types::Scene {
-        objects: vec![
-            utils::temp::scene_plane(
-                &mut curr_index,
-                &atlas,
-                texture::Texture::Murica,
-                types::Transform::from_vec3(Vec3::new(0.0, 0.0, -5.0)),
-            ),
-            utils::temp::scene_plane(
-                &mut curr_index,
-                &atlas,
-                texture::Texture::Idk,
-                types::Transform::from_vec3(Vec3::new(2.0, 0.0, -5.0)),
-            ),
-            utils::temp::scene_plane(
-                &mut curr_index,
-                &atlas,
-                texture::Texture::Green,
-                types::Transform::from_vec3(Vec3::new(-2.0, 0.0, -5.0)),
-            ),
-        ],
-    };
     let camera = types::Camera::default();
     let camera_controller = types::CameraController {
         sensitivity: 0.002f32,
@@ -58,5 +34,24 @@ fn main() {
         camera_controller,
     };
 
+    let event_loop = winit::event_loop::EventLoop::new().unwrap();
+    event_loop.set_control_flow(ControlFlow::Poll);
     event_loop.run_app(&mut app).unwrap();
+}
+
+fn get_chunk_so() -> SceneObject {
+    let n = Arc::new(noise::Perlin::new(0));
+    let chunk = worldgen::generate_chunk(n);
+    let z_mesh = worldgen::get_z_mesh(&chunk);
+    SceneObject {
+        transform: Default::default(),
+        model: Model { mesh: z_mesh },
+    }
+}
+
+fn main() {
+    let scene = types::Scene {
+        objects: vec![get_chunk_so()],
+    };
+    run_app(scene);
 }

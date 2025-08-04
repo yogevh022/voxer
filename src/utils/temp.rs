@@ -34,7 +34,7 @@ pub fn plane_model_for(ci: &mut u16, texture: Texture, atlas: &TextureAtlas) -> 
         index_offset: (&indices).len() as u64 * size_of::<u16>() as u64,
         indices,
     };
-    Model { mesh, texture }
+    Model { mesh }
 }
 
 pub fn scene_plane(

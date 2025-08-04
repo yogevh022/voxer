@@ -69,6 +69,23 @@ pub fn create_diffuse(
     diffuse_texture
 }
 
+pub fn create_depth(device: &wgpu::Device, surface_config: &wgpu::SurfaceConfiguration) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("depth_texture"),
+        size: wgpu::Extent3d {
+            width: surface_config.width,
+            height: surface_config.height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Depth32Float,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    })
+}
+
 pub fn diffuse_sampler(device: &wgpu::Device) -> wgpu::Sampler {
     // preconfigured sampler
     device.create_sampler(&wgpu::SamplerDescriptor {

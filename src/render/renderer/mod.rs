@@ -26,6 +26,7 @@ pub(crate) struct RendererState<'window> {
     index_buffer: wgpu::Buffer,
     uniform_buffer: wgpu::Buffer,
 
+    depth_texture: wgpu::Texture,
     atlas_texture: wgpu::Texture,
     atlas_texture_view: wgpu::TextureView,
     atlas_sampler: wgpu::Sampler,
@@ -77,6 +78,7 @@ impl RendererState<'_> {
 
         let atlas_rgba = utils::temp::get_atlas_image();
 
+        let depth_texture = texture::create_depth(&device, &config);
         let atlas_texture = texture::create_diffuse(&device, &queue, &atlas_rgba);
         let atlas_texture_view = atlas_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let atlas_sampler = texture::diffuse_sampler(&device);
@@ -129,6 +131,7 @@ impl RendererState<'_> {
             vertex_buffer,
             index_buffer,
             uniform_buffer,
+            depth_texture,
             atlas_texture,
             atlas_texture_view,
             atlas_sampler,
@@ -152,13 +155,14 @@ impl RendererState<'_> {
         let texture_view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_view = self.depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("render_encoder"),
             });
 
-        let mut render_pass = render_pass::begin(&mut encoder, &texture_view);
+        let mut render_pass = render_pass::begin(&mut encoder, &texture_view, &depth_view);
         render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));

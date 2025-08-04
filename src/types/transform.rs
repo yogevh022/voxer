@@ -15,7 +15,7 @@ impl Transform {
     pub fn forward(&self) -> glam::Vec3 {
         self.rotation * glam::Vec3::Z
     }
-    
+
     pub fn right(&self) -> glam::Vec3 {
         self.rotation * -glam::Vec3::X
     }

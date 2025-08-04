@@ -1,5 +1,5 @@
-use winit::keyboard::KeyCode;
 use crate::input::keycode;
+use winit::keyboard::KeyCode;
 
 #[derive(Debug)]
 pub(crate) struct KeyboardInput {

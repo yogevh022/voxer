@@ -1,4 +1,3 @@
-
 #[derive(Debug)]
 pub(crate) struct MouseInput {
     pub(crate) position: [f64; 2],
@@ -24,7 +23,7 @@ impl MouseInput {
     pub(crate) fn set_delta(&mut self, delta: (f64, f64)) {
         self.delta = [delta.0, delta.1];
     }
-    
+
     pub(crate) fn set_position(&mut self, position: (f64, f64)) {
         self.position = [position.0, position.1];
     }

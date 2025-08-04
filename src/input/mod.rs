@@ -1,5 +1,5 @@
-pub mod keycode;
 mod keyboard;
+pub mod keycode;
 mod mouse;
 
 #[derive(Default, Debug)]
