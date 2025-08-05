@@ -1,5 +1,6 @@
 mod alloc;
 pub mod bind_group;
+pub mod chunk_loader;
 pub mod index;
 pub mod pipeline;
 pub mod render_pass;
@@ -13,9 +14,8 @@ use crate::render::renderer::resources::{
     MeshBuffers, RenderResources, TerrainResources, UniformResources,
 };
 use crate::render::types::{Mesh, Vertex};
-use crate::worldgen::types::World;
-use crate::{render, types, utils};
-use glam::{Mat4, Vec3};
+use crate::{types, utils};
+use glam::Mat4;
 use std::sync::Arc;
 use winit::window::Window;
 
@@ -190,8 +190,7 @@ impl Renderer<'_> {
         let uni_buf_offset = self.device.limits().min_uniform_buffer_offset_alignment;
         let vp = camera.get_view_projection();
         for (i, chunk_pos) in scene.world.loaded_chunks.iter().enumerate() {
-            let c_pos = Vec3::new(chunk_pos.0 as f32, chunk_pos.1 as f32, chunk_pos.2 as f32);
-            let w_pos = utils::world::chunk_to_world_pos(c_pos);
+            let w_pos = utils::world::chunk_to_world_pos(chunk_pos);
             let uni = (vp * Mat4::from_translation(w_pos)).to_cols_array_2d();
 
             self.queue.write_buffer(

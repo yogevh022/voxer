@@ -1,16 +1,16 @@
 use crate::render::types::Mesh;
 use crate::texture::TextureAtlas;
 use crate::worldgen::types::Chunk;
-use crate::{utils, worldgen};
-use glam::Vec3;
+use crate::worldgen;
+use glam::{IVec3, Vec3};
 use std::sync::Arc;
-use wgpu::naga::{FastHashMap, FastHashSet};
+use wgpu::naga::FastHashMap;
 
 #[derive(Default)]
 pub struct World {
     pub seed: u32,
-    pub chunks: FastHashMap<(i32, i32, i32), Chunk>,
-    pub loaded_chunks: Vec<(i32, i32, i32)>,
+    pub chunks: FastHashMap<IVec3, Chunk>,
+    pub loaded_chunks: Vec<IVec3>,
 }
 
 impl World {
@@ -27,13 +27,14 @@ impl World {
 
         let ns = Arc::new(noise::OpenSimplex::new(self.seed));
         for x in -(world_size / 2f32) as i32..(world_size / 2f32) as i32 {
-            for z in -(world_size / 2f32) as i32..(world_size / 2f32) as i32 {
-                let chunk_position = Vec3::new(x as f32, 0f32, z as f32);
-                let blocks = worldgen::generate_chunk_blocks(&ns, chunk_position);
-                let mesh = Chunk::generate_mesh(&blocks, texture_atlas);
-                let chunk = Chunk { blocks, mesh };
-                self.chunks
-                    .insert(utils::vec3_to_i32_tuple(&chunk_position), chunk);
+            for y in 0..1 {
+                for z in -(world_size / 2f32) as i32..(world_size / 2f32) as i32 {
+                    let chunk_position = Vec3::new(x as f32, y as f32, z as f32);
+                    let blocks = worldgen::generate_chunk_blocks(&ns, chunk_position);
+                    let mesh = Chunk::generate_mesh(&blocks, texture_atlas);
+                    let chunk = Chunk { blocks, mesh };
+                    self.chunks.insert(IVec3::new(x, y, z), chunk);
+                }
             }
         }
     }
@@ -47,7 +48,7 @@ impl World {
         chunks
     }
 
-    pub fn get_meshes_for_positions(&self, positions: Vec<&(i32, i32, i32)>) -> Vec<Mesh> {
+    pub fn get_meshes_for_positions(&self, positions: Vec<&IVec3>) -> Vec<Mesh> {
         let mut meshes = Vec::with_capacity(positions.len());
         for pos in positions {
             let c = self.chunks.get(pos).unwrap();
