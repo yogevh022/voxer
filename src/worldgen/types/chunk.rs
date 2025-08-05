@@ -4,12 +4,15 @@ use crate::worldgen::meshing;
 use crate::worldgen::types::block::BlockKind;
 
 pub const CHUNK_SIZE: usize = 16;
+pub type ChunkBlocks = [[[BlockKind; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
 pub struct Chunk {
-    pub(crate) blocks: [[[BlockKind; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
+    pub(crate) blocks: ChunkBlocks,
+    pub(crate) mesh: Mesh,
 }
 
 impl Chunk {
-    pub fn generate_mesh(&self, texture_atlas: &TextureAtlas) -> Mesh {
+    pub fn generate_mesh(blocks: &ChunkBlocks, texture_atlas: &TextureAtlas) -> Mesh {
+        // fixme this function does not belong here
         let mut verts = Vec::new();
         let mut inds = Vec::new();
 
@@ -17,35 +20,35 @@ impl Chunk {
             for y in 0..CHUNK_SIZE {
                 for z in 0..CHUNK_SIZE {
                     let pos = (x as f32, y as f32, z as f32);
-                    if self.blocks[x][y][z].is_air() {
+                    if blocks[x][y][z].is_air() {
                         continue;
                     }
-                    if neighbor(&self.blocks, x as isize + 1, y as isize, z as isize)
+                    if neighbor(&blocks, x as isize + 1, y as isize, z as isize)
                         .map_or(true, |b| b.is_air())
                     {
                         meshing::xp_verts(texture_atlas, &mut verts, &mut inds, pos);
                     }
-                    if neighbor(&self.blocks, x as isize - 1, y as isize, z as isize)
+                    if neighbor(&blocks, x as isize - 1, y as isize, z as isize)
                         .map_or(true, |b| b.is_air())
                     {
                         meshing::xm_verts(texture_atlas, &mut verts, &mut inds, pos);
                     }
-                    if neighbor(&self.blocks, x as isize, y as isize + 1, z as isize)
+                    if neighbor(&blocks, x as isize, y as isize + 1, z as isize)
                         .map_or(true, |b| b.is_air())
                     {
                         meshing::yp_verts(texture_atlas, &mut verts, &mut inds, pos);
                     }
-                    if neighbor(&self.blocks, x as isize, y as isize - 1, z as isize)
+                    if neighbor(&blocks, x as isize, y as isize - 1, z as isize)
                         .map_or(true, |b| b.is_air())
                     {
                         meshing::ym_verts(texture_atlas, &mut verts, &mut inds, pos);
                     }
-                    if neighbor(&self.blocks, x as isize, y as isize, z as isize + 1)
+                    if neighbor(&blocks, x as isize, y as isize, z as isize + 1)
                         .map_or(true, |b| b.is_air())
                     {
                         meshing::zp_verts(texture_atlas, &mut verts, &mut inds, pos);
                     }
-                    if neighbor(&self.blocks, x as isize, y as isize, z as isize - 1)
+                    if neighbor(&blocks, x as isize, y as isize, z as isize - 1)
                         .map_or(true, |b| b.is_air())
                     {
                         meshing::zm_verts(texture_atlas, &mut verts, &mut inds, pos);
@@ -60,12 +63,7 @@ impl Chunk {
     }
 }
 
-fn neighbor(
-    blocks: &[[[BlockKind; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
-    x: isize,
-    y: isize,
-    z: isize,
-) -> Option<&BlockKind> {
+fn neighbor(blocks: &ChunkBlocks, x: isize, y: isize, z: isize) -> Option<&BlockKind> {
     if x < 0
         || y < 0
         || z < 0

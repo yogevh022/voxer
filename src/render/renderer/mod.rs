@@ -12,13 +12,14 @@ pub mod vertex;
 use crate::render::renderer::resources::{
     MeshBuffers, RenderResources, TerrainResources, UniformResources,
 };
-use crate::render::types::{Index, Vertex};
-use crate::types::SceneObject;
+use crate::render::types::{Mesh, Vertex};
+use crate::worldgen::types::World;
 use crate::{render, types, utils};
+use glam::{Mat4, Vec3};
 use std::sync::Arc;
 use winit::window::Window;
 
-pub(crate) struct RendererState<'window> {
+pub(crate) struct Renderer<'window> {
     surface: wgpu::Surface<'window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -28,8 +29,8 @@ pub(crate) struct RendererState<'window> {
     resources: RenderResources,
 }
 
-impl RendererState<'_> {
-    pub(crate) async fn new(window: Arc<Window>, rendered_objects: &Vec<SceneObject>) -> Self {
+impl Renderer<'_> {
+    pub(crate) async fn new(window: Arc<Window>) -> Self {
         let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window.clone()).unwrap();
 
@@ -104,14 +105,15 @@ impl RendererState<'_> {
             surface_format,
         );
 
-        let (vertex_alloc, index_alloc) = alloc::size_of_meshes_from_sos(rendered_objects);
-        let terrain_vertex_buffer = vertex::create_buffer(&device, vertex_alloc);
-        let terrain_index_buffer = index::create_buffer(&device, index_alloc);
+        let terrain_vertex_alloc = 1024 * size_of::<Vertex>() as u64;
+        let terrain_index_alloc = 1024 * size_of::<u32>() as u64;
+        // let (terrain_vertex_alloc, terrain_index_alloc) =
+        //     alloc::size_of_meshes_from_sos(rendered_objects);
 
         let terrain_resources = TerrainResources {
             mesh_buffers: MeshBuffers {
-                vertex: terrain_vertex_buffer,
-                index: terrain_index_buffer,
+                vertex: vertex::create_buffer(&device, terrain_vertex_alloc),
+                index: index::create_buffer(&device, terrain_index_alloc),
             },
             texture_view: atlas_texture_view,
             texture_sampler: atlas_sampler,
@@ -130,6 +132,7 @@ impl RendererState<'_> {
             terrain: terrain_resources,
             uniform: uniform_resources,
             depth_texture_view,
+            buffer_pool: Vec::new(),
         };
 
         Self {
@@ -140,6 +143,23 @@ impl RendererState<'_> {
             pipeline,
             resources,
         }
+    }
+
+    pub(crate) fn add_buffer(&mut self, mesh: &Mesh) {
+        let (vert_alloc, ind_alloc) = alloc::size_of_mesh(mesh);
+        let mb = MeshBuffers {
+            vertex: vertex::create_buffer(&self.device, vert_alloc),
+            index: index::create_buffer(&self.device, ind_alloc),
+        };
+        self.queue
+            .write_buffer(&mb.vertex, 0, bytemuck::cast_slice(&mesh.vertices));
+        self.queue
+            .write_buffer(&mb.index, 0, bytemuck::cast_slice(&mesh.indices));
+        self.resources.buffer_pool.push(mb);
+    }
+
+    pub(crate) fn remove_buffer(&mut self, index: usize) {
+        self.resources.buffer_pool.remove(index);
     }
 
     pub(crate) fn render(
@@ -168,38 +188,29 @@ impl RendererState<'_> {
         );
 
         let uni_buf_offset = self.device.limits().min_uniform_buffer_offset_alignment;
-        let mut global_mesh_data = render::types::global::Meshes::new();
-
         let vp = camera.get_view_projection();
-        for (i, so) in scene.objects.iter_mut().enumerate() {
-            let uni = (vp * so.model_matrix()).to_cols_array_2d();
+        for (i, chunk_pos) in scene.world.loaded_chunks.iter().enumerate() {
+            let c_pos = Vec3::new(chunk_pos.0 as f32, chunk_pos.1 as f32, chunk_pos.2 as f32);
+            let w_pos = utils::world::chunk_to_world_pos(c_pos);
+            let uni = (vp * Mat4::from_translation(w_pos)).to_cols_array_2d();
+
             self.queue.write_buffer(
                 &self.resources.uniform.buffer,
                 i as u64 * uni_buf_offset as u64,
                 bytemuck::cast_slice(&[uni]),
             );
-
-            global_mesh_data.extend_with_offset(&so.model.mesh);
         }
 
-        self.queue.write_buffer(
-            &self.resources.terrain.mesh_buffers.vertex,
-            0,
-            bytemuck::cast_slice(&global_mesh_data.vertices),
-        );
-        self.queue.write_buffer(
-            &self.resources.terrain.mesh_buffers.index,
-            0,
-            bytemuck::cast_slice(&global_mesh_data.indices),
-        );
-
-        let mut index_offset = 0u32; // in indices not bytes
-        for (i, so) in scene.objects.iter().enumerate() {
+        for (i, chunk) in scene.world.get_loaded_chunks().iter().enumerate() {
             let buf_offset = i as u32 * uni_buf_offset;
-            let index_count = so.model.mesh.indices.len() as u32;
+            let idx = chunk.mesh.indices.len();
             render_pass.set_bind_group(1, &self.resources.uniform.bind_group, &[buf_offset]);
-            render_pass.draw_indexed(index_offset..(index_offset + index_count), 0, 0..1);
-            index_offset += index_count;
+            render_pass.set_vertex_buffer(0, self.resources.buffer_pool[i].vertex.slice(..));
+            render_pass.set_index_buffer(
+                self.resources.buffer_pool[i].index.slice(..),
+                wgpu::IndexFormat::Uint32,
+            );
+            render_pass.draw_indexed(0..(idx as u32), 0, 0..1);
         }
         drop(render_pass);
 

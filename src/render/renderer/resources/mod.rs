@@ -10,4 +10,5 @@ pub struct RenderResources {
     pub terrain: TerrainResources,
     pub uniform: UniformResources,
     pub depth_texture_view: wgpu::TextureView,
+    pub buffer_pool: Vec<MeshBuffers>,
 }

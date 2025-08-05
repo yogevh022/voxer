@@ -1,5 +1,5 @@
 use crate::input::Input;
-use crate::render::RendererState;
+use crate::render::Renderer;
 use crate::render::types::Vertex;
 use crate::{input, types, utils};
 use parking_lot::RwLock;
@@ -16,7 +16,7 @@ pub struct AppTestData {
 
 pub struct App<'a> {
     pub window: Option<Arc<Window>>,
-    pub renderer_state: Option<RendererState<'a>>,
+    pub renderer: Option<Renderer<'a>>,
     pub test_data: AppTestData,
     pub time: utils::Timer,
     pub input: Arc<RwLock<Input>>,
@@ -39,10 +39,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                 arc_window.inner_size().width as f32 / arc_window.inner_size().height as f32,
             );
 
-            self.renderer_state = Some(pollster::block_on(RendererState::new(
-                arc_window,
-                &self.scene.objects,
-            )));
+            self.renderer = Some(pollster::block_on(Renderer::new(arc_window)));
         }
     }
 
@@ -59,7 +56,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             match event {
                 WindowEvent::CloseRequested => event_loop.exit(),
                 WindowEvent::RedrawRequested => {
-                    if let Some(state) = &mut self.renderer_state {
+                    if let Some(state) = &mut self.renderer {
                         self.time.tick();
 
                         // temp fps display logic
@@ -136,5 +133,54 @@ impl<'a> App<'a> {
         let move_vec = forward_input as f32 * self.camera.transform.forward()
             + right_input as f32 * self.camera.transform.right();
         self.camera.transform.position += move_vec * MOVE_SPEED * self.time.delta_time;
+
+        let pos = self.camera.transform.position;
+        let chunk_pos = utils::world::world_to_chunk_pos(pos);
+
+        let mut relevant_chunk_positions = utils::world::get_relevant_hashable_chunk_pos(chunk_pos);
+        relevant_chunk_positions.retain(|c_pos| {
+            match self.scene.world.chunks.get(c_pos) {
+                Some(c) => {
+                    if c.mesh.vertices.len() == 0 {
+                        return false;
+                    }
+                }
+                None => return false,
+            };
+            true
+        });
+        
+        let mut chunks_to_unload = Vec::new();
+        for (c_idx, c_pos) in self.scene.world.loaded_chunks.iter().enumerate() {
+            if relevant_chunk_positions.contains(c_pos) {
+                continue;
+            };
+            chunks_to_unload.push(c_idx);
+        }
+        
+        let mut chunks_to_load = Vec::new();
+        for c_pos in relevant_chunk_positions.iter() {
+            if !self.scene.world.loaded_chunks.contains(&c_pos) {
+                self.scene.world.loaded_chunks.push(*c_pos);
+                chunks_to_load.push(c_pos);
+            }
+        }
+
+        let renderer = self.renderer.as_mut().expect("renderer is none");
+
+        if !chunks_to_unload.is_empty() {
+            chunks_to_unload.sort();
+            for c_idx in chunks_to_unload.iter().rev() {
+                self.scene.world.loaded_chunks.remove(*c_idx);
+                renderer.remove_buffer(*c_idx);
+            }
+        }
+
+        if !chunks_to_load.is_empty() {
+            let meshes = self.scene.world.get_meshes_for_positions(chunks_to_load);
+            for m in meshes {
+                renderer.add_buffer(&m);
+            }
+        }
     }
 }

@@ -1,7 +1,7 @@
 mod meshing;
 pub mod types;
 
-use crate::worldgen::types::{BlockKind, CHUNK_SIZE, Chunk};
+use crate::worldgen::types::{BlockKind, CHUNK_SIZE, ChunkBlocks};
 use glam::Vec3;
 use noise;
 use noise::NoiseFn;
@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 const NOISE_SCALE: f64 = 0.05;
 
-pub fn generate_chunk(ns: &Arc<impl NoiseFn<f64, 3>>, chunk_position: Vec3) -> Chunk {
-    let blocks: [[[BlockKind; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] = std::array::from_fn(|x| {
+pub fn generate_chunk_blocks(ns: &Arc<impl NoiseFn<f64, 3>>, chunk_position: Vec3) -> ChunkBlocks {
+    let blocks: ChunkBlocks = std::array::from_fn(|x| {
         std::array::from_fn(|y| {
             std::array::from_fn(|z| {
                 if ns.get([
@@ -26,5 +26,5 @@ pub fn generate_chunk(ns: &Arc<impl NoiseFn<f64, 3>>, chunk_position: Vec3) -> C
             })
         })
     });
-    Chunk { blocks }
+    blocks
 }
