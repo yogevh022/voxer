@@ -7,7 +7,7 @@ pub mod texture;
 pub mod uniform;
 pub mod vertex;
 
-use crate::render::types::Vertex;
+use crate::render::types::{Index, Vertex};
 use crate::types::SceneObject;
 use crate::{render, types, utils};
 use std::sync::Arc;
@@ -96,7 +96,7 @@ impl RendererState<'_> {
         });
 
         let vertex_buffer = vertex::create_buffer(&device, vert_alloc * size_of::<Vertex>() as u64);
-        let index_buffer = index::create_buffer(&device, ind_alloc * size_of::<u16>() as u64);
+        let index_buffer = index::create_buffer(&device, ind_alloc * size_of::<Index>() as u64);
 
         let tex_bg_entries = bind_group::index_based_entries([
             // the index of the resource in this array is the index of the binding
@@ -155,7 +155,9 @@ impl RendererState<'_> {
         let texture_view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let depth_view = self.depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_view = self
+            .depth_texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -166,13 +168,12 @@ impl RendererState<'_> {
         render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
         let uni_buf_offset = self.device.limits().min_uniform_buffer_offset_alignment;
-        let mut all_vertices = Vec::new();
-        let mut all_indices = Vec::new();
-        let vp = camera.get_view_projection();
+        let mut global_mesh_data = render::types::global::Meshes::new();
 
+        let vp = camera.get_view_projection();
         for (i, so) in scene.objects.iter_mut().enumerate() {
             let uni = (vp * so.model_matrix()).to_cols_array_2d();
             self.queue.write_buffer(
@@ -181,14 +182,19 @@ impl RendererState<'_> {
                 bytemuck::cast_slice(&[uni]),
             );
 
-            all_vertices.extend_from_slice(&so.model.mesh.vertices);
-            all_indices.extend_from_slice(&so.model.mesh.indices);
+            global_mesh_data.extend_with_offset(&so.model.mesh);
         }
 
-        self.queue
-            .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&all_vertices));
-        self.queue
-            .write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&all_indices));
+        self.queue.write_buffer(
+            &self.vertex_buffer,
+            0,
+            bytemuck::cast_slice(&global_mesh_data.vertices),
+        );
+        self.queue.write_buffer(
+            &self.index_buffer,
+            0,
+            bytemuck::cast_slice(&global_mesh_data.indices),
+        );
 
         let mut index_offset = 0u32; // in indices not bytes
         for (i, so) in scene.objects.iter().enumerate() {

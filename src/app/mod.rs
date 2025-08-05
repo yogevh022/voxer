@@ -1,8 +1,7 @@
 use crate::input::Input;
 use crate::render::RendererState;
 use crate::render::types::Vertex;
-use crate::{input, texture, types, utils};
-use glam::{Quat, Vec3};
+use crate::{input, types, utils};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -10,9 +9,16 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
+#[derive(Default)]
+pub struct AppTestData {
+    pub last_fps: f32,
+}
+
 pub struct App<'a> {
     pub window: Option<Arc<Window>>,
     pub renderer_state: Option<RendererState<'a>>,
+    pub test_data: AppTestData,
+    pub time: utils::Timer,
     pub input: Arc<RwLock<Input>>,
     pub scene: types::Scene,
     pub camera: types::Camera,
@@ -63,6 +69,14 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                 WindowEvent::CloseRequested => event_loop.exit(),
                 WindowEvent::RedrawRequested => {
                     if let Some(state) = &mut self.renderer_state {
+                        self.time.tick();
+
+                        // temp fps display logic
+                        if self.test_data.last_fps != self.time.fps {
+                            window.set_title(&format!("Tech - {:.2} FPS", self.time.fps));
+                            self.test_data.last_fps = self.time.fps;
+                        }
+
                         if let Err(e) = state.render(&self.camera, &mut self.scene) {
                             println!("{:?}", e);
                         }
@@ -96,7 +110,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
         };
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                self.input.write().mouse.set_delta(delta);
+                self.input.write().mouse.add_delta(delta);
             }
             _ => {}
         }
@@ -115,8 +129,13 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
 impl<'a> App<'a> {
     fn update(&mut self) {
         let input = self.input.read();
+        const MOUSE_SENSITIVITY: f64 = 0.01;
+        const MOVE_SPEED: f32 = 30.0;
 
-        self.camera_controller.look(input.mouse.delta.into());
+        self.camera_controller.look((
+            input.mouse.delta[0] * MOUSE_SENSITIVITY,
+            input.mouse.delta[1] * MOUSE_SENSITIVITY,
+        ));
         self.camera.transform.rotation = self.camera_controller.get_rotation();
 
         let forward_input = input.keyboard.key_down(KeyCode::KeyW) as i8
@@ -125,6 +144,6 @@ impl<'a> App<'a> {
             - input.keyboard.key_down(KeyCode::KeyA) as i8;
         let move_vec = forward_input as f32 * self.camera.transform.forward()
             + right_input as f32 * self.camera.transform.right();
-        self.camera.transform.position += move_vec * 0.01;
+        self.camera.transform.position += move_vec * MOVE_SPEED * self.time.delta_time;
     }
 }

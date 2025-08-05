@@ -1,30 +1,31 @@
-use crate::render::types::{Mesh, Model, Vertex};
+use crate::render::types::{Index, Mesh, Model, Vertex};
 use crate::texture::{Texture, TextureAtlas};
 use crate::types::{SceneObject, Transform};
+use glam::{Vec2, Vec3};
 
 pub fn quad_verts_for(texture: Texture, atlas: &TextureAtlas) -> [Vertex; 4] {
     let uv_offset = atlas.uv(texture).offset;
     [
         Vertex {
-            position: [-0.5, -0.5, 0.0],
-            tex_coords: [uv_offset[0], uv_offset[1] + atlas.tile_dim],
+            position: Vec3::new(-0.5, -0.5, 0.0),
+            tex_coords: Vec2::new(uv_offset[0], uv_offset[1] + atlas.tile_dim),
         },
         Vertex {
-            position: [0.5, -0.5, 0.0],
-            tex_coords: [uv_offset[0] + atlas.tile_dim, uv_offset[1] + atlas.tile_dim],
+            position: Vec3::new(0.5, -0.5, 0.0),
+            tex_coords: Vec2::new(uv_offset[0] + atlas.tile_dim, uv_offset[1] + atlas.tile_dim),
         },
         Vertex {
-            position: [0.5, 0.5, 0.0],
-            tex_coords: [uv_offset[0] + atlas.tile_dim, uv_offset[1]],
+            position: Vec3::new(0.5, 0.5, 0.0),
+            tex_coords: Vec2::new(uv_offset[0] + atlas.tile_dim, uv_offset[1]),
         },
         Vertex {
-            position: [-0.5, 0.5, 0.0],
-            tex_coords: [uv_offset[0], uv_offset[1]],
+            position: Vec3::new(-0.5, 0.5, 0.0),
+            tex_coords: Vec2::new(uv_offset[0], uv_offset[1]),
         },
     ]
 }
 
-pub fn plane_model_for(ci: &mut u16, texture: Texture, atlas: &TextureAtlas) -> Model {
+pub fn plane_model_for(ci: &mut Index, texture: Texture, atlas: &TextureAtlas) -> Model {
     let indices = Vec::from([*ci + 0, *ci + 2, *ci + 1, *ci + 0, *ci + 3, *ci + 2]);
     *ci += 4;
     let vertices = quad_verts_for(texture, atlas);
@@ -38,7 +39,7 @@ pub fn plane_model_for(ci: &mut u16, texture: Texture, atlas: &TextureAtlas) -> 
 }
 
 pub fn scene_plane(
-    curr_index: &mut u16,
+    curr_index: &mut Index,
     atlas: &TextureAtlas,
     texture: Texture,
     transform: Transform,

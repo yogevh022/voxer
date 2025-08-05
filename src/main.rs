@@ -7,31 +7,37 @@ mod types;
 mod utils;
 mod worldgen;
 
+use crate::app::AppTestData;
 use crate::input::Input;
 use crate::render::types::Model;
-use crate::types::SceneObject;
+use crate::texture::TextureAtlas;
+use crate::types::{SceneObject, Transform};
+use crate::worldgen::types::CHUNK_SIZE;
 use glam::Vec3;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use winit::event_loop::ControlFlow;
 
-fn run_app(scene: types::Scene) {
+fn run_app() {
     let atlas = texture::helpers::generate_texture_atlas();
     _ = atlas.image.save("src/texture/images/atlas.png");
 
-    let camera = types::Camera::default();
-    let camera_controller = types::CameraController {
-        sensitivity: 0.002f32,
-        ..Default::default()
+    let scene = types::Scene {
+        objects: get_chunks(&atlas),
     };
+
+    let camera = types::Camera::default();
+    let camera_controller = types::CameraController::default();
 
     let mut app = app::App {
         window: None,
         renderer_state: None,
         input: Arc::new(RwLock::new(Input::default())),
+        time: utils::Timer::new(),
         scene,
         camera,
         camera_controller,
+        test_data: AppTestData::default(),
     };
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
@@ -39,19 +45,27 @@ fn run_app(scene: types::Scene) {
     event_loop.run_app(&mut app).unwrap();
 }
 
-fn get_chunk_so() -> SceneObject {
-    let n = Arc::new(noise::Perlin::new(0));
-    let chunk = worldgen::generate_chunk(n);
-    let z_mesh = worldgen::get_z_mesh(&chunk);
-    SceneObject {
-        transform: Default::default(),
-        model: Model { mesh: z_mesh },
+fn get_chunks(texture_atlas: &TextureAtlas) -> Vec<SceneObject> {
+    let mut sos = Vec::new();
+    let ns = Arc::new(noise::OpenSimplex::new(0));
+    for x in 0..10 {
+        for z in 0..10 {
+            let chunk_position = Vec3::new(x as f32, 0f32, z as f32);
+            let chunk = worldgen::generate_chunk(&ns, chunk_position);
+            let chunk_mesh = chunk.generate_mesh(texture_atlas);
+            sos.push(SceneObject {
+                transform: Transform::from_vec3(Vec3::new(
+                    chunk_position.x * CHUNK_SIZE as f32,
+                    chunk_position.y * CHUNK_SIZE as f32,
+                    chunk_position.z * CHUNK_SIZE as f32,
+                )),
+                model: Model { mesh: chunk_mesh },
+            });
+        }
     }
+    sos
 }
 
 fn main() {
-    let scene = types::Scene {
-        objects: vec![get_chunk_so()],
-    };
-    run_app(scene);
+    run_app();
 }

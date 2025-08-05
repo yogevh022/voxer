@@ -20,6 +20,10 @@ impl Default for MouseInput {
 }
 
 impl MouseInput {
+    pub(crate) fn add_delta(&mut self, delta: (f64, f64)) {
+        self.delta = [self.delta[0] + delta.0, self.delta[1] + delta.1];
+    }
+    
     pub(crate) fn set_delta(&mut self, delta: (f64, f64)) {
         self.delta = [delta.0, delta.1];
     }

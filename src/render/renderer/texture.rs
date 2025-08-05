@@ -69,7 +69,10 @@ pub fn create_diffuse(
     diffuse_texture
 }
 
-pub fn create_depth(device: &wgpu::Device, surface_config: &wgpu::SurfaceConfiguration) -> wgpu::Texture {
+pub fn create_depth(
+    device: &wgpu::Device,
+    surface_config: &wgpu::SurfaceConfiguration,
+) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
         label: Some("depth_texture"),
         size: wgpu::Extent3d {

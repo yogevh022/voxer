@@ -1,10 +1,11 @@
+use glam::{Vec2, Vec3};
 use std::mem;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
-    pub position: [f32; 3],
-    pub tex_coords: [f32; 2],
+    pub position: Vec3,
+    pub tex_coords: Vec2,
 }
 
 impl Vertex {

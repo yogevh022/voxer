@@ -46,15 +46,14 @@ impl Default for CameraProperties {
 
 #[derive(Default)]
 pub struct CameraController {
-    pub sensitivity: f32,
     pub yaw: Quat,
     pub pitch: Quat,
 }
 
 impl CameraController {
     pub fn look(&mut self, delta: (f64, f64)) {
-        self.yaw *= Quat::from_axis_angle(glam::Vec3::Y, delta.0 as f32 * -self.sensitivity);
-        self.pitch *= Quat::from_axis_angle(glam::Vec3::X, delta.1 as f32 * self.sensitivity);
+        self.yaw *= Quat::from_axis_angle(glam::Vec3::Y, -delta.0 as f32);
+        self.pitch *= Quat::from_axis_angle(glam::Vec3::X, delta.1 as f32);
     }
     pub fn get_rotation(&self) -> Quat {
         self.yaw * self.pitch
