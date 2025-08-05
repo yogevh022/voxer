@@ -30,9 +30,7 @@ pub fn plane_model_for(ci: &mut Index, texture: Texture, atlas: &TextureAtlas) -
     *ci += 4;
     let vertices = quad_verts_for(texture, atlas);
     let mesh = Mesh {
-        vertex_offset: (&vertices).len() as u64 * size_of::<Vertex>() as u64,
         vertices: Vec::from(vertices),
-        index_offset: (&indices).len() as u64 * size_of::<u16>() as u64,
         indices,
     };
     Model { mesh }

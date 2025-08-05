@@ -25,15 +25,6 @@ pub struct App<'a> {
     pub camera_controller: types::CameraController,
 }
 
-impl<'a> App<'a> {
-    fn test(&mut self, vert: &[Vertex]) {
-        self.renderer_state
-            .as_mut()
-            .unwrap_or_else(|| panic!("rex"))
-            .update_vertex_buffer(vert);
-    }
-}
-
 impl<'a> winit::application::ApplicationHandler for App<'a> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {

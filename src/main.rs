@@ -48,8 +48,8 @@ fn run_app() {
 fn get_chunks(texture_atlas: &TextureAtlas) -> Vec<SceneObject> {
     let mut sos = Vec::new();
     let ns = Arc::new(noise::OpenSimplex::new(0));
-    for x in 0..10 {
-        for z in 0..10 {
+    for x in 0..1 {
+        for z in 0..1 {
             let chunk_position = Vec3::new(x as f32, 0f32, z as f32);
             let chunk = worldgen::generate_chunk(&ns, chunk_position);
             let chunk_mesh = chunk.generate_mesh(texture_atlas);

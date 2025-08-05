@@ -1,17 +1,21 @@
+mod alloc;
 pub mod bind_group;
 pub mod index;
 pub mod pipeline;
 pub mod render_pass;
+mod resources;
 pub mod shader;
 pub mod texture;
 pub mod uniform;
 pub mod vertex;
 
+use crate::render::renderer::resources::{
+    MeshBuffers, RenderResources, TerrainResources, UniformResources,
+};
 use crate::render::types::{Index, Vertex};
 use crate::types::SceneObject;
 use crate::{render, types, utils};
 use std::sync::Arc;
-use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 pub(crate) struct RendererState<'window> {
@@ -19,20 +23,9 @@ pub(crate) struct RendererState<'window> {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    size: winit::dpi::PhysicalSize<u32>,
 
-    render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    uniform_buffer: wgpu::Buffer,
-
-    depth_texture: wgpu::Texture,
-    atlas_texture: wgpu::Texture,
-    atlas_texture_view: wgpu::TextureView,
-    atlas_sampler: wgpu::Sampler,
-
-    texture_bind_group: wgpu::BindGroup,
-    uniform_bind_group: wgpu::BindGroup,
+    pipeline: wgpu::RenderPipeline,
+    resources: RenderResources,
 }
 
 impl RendererState<'_> {
@@ -77,32 +70,20 @@ impl RendererState<'_> {
         surface.configure(&device, &config);
 
         let atlas_rgba = utils::temp::get_atlas_image();
-
-        let depth_texture = texture::create_depth(&device, &config);
         let atlas_texture = texture::create_diffuse(&device, &queue, &atlas_rgba);
         let atlas_texture_view = atlas_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let atlas_sampler = texture::diffuse_sampler(&device);
+        let terrain_texture_bg_entries = bind_group::index_based_entries([
+            // the index of the resource in this array is the index of the binding
+            wgpu::BindingResource::TextureView(&atlas_texture_view),
+            wgpu::BindingResource::Sampler(&atlas_sampler),
+        ]);
 
         let uniform_buffer = uniform::create_buffer(
             &device,
             // arbitrarily creating the buffer with capacity for 1000 objects
             (device.limits().min_uniform_buffer_offset_alignment * 1000) as u64,
         );
-        let mut vert_alloc = 0u64;
-        let mut ind_alloc = 0u64;
-        rendered_objects.iter().for_each(|so| {
-            vert_alloc += so.model.mesh.vertex_offset;
-            ind_alloc += so.model.mesh.index_offset;
-        });
-
-        let vertex_buffer = vertex::create_buffer(&device, vert_alloc * size_of::<Vertex>() as u64);
-        let index_buffer = index::create_buffer(&device, ind_alloc * size_of::<Index>() as u64);
-
-        let tex_bg_entries = bind_group::index_based_entries([
-            // the index of the resource in this array is the index of the binding
-            wgpu::BindingResource::TextureView(&atlas_texture_view),
-            wgpu::BindingResource::Sampler(&atlas_sampler),
-        ]);
 
         let uniform_buffer_binding_resource = wgpu::BindingResource::Buffer(wgpu::BufferBinding {
             buffer: &uniform_buffer,
@@ -110,40 +91,55 @@ impl RendererState<'_> {
             size: std::num::NonZeroU64::new(64),
         });
 
-        let (tex_bg_layout, tex_bg) = texture::create_bind_group(&device, &tex_bg_entries);
+        let (tex_bg_layout, tex_bg) =
+            texture::create_bind_group(&device, &terrain_texture_bg_entries);
         let (uniform_bg_layout, uniform_bg) =
             uniform::create_bind_group(&device, uniform_buffer_binding_resource);
 
         let shader = shader::create(&device, shader::main_shader_source().into());
-        let render_pipeline = pipeline::create(
+        let pipeline = pipeline::create(
             &device,
             &[&tex_bg_layout, &uniform_bg_layout],
             &shader,
             surface_format,
         );
 
+        let (vertex_alloc, index_alloc) = alloc::size_of_meshes_from_sos(rendered_objects);
+        let terrain_vertex_buffer = vertex::create_buffer(&device, vertex_alloc);
+        let terrain_index_buffer = index::create_buffer(&device, index_alloc);
+
+        let terrain_resources = TerrainResources {
+            mesh_buffers: MeshBuffers {
+                vertex: terrain_vertex_buffer,
+                index: terrain_index_buffer,
+            },
+            texture_view: atlas_texture_view,
+            texture_sampler: atlas_sampler,
+            texture_bind_group: tex_bg,
+        };
+
+        let uniform_resources = UniformResources {
+            buffer: uniform_buffer,
+            bind_group: uniform_bg,
+        };
+
+        let depth_texture = texture::create_depth(&device, &config);
+        let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let resources = RenderResources {
+            terrain: terrain_resources,
+            uniform: uniform_resources,
+            depth_texture_view,
+        };
+
         Self {
             surface,
             device,
             queue,
             config,
-            render_pipeline,
-            vertex_buffer,
-            index_buffer,
-            uniform_buffer,
-            depth_texture,
-            atlas_texture,
-            atlas_texture_view,
-            atlas_sampler,
-            size,
-            texture_bind_group: tex_bg,
-            uniform_bind_group: uniform_bg,
+            pipeline,
+            resources,
         }
-    }
-
-    pub(crate) fn update_vertex_buffer(&mut self, vertices: &[Vertex]) {
-        // fixme
-        self.vertex_buffer = vertex::create_buffer(&self.device, vertices.len() as u64);
     }
 
     pub(crate) fn render(
@@ -152,11 +148,8 @@ impl RendererState<'_> {
         scene: &mut types::Scene,
     ) -> Result<(), wgpu::SurfaceError> {
         let frame = self.surface.get_current_texture()?;
-        let texture_view = frame
+        let view = frame
             .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let depth_view = self
-            .depth_texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
             .device
@@ -164,11 +157,15 @@ impl RendererState<'_> {
                 label: Some("render_encoder"),
             });
 
-        let mut render_pass = render_pass::begin(&mut encoder, &texture_view, &depth_view);
-        render_pass.set_bind_group(0, &self.texture_bind_group, &[]);
-        render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        let mut render_pass =
+            render_pass::begin(&mut encoder, &view, &self.resources.depth_texture_view);
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(0, &self.resources.terrain.texture_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.resources.terrain.mesh_buffers.vertex.slice(..));
+        render_pass.set_index_buffer(
+            self.resources.terrain.mesh_buffers.index.slice(..),
+            wgpu::IndexFormat::Uint32,
+        );
 
         let uni_buf_offset = self.device.limits().min_uniform_buffer_offset_alignment;
         let mut global_mesh_data = render::types::global::Meshes::new();
@@ -177,7 +174,7 @@ impl RendererState<'_> {
         for (i, so) in scene.objects.iter_mut().enumerate() {
             let uni = (vp * so.model_matrix()).to_cols_array_2d();
             self.queue.write_buffer(
-                &self.uniform_buffer,
+                &self.resources.uniform.buffer,
                 i as u64 * uni_buf_offset as u64,
                 bytemuck::cast_slice(&[uni]),
             );
@@ -186,12 +183,12 @@ impl RendererState<'_> {
         }
 
         self.queue.write_buffer(
-            &self.vertex_buffer,
+            &self.resources.terrain.mesh_buffers.vertex,
             0,
             bytemuck::cast_slice(&global_mesh_data.vertices),
         );
         self.queue.write_buffer(
-            &self.index_buffer,
+            &self.resources.terrain.mesh_buffers.index,
             0,
             bytemuck::cast_slice(&global_mesh_data.indices),
         );
@@ -200,7 +197,7 @@ impl RendererState<'_> {
         for (i, so) in scene.objects.iter().enumerate() {
             let buf_offset = i as u32 * uni_buf_offset;
             let index_count = so.model.mesh.indices.len() as u32;
-            render_pass.set_bind_group(1, &self.uniform_bind_group, &[buf_offset]);
+            render_pass.set_bind_group(1, &self.resources.uniform.bind_group, &[buf_offset]);
             render_pass.draw_indexed(index_offset..(index_offset + index_count), 0, 0..1);
             index_offset += index_count;
         }

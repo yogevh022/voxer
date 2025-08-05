@@ -1,4 +1,4 @@
-use crate::render::types::{Index, Mesh, Vertex};
+use crate::render::types::Mesh;
 use crate::texture::TextureAtlas;
 use crate::worldgen::meshing;
 use crate::worldgen::types::block::BlockKind;
@@ -54,8 +54,6 @@ impl Chunk {
             }
         }
         Mesh {
-            vertex_offset: verts.len() as u64 * size_of::<Vertex>() as u64,
-            index_offset: inds.len() as u64 * size_of::<Index>() as u64,
             vertices: verts,
             indices: inds,
         }
