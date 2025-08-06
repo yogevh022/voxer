@@ -1,8 +1,7 @@
 use glam::{Vec2, Vec3};
-use std::mem;
 
 #[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Debug, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
     pub position: Vec3,
     pub tex_coords: Vec2,

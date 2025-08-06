@@ -2269,6 +2269,7 @@ dependencies = [
  "noise",
  "parking_lot",
  "pollster",
+ "rayon",
  "wgpu",
  "winit",
 ]

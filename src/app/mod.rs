@@ -1,8 +1,13 @@
 use crate::input::Input;
 use crate::render::Renderer;
-use crate::{input, render, types, utils};
+use crate::render::types::Mesh;
+use crate::texture::TextureAtlas;
+use crate::worldgen::types::{Chunk, World};
+use crate::{input, meshing, types, utils};
 use glam::{IVec3, Vec3};
 use parking_lot::RwLock;
+use rayon::iter::ParallelIterator;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator};
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
@@ -13,6 +18,7 @@ use winit::window::Window;
 pub struct AppTestData {
     pub last_fps: f32,
     pub last_chunk_pos: IVec3,
+    pub atlas: Option<TextureAtlas>,
 }
 
 pub struct App<'a> {
@@ -40,7 +46,8 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                 arc_window.inner_size().width as f32 / arc_window.inner_size().height as f32,
             );
             // a little silly but for now this makes sure the initial last_chunk_pos is never the same as the current one
-            self.test_data.last_chunk_pos = utils::vec3_to_ivec3(&(self.camera.transform.position + 1f32));
+            self.test_data.last_chunk_pos =
+                utils::vec3_to_ivec3(&(self.camera.transform.position + 1f32));
 
             self.renderer = Some(pollster::block_on(Renderer::new(arc_window)));
         }
@@ -120,7 +127,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
 impl<'a> App<'a> {
     fn update(&mut self) {
         let input = self.input.read();
-        const RENDER_DISTANCE: f32 = 10.0;
+        const RENDER_DISTANCE: f32 = 6.0;
         const MOUSE_SENSITIVITY: f64 = 0.01;
         const MOVE_SPEED: f32 = 30.0;
 
@@ -145,12 +152,88 @@ impl<'a> App<'a> {
             let chunk_pos_f32 =
                 Vec3::new(chunk_pos.x as f32, chunk_pos.y as f32, chunk_pos.z as f32);
             let renderer = self.renderer.as_mut().expect("renderer is none");
-            render::chunk_loader::update_loaded_chunks(
-                chunk_pos_f32,
-                RENDER_DISTANCE,
-                &mut self.scene.world,
-                renderer,
-            );
+            let active_chunk_positions =
+                utils::geo::discrete_points_within_sphere(chunk_pos_f32, RENDER_DISTANCE);
+            let chunk_tasks = self.scene.world.chunks_tasks(&active_chunk_positions);
+
+            // generating chunks
+            let g_chunks = &self.scene.world.generating_chunks;
+            let noise = &self.scene.world.noise;
+            let pending_chunk_generation = {
+                let generating_chunks_lock = self.scene.world.generating_chunks.read();
+                chunk_tasks
+                    .generate_chunk
+                    .into_iter()
+                    .filter(|c| !generating_chunks_lock.contains(*c))
+                    .collect::<Vec<_>>()
+            };
+            let chunks: Vec<(IVec3, Chunk)> = pending_chunk_generation
+                .par_iter()
+                .map(|c_pos| {
+                    g_chunks.write().insert(**c_pos);
+                    (**c_pos, World::generate_chunk(&noise, **c_pos))
+                })
+                .collect();
+
+            let mut g_chunks_lock = g_chunks.write();
+            for (c_pos, chunk) in chunks {
+                g_chunks_lock.remove(&c_pos);
+                self.scene.world.chunks.insert(c_pos, chunk);
+            }
+
+            // generating meshes
+            {
+                let g_meshes = &self.scene.world.generating_meshes;
+
+                let pending_mesh_generation = {
+                    let generating_meshes_lock = g_meshes.read();
+                    chunk_tasks
+                        .generate_mesh
+                        .into_iter()
+                        .filter(|c| !generating_meshes_lock.contains(*c))
+                        .collect::<Vec<_>>()
+                };
+
+                let mut meshes: Vec<(&IVec3, Mesh)> =
+                    Vec::with_capacity(pending_mesh_generation.len());
+                pending_mesh_generation
+                    .par_iter()
+                    .map(|c_pos| {
+                        g_meshes.write().insert(**c_pos);
+                        (
+                            *c_pos,
+                            meshing::chunk::generate_mesh(
+                                &self.scene.world.chunks[*c_pos],
+                                self.test_data.atlas.as_ref().unwrap(),
+                            ),
+                        )
+                    })
+                    .collect_into_vec(&mut meshes);
+                let mut g_meshes_lock = g_meshes.write();
+                for (c_pos, mesh) in meshes {
+                    g_meshes_lock.remove(c_pos);
+                    let chunk = self.scene.world.chunks.get_mut(c_pos).unwrap();
+                    chunk.mesh = Some(mesh);
+                }
+            }
+
+            // unload unactive from renderer
+            for expired_entry_index in renderer
+                .expired_chunks(&active_chunk_positions)
+                .iter()
+                .rev()
+            {
+                renderer.remove_chunk_buffer(*expired_entry_index);
+            }
+
+            // load active to renderer
+            for chunk_pos in renderer
+                .emerging_chunks(chunk_tasks.renderer_load)
+                .into_iter()
+            {
+                let c_mesh = &self.scene.world.chunks[chunk_pos].mesh.as_ref().unwrap();
+                renderer.add_chunk_buffer(*chunk_pos, c_mesh)
+            }
         }
     }
 }

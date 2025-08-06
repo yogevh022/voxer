@@ -11,7 +11,7 @@ fn tex(n: u8) -> Texture {
     }
 }
 
-pub(crate) fn zp_verts(
+pub(crate) fn plus_z_mesh(
     atlas: &TextureAtlas,
     verts: &mut Vec<Vertex>,
     inds: &mut Vec<Index>,
@@ -48,7 +48,7 @@ pub(crate) fn zp_verts(
     ]);
 }
 
-pub(crate) fn zm_verts(
+pub(crate) fn minus_z_mesh(
     atlas: &TextureAtlas,
     verts: &mut Vec<Vertex>,
     inds: &mut Vec<Index>,
@@ -87,7 +87,7 @@ pub(crate) fn zm_verts(
     ]);
 }
 
-pub(crate) fn xp_verts(
+pub(crate) fn plus_x_mesh(
     atlas: &TextureAtlas,
     verts: &mut Vec<Vertex>,
     inds: &mut Vec<Index>,
@@ -124,7 +124,7 @@ pub(crate) fn xp_verts(
     ]);
 }
 
-pub(crate) fn xm_verts(
+pub(crate) fn minus_x_mesh(
     atlas: &TextureAtlas,
     verts: &mut Vec<Vertex>,
     inds: &mut Vec<Index>,
@@ -161,7 +161,7 @@ pub(crate) fn xm_verts(
     ]);
 }
 
-pub(crate) fn yp_verts(
+pub(crate) fn plus_y_mesh(
     atlas: &TextureAtlas,
     verts: &mut Vec<Vertex>,
     inds: &mut Vec<Index>,
@@ -200,7 +200,7 @@ pub(crate) fn yp_verts(
     ]);
 }
 
-pub(crate) fn ym_verts(
+pub(crate) fn minus_y_mesh(
     atlas: &TextureAtlas,
     verts: &mut Vec<Vertex>,
     inds: &mut Vec<Index>,

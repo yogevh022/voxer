@@ -1,6 +1,7 @@
 mod app;
 mod input;
 mod mat;
+mod meshing;
 mod render;
 mod texture;
 mod types;
@@ -17,8 +18,7 @@ fn run_app() {
     let atlas = texture::helpers::generate_texture_atlas();
     _ = atlas.image.save("src/texture/images/atlas.png");
 
-    let mut world = worldgen::types::World::new(0);
-    world.generate(&atlas);
+    let world = worldgen::types::World::new(0);
 
     let scene = types::Scene {
         world,
@@ -36,7 +36,10 @@ fn run_app() {
         scene,
         camera,
         camera_controller,
-        test_data: AppTestData::default(),
+        test_data: AppTestData {
+            atlas: Some(atlas),
+            ..Default::default()
+        },
     };
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
