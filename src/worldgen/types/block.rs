@@ -1,5 +1,5 @@
 #[repr(u16)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BlockKind {
     Air,
     Dirt,

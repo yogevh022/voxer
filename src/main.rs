@@ -8,17 +8,53 @@ mod types;
 mod utils;
 mod worldgen;
 
-use crate::app::AppTestData;
+use crate::app::{AppTestData, WorkerHandles};
 use crate::input::Input;
+use crate::meshing::generation::{MeshGenRequest, MeshGenResponse};
+use crate::worldgen::types::{WorldGenRequest, WorldGenResponse};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use winit::event_loop::ControlFlow;
 
 fn run_app() {
-    let atlas = texture::helpers::generate_texture_atlas();
+    let atlas = Arc::new(texture::helpers::generate_texture_atlas());
     _ = atlas.image.save("src/texture/images/atlas.png");
 
     let world = worldgen::types::World::new(0);
+
+    let (worldgen_response_send, worldgen_response_recv) =
+        crossbeam::channel::unbounded::<WorldGenResponse>();
+    let (worldgen_request_send, worldgen_request_recv) =
+        crossbeam::channel::unbounded::<WorldGenRequest>();
+    let (meshgen_response_send, meshgen_response_recv) =
+        crossbeam::channel::unbounded::<MeshGenResponse>();
+    let (meshgen_request_send, meshgen_request_recv) =
+        crossbeam::channel::unbounded::<MeshGenRequest>();
+
+    std::thread::spawn(move || {
+        worldgen::types::world_generation_task(
+            world.seed,
+            worldgen_response_send,
+            worldgen_request_recv,
+        )
+    });
+    std::thread::spawn(move || {
+        meshing::generation::world_mesh_generation_task(
+            atlas,
+            meshgen_response_send,
+            meshgen_request_recv,
+        )
+    });
+
+    let worldgen_handle = worldgen::types::WorldGenHandle {
+        send: worldgen_request_send,
+        receive: worldgen_response_recv,
+    };
+
+    let meshgen_handle = meshing::generation::MeshGenHandle {
+        send: meshgen_request_send,
+        receive: meshgen_response_recv,
+    };
 
     let scene = types::Scene {
         world,
@@ -33,13 +69,14 @@ fn run_app() {
         renderer: None,
         input: Arc::new(RwLock::new(Input::default())),
         time: utils::Timer::new(),
+        worker_handles: WorkerHandles {
+            worldgen: worldgen_handle,
+            meshgen: meshgen_handle,
+        },
         scene,
         camera,
         camera_controller,
-        test_data: AppTestData {
-            atlas: Some(atlas),
-            ..Default::default()
-        },
+        test_data: AppTestData::default(),
     };
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();

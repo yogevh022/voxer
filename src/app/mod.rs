@@ -1,8 +1,9 @@
 use crate::input::Input;
+use crate::meshing::generation::MeshGenHandle;
 use crate::render::Renderer;
 use crate::render::types::Mesh;
 use crate::texture::TextureAtlas;
-use crate::worldgen::types::{Chunk, World};
+use crate::worldgen::types::{Chunk, World, WorldGenHandle};
 use crate::{input, meshing, types, utils};
 use glam::{IVec3, Vec3};
 use parking_lot::RwLock;
@@ -18,13 +19,18 @@ use winit::window::Window;
 pub struct AppTestData {
     pub last_fps: f32,
     pub last_chunk_pos: IVec3,
-    pub atlas: Option<TextureAtlas>,
+}
+
+pub struct WorkerHandles {
+    pub worldgen: WorldGenHandle,
+    pub meshgen: MeshGenHandle,
 }
 
 pub struct App<'a> {
     pub window: Option<Arc<Window>>,
     pub renderer: Option<Renderer<'a>>,
     pub test_data: AppTestData,
+    pub worker_handles: WorkerHandles,
     pub time: utils::Timer,
     pub input: Arc<RwLock<Input>>,
     pub scene: types::Scene,
@@ -151,73 +157,12 @@ impl<'a> App<'a> {
             self.test_data.last_chunk_pos = chunk_pos;
             let chunk_pos_f32 =
                 Vec3::new(chunk_pos.x as f32, chunk_pos.y as f32, chunk_pos.z as f32);
-            let renderer = self.renderer.as_mut().expect("renderer is none");
             let active_chunk_positions =
                 utils::geo::discrete_points_within_sphere(chunk_pos_f32, RENDER_DISTANCE);
-            let chunk_tasks = self.scene.world.chunks_tasks(&active_chunk_positions);
 
-            // generating chunks
-            let g_chunks = &self.scene.world.generating_chunks;
-            let noise = &self.scene.world.noise;
-            let pending_chunk_generation = {
-                let generating_chunks_lock = self.scene.world.generating_chunks.read();
-                chunk_tasks
-                    .generate_chunk
-                    .into_iter()
-                    .filter(|c| !generating_chunks_lock.contains(*c))
-                    .collect::<Vec<_>>()
-            };
-            let chunks: Vec<(IVec3, Chunk)> = pending_chunk_generation
-                .par_iter()
-                .map(|c_pos| {
-                    g_chunks.write().insert(**c_pos);
-                    (**c_pos, World::generate_chunk(&noise, **c_pos))
-                })
-                .collect();
+            let renderer = self.renderer.as_mut().expect("renderer is none");
 
-            let mut g_chunks_lock = g_chunks.write();
-            for (c_pos, chunk) in chunks {
-                g_chunks_lock.remove(&c_pos);
-                self.scene.world.chunks.insert(c_pos, chunk);
-            }
-
-            // generating meshes
-            {
-                let g_meshes = &self.scene.world.generating_meshes;
-
-                let pending_mesh_generation = {
-                    let generating_meshes_lock = g_meshes.read();
-                    chunk_tasks
-                        .generate_mesh
-                        .into_iter()
-                        .filter(|c| !generating_meshes_lock.contains(*c))
-                        .collect::<Vec<_>>()
-                };
-
-                let mut meshes: Vec<(&IVec3, Mesh)> =
-                    Vec::with_capacity(pending_mesh_generation.len());
-                pending_mesh_generation
-                    .par_iter()
-                    .map(|c_pos| {
-                        g_meshes.write().insert(**c_pos);
-                        (
-                            *c_pos,
-                            meshing::chunk::generate_mesh(
-                                &self.scene.world.chunks[*c_pos],
-                                self.test_data.atlas.as_ref().unwrap(),
-                            ),
-                        )
-                    })
-                    .collect_into_vec(&mut meshes);
-                let mut g_meshes_lock = g_meshes.write();
-                for (c_pos, mesh) in meshes {
-                    g_meshes_lock.remove(c_pos);
-                    let chunk = self.scene.world.chunks.get_mut(c_pos).unwrap();
-                    chunk.mesh = Some(mesh);
-                }
-            }
-
-            // unload unactive from renderer
+            // UNLOAD FROM RENDERER
             for expired_entry_index in renderer
                 .expired_chunks(&active_chunk_positions)
                 .iter()
@@ -226,13 +171,75 @@ impl<'a> App<'a> {
                 renderer.remove_chunk_buffer(*expired_entry_index);
             }
 
-            // load active to renderer
-            for chunk_pos in renderer
-                .emerging_chunks(chunk_tasks.renderer_load)
-                .into_iter()
-            {
-                let c_mesh = &self.scene.world.chunks[chunk_pos].mesh.as_ref().unwrap();
-                renderer.add_chunk_buffer(*chunk_pos, c_mesh)
+            // RECEIVE FROM WORLDGEN WORKER
+            if let Ok(generated_chunks) = self.worker_handles.worldgen.receive.try_recv() {
+                for (c_pos, chunk) in generated_chunks {
+                    self.scene.world.chunks.insert(c_pos, Some(chunk));
+                    self.scene.world.active_generation.chunks.remove(&c_pos);
+                }
+            }
+
+            // RECEIVE FROM MESHGEN WORKER
+            if let Ok(generated_meshes) = self.worker_handles.meshgen.receive.try_recv() {
+                for (c_pos, chunk) in generated_meshes {
+                    self.scene.world.chunks.insert(c_pos, Some(chunk));
+                    self.scene.world.active_generation.meshes.remove(&c_pos);
+                }
+            }
+
+            // CHECK CHUNK STATUS *AFTER* RECEIVING FROM WORKERS
+            let chunks_status = self.scene.world.chunks_status(active_chunk_positions);
+
+            // SEND TO WORLDGEN WORKER
+            self.worker_handles
+                .worldgen
+                .send
+                .send(
+                    chunks_status
+                        .not_found
+                        .into_iter()
+                        .map(|c_pos| {
+                            self.scene.world.active_generation.chunks.insert(c_pos);
+                            c_pos
+                        })
+                        .collect(),
+                )
+                .unwrap();
+
+            // SEND TO MESHGEN WORKER
+            self.worker_handles
+                .meshgen
+                .send
+                .send(
+                    chunks_status
+                        .meshless
+                        .into_iter()
+                        .map(|c_pos| {
+                            self.scene.world.active_generation.meshes.insert(c_pos);
+                            (
+                                c_pos,
+                                self.scene
+                                    .world
+                                    .chunks
+                                    .get_mut(&c_pos)
+                                    .unwrap()
+                                    .take()
+                                    .unwrap(),
+                            )
+                        })
+                        .collect(),
+                )
+                .unwrap();
+
+            // LOAD TO RENDERER
+            for emerging_chunk in renderer.emerging_chunks(chunks_status.to_render) {
+                let mesh = self.scene.world.chunks[&emerging_chunk]
+                    .as_ref()
+                    .unwrap()
+                    .mesh
+                    .as_ref()
+                    .unwrap();
+                renderer.add_chunk_buffer(emerging_chunk, mesh);
             }
         }
     }

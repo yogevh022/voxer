@@ -40,17 +40,17 @@ impl Renderer<'_> {
         self.resources.chunk_buffer_pool.remove(index);
     }
 
-    pub(crate) fn emerging_chunks<'a>(
+    pub(crate) fn emerging_chunks(
         &mut self,
-        active_positions: Vec<&'a IVec3>,
-    ) -> Vec<&'a IVec3> {
+        active_positions: Vec<IVec3>,
+    ) -> Vec<IVec3> {
         active_positions
             .into_iter()
             .filter(|c_pos| {
                 self.resources
                     .chunk_buffer_pool
                     .iter()
-                    .position(|entry| entry.position == **c_pos)
+                    .position(|entry| entry.position == *c_pos)
                     .is_none()
             })
             .collect::<Vec<_>>()

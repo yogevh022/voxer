@@ -2,10 +2,6 @@ use crate::meshing::naive_quad;
 use crate::render::types::Mesh;
 use crate::texture::TextureAtlas;
 use crate::worldgen::types::{BlockKind, Chunk};
-use glam::IVec3;
-use parking_lot::RwLock;
-use std::sync::Arc;
-use wgpu::naga::FastHashSet;
 
 pub fn generate_mesh(chunk: &Chunk, texture_atlas: &TextureAtlas) -> Mesh {
     let mut verts = Vec::new();
