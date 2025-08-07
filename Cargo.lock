@@ -2298,6 +2298,7 @@ dependencies = [
  "crossbeam",
  "glam",
  "image",
+ "indexmap",
  "noise",
  "parking_lot",
  "pollster",

@@ -1,18 +1,19 @@
 use crate::render::types::Vertex;
-pub fn create(
+pub fn create_render(
     device: &wgpu::Device,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
     shader: &wgpu::ShaderModule,
     surface_format: wgpu::TextureFormat,
+    label: &str,
 ) -> wgpu::RenderPipeline {
     let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("render_pipeline_layout"),
+        label: Some(&format!("{}_layout", label)),
         bind_group_layouts,
         push_constant_ranges: &[],
     });
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("render_pipeline"),
+        label: Some(label),
         layout: Some(&render_pipeline_layout),
         vertex: wgpu::VertexState {
             module: shader,
@@ -45,6 +46,28 @@ pub fn create(
         }),
         multisample: wgpu::MultisampleState::default(),
         multiview: None,
+        cache: None,
+    })
+}
+
+pub fn create_compute(
+    device: &wgpu::Device,
+    bind_group_layouts: &[&wgpu::BindGroupLayout],
+    shader: &wgpu::ShaderModule,
+    label: &str,
+) -> wgpu::ComputePipeline {
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some(&format!("{}_layout", label)),
+        bind_group_layouts,
+        push_constant_ranges: &[],
+    });
+
+    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some(label),
+        layout: Some(&pipeline_layout),
+        module: &shader,
+        entry_point: Some("compute_main"),
+        compilation_options: Default::default(),
         cache: None,
     })
 }

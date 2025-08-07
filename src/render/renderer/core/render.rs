@@ -1,14 +1,14 @@
-use crate::render::render_pass;
+use crate::render::encoders;
 use crate::render::renderer::core::Renderer;
+use crate::render::renderer::gpu;
+use crate::render::renderer::resources::ChunkPool;
+use crate::worldgen::types::World;
 use crate::{types, utils};
 use glam::Mat4;
+use std::mem;
 
 impl Renderer<'_> {
-    pub(crate) fn render(
-        &mut self,
-        camera: &types::Camera,
-        scene: &mut types::Scene,
-    ) -> Result<(), wgpu::SurfaceError> {
+    pub(crate) fn render(&mut self, camera: &types::Camera) -> Result<(), wgpu::SurfaceError> {
         let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture
@@ -19,44 +19,60 @@ impl Renderer<'_> {
                 label: Some("render_encoder"),
             });
 
-        let mut render_pass =
-            render_pass::begin(&mut encoder, &view, &self.resources.depth_texture_view);
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &self.resources.terrain.texture_bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.resources.terrain.mesh_buffers.vertex.slice(..));
-        render_pass.set_index_buffer(
-            self.resources.terrain.mesh_buffers.index.slice(..),
-            wgpu::IndexFormat::Uint32,
-        );
+        // FIRST REMOVE PENDING REMOVALS
+        let chunk_pool_indices = self.render_resources.chunk_pool.take_remove_queue();
+        if !chunk_pool_indices.is_empty() {
+            // minimal traffic swap remove algorithm for the buffer
+            let new_indices = ChunkPool::post_swap_remove_indices(
+                self.render_resources.chunk_pool.len(),
+                &chunk_pool_indices,
+            );
+            gpu::buffer::reorder_to_indices(
+                &self.queue,
+                &self.render_resources.transform.model_matrix_buffer,
+                size_of::<[[f32; 4]; 4]>(),
+                &new_indices,
+                |i| {
+                    utils::mat::model_matrix(self.render_resources.chunk_pool.get_index(i).0)
+                        .to_cols_array()
+                },
+            );
 
-        let uni_buf_offset = self.device.limits().min_uniform_buffer_offset_alignment;
-        let vp = camera.get_view_projection();
-        for (i, chunk_buffer_entry) in self.resources.chunk_buffer_pool.iter().enumerate() {
-            let w_pos = utils::world::chunk_to_world_pos(&chunk_buffer_entry.position);
-            let uni = (vp * Mat4::from_translation(w_pos)).to_cols_array_2d();
+            // plain swap remove on cpu
+            for i in chunk_pool_indices {
+                self.render_resources.chunk_pool.swap_remove(i);
+            }
+        }
 
+        // THEN PUSH PENDING ADDITIONS
+        let chunk_entries = self.render_resources.chunk_pool.take_load_queue();
+        if !chunk_entries.is_empty() {
+            let initial_count = self.render_resources.chunk_pool.len();
             self.queue.write_buffer(
-                &self.resources.uniform.buffer,
-                i as u64 * uni_buf_offset as u64,
-                bytemuck::cast_slice(&[uni]),
+                &self.render_resources.transform.model_matrix_buffer,
+                (initial_count * size_of::<[[f32; 4]; 4]>()) as u64,
+                bytemuck::cast_slice(
+                    &chunk_entries
+                        .iter()
+                        .map(|(c_pos, _)| utils::mat::model_matrix(c_pos))
+                        .collect::<Vec<_>>(),
+                ),
             );
+            self.render_resources.chunk_pool.extend(chunk_entries);
         }
 
-        for (i, chunk_buffer_entry) in self.resources.chunk_buffer_pool.iter().enumerate() {
-            let buf_offset = i as u32 * uni_buf_offset;
-            let idx = chunk_buffer_entry.index_offset;
-            render_pass.set_bind_group(1, &self.resources.uniform.bind_group, &[buf_offset]);
-            render_pass.set_vertex_buffer(
-                0,
-                self.resources.chunk_buffer_pool[i].buffer.vertex.slice(..),
-            );
-            render_pass.set_index_buffer(
-                self.resources.chunk_buffer_pool[i].buffer.index.slice(..),
-                wgpu::IndexFormat::Uint32,
-            );
-            render_pass.draw_indexed(0..idx, 0, 0..1);
-        }
-        drop(render_pass);
+        // encode main render pass
+        encoders::render_pass::encode(
+            &mut encoder,
+            encoders::render_pass::RenderPassEncodeContext {
+                view,
+                pipeline: &self.render_pipeline,
+                device: &self.device,
+                queue: &self.queue,
+                resources: &self.render_resources,
+                view_projection: camera.get_view_projection(),
+            },
+        );
 
         self.queue.submit(Some(encoder.finish()));
         frame.present();

@@ -1,10 +1,8 @@
+use crate::render::renderer;
 use crate::render::renderer::resources::{
-    MeshBuffers, RenderResources, TerrainResources, UniformResources,
+    ChunkPool, RenderResources, TerrainResources, TransformResources,
 };
-use crate::render::types::Vertex;
-use crate::render::{bind_group, index, pipeline, shader, texture, uniform, vertex};
 use crate::utils;
-pub(crate) use chunks::ChunkBufferEntry;
 use std::sync::Arc;
 use winit::window::Window;
 
@@ -17,12 +15,12 @@ pub(crate) struct Renderer<'window> {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
 
-    pipeline: wgpu::RenderPipeline,
-    resources: RenderResources,
+    render_pipeline: wgpu::RenderPipeline,
+    render_resources: RenderResources,
 }
 
 impl Renderer<'_> {
-    pub(crate) async fn new(window: Arc<Window>) -> Self {
+    pub(crate) async fn new(window: Arc<Window>, render_distance: f32) -> Self {
         let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window.clone()).unwrap();
 
@@ -37,7 +35,7 @@ impl Renderer<'_> {
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
+                required_features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
                 required_limits: wgpu::Limits::default(),
                 label: None,
                 memory_hints: Default::default(),
@@ -63,68 +61,75 @@ impl Renderer<'_> {
         surface.configure(&device, &config);
 
         let atlas_rgba = utils::temp::get_atlas_image();
-        let atlas_texture = texture::create_diffuse(&device, &queue, &atlas_rgba);
+        let atlas_texture =
+            renderer::helpers::texture::create_diffuse(&device, &queue, &atlas_rgba);
         let atlas_texture_view = atlas_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let atlas_sampler = texture::diffuse_sampler(&device);
-        let terrain_texture_bg_entries = bind_group::index_based_entries([
-            // the index of the resource in this array is the index of the binding
+        let atlas_sampler = renderer::helpers::texture::diffuse_sampler(&device);
+        let terrain_texture_bg_entries = renderer::helpers::bind_group::index_based_entries([
             wgpu::BindingResource::TextureView(&atlas_texture_view),
             wgpu::BindingResource::Sampler(&atlas_sampler),
         ]);
 
-        let uniform_buffer = uniform::create_buffer(
+        let uniform_buffer_size = device
+            .limits()
+            .min_uniform_buffer_offset_alignment
+            .min(size_of::<[[f32; 4]; 4]>() as u32) as u64;
+        let uniform_buffer = renderer::helpers::uniform::create_buffer(
             &device,
-            // arbitrarily creating the buffer with capacity for 1000 objects
-            (device.limits().min_uniform_buffer_offset_alignment * 1000) as u64,
+            uniform_buffer_size,
+            "uniform_buffer",
         );
 
-        let uniform_buffer_binding_resource = wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+        let view_projection_buffer = wgpu::BindingResource::Buffer(wgpu::BufferBinding {
             buffer: &uniform_buffer,
             offset: 0,
-            size: std::num::NonZeroU64::new(64),
+            size: std::num::NonZeroU64::new(uniform_buffer_size),
         });
 
-        let (tex_bg_layout, tex_bg) =
-            texture::create_bind_group(&device, &terrain_texture_bg_entries);
-        let (uniform_bg_layout, uniform_bg) =
-            uniform::create_bind_group(&device, uniform_buffer_binding_resource);
+        // >upper bound of max chunks to be buffered at once
+        let max_rendered_chunks = utils::geo::max_discrete_sphere_pts(render_distance);
+        let chunk_matrix_buffer =
+            renderer::helpers::chunk_model::create_buffer(&device, max_rendered_chunks);
 
-        let shader = shader::create(&device, shader::main_shader_source().into());
-        let pipeline = pipeline::create(
+        let (texture_layout, atlas_bind_group) =
+            renderer::helpers::texture::create_bind_group(&device, &terrain_texture_bg_entries);
+        let (transform_matrices_layout, transform_matrices_bind_group) =
+            renderer::helpers::transform_matrices::create_bind_group(
+                &device,
+                &renderer::helpers::bind_group::index_based_entries([
+                    view_projection_buffer,                  // 0
+                    chunk_matrix_buffer.as_entire_binding(), // 1
+                ]),
+            );
+
+        let render_pipeline = renderer::helpers::render_pipeline::create(
             &device,
-            &[&tex_bg_layout, &uniform_bg_layout],
-            &shader,
+            renderer::helpers::shader::main_shader_source().into(),
+            &[&texture_layout, &transform_matrices_layout],
             surface_format,
+            "main_render_pipeline",
         );
 
-        let terrain_vertex_alloc = 1024 * size_of::<Vertex>() as u64;
-        let terrain_index_alloc = 1024 * size_of::<u32>() as u64;
-        // let (terrain_vertex_alloc, terrain_index_alloc) =
-        //     alloc::size_of_meshes_from_sos(rendered_objects);
-
         let terrain_resources = TerrainResources {
-            mesh_buffers: MeshBuffers {
-                vertex: vertex::create_buffer(&device, terrain_vertex_alloc),
-                index: index::create_buffer(&device, terrain_index_alloc),
-            },
-            texture_view: atlas_texture_view,
-            texture_sampler: atlas_sampler,
-            texture_bind_group: tex_bg,
+            atlas_view: atlas_texture_view,
+            atlas_sampler,
+            atlas_bind_group,
         };
 
-        let uniform_resources = UniformResources {
-            buffer: uniform_buffer,
-            bind_group: uniform_bg,
+        let transform_resources = TransformResources {
+            uniform_buffer,
+            model_matrix_buffer: chunk_matrix_buffer,
+            bind_group: transform_matrices_bind_group,
         };
 
-        let depth_texture = texture::create_depth(&device, &config);
-        let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_texture_view = renderer::helpers::texture::create_depth(&device, &config)
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let resources = RenderResources {
+        let render_resources = RenderResources {
             terrain: terrain_resources,
-            uniform: uniform_resources,
+            transform: transform_resources,
+            chunk_pool: ChunkPool::default(),
             depth_texture_view,
-            chunk_buffer_pool: Vec::new(),
         };
 
         Self {
@@ -132,8 +137,8 @@ impl Renderer<'_> {
             device,
             queue,
             config,
-            pipeline,
-            resources,
+            render_pipeline,
+            render_resources,
         }
     }
 }

@@ -1,15 +1,22 @@
+mod chunk;
 mod mesh;
 mod terrain;
 mod uniform;
 
-use crate::render::renderer::core::ChunkBufferEntry;
+pub use chunk::{ChunkPool, ChunkPoolEntry};
 pub use mesh::MeshBuffers;
 pub use terrain::TerrainResources;
-pub use uniform::UniformResources;
+pub use uniform::TransformResources;
+use wgpu::naga::FastHashMap;
 
 pub struct RenderResources {
     pub terrain: TerrainResources,
-    pub uniform: UniformResources,
+    pub transform: TransformResources,
+    pub chunk_pool: ChunkPool,
     pub depth_texture_view: wgpu::TextureView,
-    pub chunk_buffer_pool: Vec<ChunkBufferEntry>,
+}
+
+pub struct ComputeResources {
+    pub pipelines: FastHashMap<&'static str, wgpu::ComputePipeline>,
+    pub bind_groups: FastHashMap<&'static str, wgpu::BindGroup>,
 }
