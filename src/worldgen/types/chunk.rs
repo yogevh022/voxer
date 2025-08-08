@@ -1,9 +1,9 @@
 use crate::render::types::Mesh;
-use crate::worldgen::types::block::BlockKind;
+use crate::worldgen::types::block::Block;
 use std::time::Instant;
 
 pub const CHUNK_SIZE: usize = 16;
-pub type ChunkBlocks = [[[BlockKind; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+pub type ChunkBlocks = [[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
 
 #[derive(Debug, Clone)]
 pub struct Chunk {

@@ -1,5 +1,6 @@
 use crate::texture::atlas::TextureAtlas;
 use crate::texture::{TEXTURE_DIM, TEXTURES, TextureData};
+use glam::Vec2;
 
 fn get_image_path(img_src: &'static str) -> String {
     "src/texture/images/".to_string() + img_src
@@ -12,7 +13,8 @@ pub fn write_texture_to_atlas(tex_data: &TextureData, atlas: &mut TextureAtlas) 
     let tex_index = tex_data.kind as u32 as f32;
     let x_offset = TEXTURE_DIM as f32 * (tex_index % atlas.tiles_per_dim);
     let y_offset = TEXTURE_DIM as f32 * (tex_index / atlas.tiles_per_dim).floor();
-    atlas.textures[tex_index as usize].offset = [x_offset / atlas.dim, y_offset / atlas.dim];
+    atlas.textures[tex_index as usize].offset =
+        Vec2::new(x_offset / atlas.dim, y_offset / atlas.dim);
     for (x, y, pixel) in tex_image.enumerate_pixels() {
         atlas
             .image

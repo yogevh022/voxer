@@ -2,7 +2,7 @@ mod block;
 mod chunk;
 mod world;
 
-pub use block::BlockKind;
+pub use block::Block;
 pub use chunk::{CHUNK_SIZE, Chunk, ChunkBlocks};
 
 pub use crate::worldgen::generation::{

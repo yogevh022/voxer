@@ -1,7 +1,7 @@
-use std::collections::HashSet;
-use crate::worldgen::types::{BlockKind, CHUNK_SIZE, Chunk, ChunkBlocks};
+use crate::worldgen::types::{Block, CHUNK_SIZE, Chunk, ChunkBlocks};
 use glam::{IVec3, Vec3};
 use noise::NoiseFn;
+use std::collections::HashSet;
 use wgpu::naga::{FastHashMap, FastHashSet};
 
 const NOISE_SCALE: f64 = 0.05;
@@ -53,9 +53,10 @@ impl World {
                         (chunk_position.z * CHUNK_SIZE as i32 + z as i32) as f64 * NOISE_SCALE,
                     ]) > 0.1
                     {
-                        BlockKind::Stone
+                        // fixme this is horrible
+                        Block(1u16 << 15)
                     } else {
-                        BlockKind::Air
+                        Block(1u16)
                     }
                 })
             })

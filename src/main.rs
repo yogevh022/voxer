@@ -1,6 +1,6 @@
 mod app;
+mod compute;
 mod input;
-mod mat;
 mod meshing;
 mod render;
 mod texture;
@@ -11,9 +11,11 @@ mod worldgen;
 use crate::app::{AppTestData, WorkerHandles};
 use crate::input::Input;
 use crate::meshing::generation::{MeshGenRequest, MeshGenResponse};
-use crate::worldgen::types::{WorldGenRequest, WorldGenResponse};
+use crate::worldgen::types::{World, WorldGenRequest, WorldGenResponse};
+use glam::IVec3;
 use parking_lot::RwLock;
 use std::sync::Arc;
+use std::time::Instant;
 use winit::event_loop::ControlFlow;
 
 fn run_app() {
@@ -86,4 +88,26 @@ fn run_app() {
 
 fn main() {
     run_app();
+
+    // let atlas = Arc::new(texture::helpers::generate_texture_atlas());
+    // _ = atlas.image.save("src/texture/images/atlas.png");
+    // 
+    // let noise = noise::OpenSimplex::new(0);
+    // 
+    // let mut chunks = Vec::new();
+    // for i in 0..200 {
+    //     let c_pos = IVec3::new(i as i32, 0, 0);
+    //     let chunk = World::generate_chunk(&noise, c_pos);
+    //     chunks.push(chunk);
+    // }
+    // 
+    // let start = Instant::now();
+    // let mut total_verts = 0;
+    // for c in chunks.iter() {
+    //     let mesh = meshing::chunk::generate_mesh(c, &atlas);
+    //     total_verts += mesh.vertices.len();
+    // }
+    // println!("Time: {:?}", start.elapsed());
+    // 
+    // println!("Total Verts: {}", total_verts);
 }

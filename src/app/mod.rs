@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use crate::input::Input;
 use crate::meshing::generation::MeshGenHandle;
 use crate::render::Renderer;
@@ -6,6 +5,7 @@ use crate::worldgen::types::{World, WorldGenHandle};
 use crate::{input, types, utils};
 use glam::{IVec3, Vec3};
 use parking_lot::RwLock;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -13,7 +13,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
-const RENDER_DISTANCE: f32 = 12.0;
+const RENDER_DISTANCE: f32 = 10.0;
 
 #[derive(Default)]
 pub struct AppTestData {
@@ -216,8 +216,17 @@ impl<'a> App<'a> {
 
         // fixme fix the collect atrocity
         // LOAD TO RENDERER
-        for emerging_chunk in renderer.emerging_chunks(chunks_status.to_render).collect::<HashSet<_>>().iter() {
-            let mesh = self.scene.world.chunks.get(emerging_chunk).unwrap()
+        for emerging_chunk in renderer
+            .emerging_chunks(chunks_status.to_render)
+            .collect::<HashSet<_>>()
+            .iter()
+        {
+            let mesh = self
+                .scene
+                .world
+                .chunks
+                .get(emerging_chunk)
+                .unwrap()
                 .as_ref()
                 .unwrap()
                 .mesh

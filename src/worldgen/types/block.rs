@@ -1,17 +1,10 @@
-#[repr(u16)]
 #[derive(Debug, Clone)]
-pub enum BlockKind {
-    Air,
-    Dirt,
-    Stone,
-    Wood,
-}
+pub struct Block(pub u16);
 
-impl BlockKind {
-    pub fn is_air(&self) -> bool {
-        match self {
-            BlockKind::Air => true,
-            _ => false,
-        }
+impl Block {
+    const TRANSPARENT_BIT: u16 = 1 << 15;
+    #[inline(always)]
+    pub fn is_transparent(&self) -> bool {
+        self.0 & Self::TRANSPARENT_BIT != 0
     }
 }

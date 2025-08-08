@@ -1,4 +1,5 @@
 pub(crate) mod geo;
+pub mod loading_bar;
 pub mod mat;
 pub mod temp;
 mod timer;

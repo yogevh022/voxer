@@ -1,67 +1,138 @@
-use crate::meshing::naive_quad;
-use crate::render::types::Mesh;
-use crate::texture::TextureAtlas;
-use crate::worldgen::types::{BlockKind, Chunk};
+use crate::compute;
+use crate::render::types::{Mesh, Vertex};
+use crate::texture::{Texture, TextureAtlas};
+use crate::worldgen::types::{CHUNK_SIZE, Chunk};
+use glam::{Vec2, Vec3};
 
 pub fn generate_mesh(chunk: &Chunk, texture_atlas: &TextureAtlas) -> Mesh {
-    let mut verts = Vec::new();
-    let mut inds = Vec::new();
+    let chunk_faces = compute::chunk::chunk_faces(
+        chunk,
+        &compute::chunk::OPAQUE_LAYER,
+        &compute::chunk::OPAQUE_LAYER,
+        &compute::chunk::OPAQUE_LAYER,
+    );
+    let face_count = chunk_faces.face_count();
+    let mut vertices = Vec::with_capacity(face_count * 4);
+    let mut indices = Vec::with_capacity(face_count * 6);
 
-    for x in 0..chunk.blocks.len() {
-        for y in 0..chunk.blocks.len() {
-            for z in 0..chunk.blocks.len() {
-                let pos = (x as f32, y as f32, z as f32);
-                if chunk.blocks[x][y][z].is_air() {
-                    continue;
-                }
-                if neighbor(chunk, x as isize + 1, y as isize, z as isize)
-                    .map_or(true, |b| b.is_air())
-                {
-                    naive_quad::plus_x_mesh(texture_atlas, &mut verts, &mut inds, pos);
-                }
-                if neighbor(chunk, x as isize - 1, y as isize, z as isize)
-                    .map_or(true, |b| b.is_air())
-                {
-                    naive_quad::minus_x_mesh(texture_atlas, &mut verts, &mut inds, pos);
-                }
-                if neighbor(chunk, x as isize, y as isize + 1, z as isize)
-                    .map_or(true, |b| b.is_air())
-                {
-                    naive_quad::plus_y_mesh(texture_atlas, &mut verts, &mut inds, pos);
-                }
-                if neighbor(chunk, x as isize, y as isize - 1, z as isize)
-                    .map_or(true, |b| b.is_air())
-                {
-                    naive_quad::minus_y_mesh(texture_atlas, &mut verts, &mut inds, pos);
-                }
-                if neighbor(chunk, x as isize, y as isize, z as isize + 1)
-                    .map_or(true, |b| b.is_air())
-                {
-                    naive_quad::plus_z_mesh(texture_atlas, &mut verts, &mut inds, pos);
-                }
-                if neighbor(chunk, x as isize, y as isize, z as isize - 1)
-                    .map_or(true, |b| b.is_air())
-                {
-                    naive_quad::minus_z_mesh(texture_atlas, &mut verts, &mut inds, pos);
-                }
+    let x_uv = texture_atlas.uv(Texture::Idk).offset;
+    let y_uv = texture_atlas.uv(Texture::Green).offset;
+    let z_uv = texture_atlas.uv(Texture::Yellow).offset;
+
+    for i in 0..chunk_faces.x.len() {
+        let x = (i / CHUNK_SIZE) as f32;
+        let y = (i % CHUNK_SIZE) as f32;
+
+        for z in 0..CHUNK_SIZE {
+            if (chunk_faces.x[i] & (1 << z)) != 0 {
+                quad_indices(&mut indices, vertices.len() as u32);
+                plus_x_vertices(&mut vertices, x_uv, x, y, z as f32, texture_atlas.tile_dim);
+            }
+            if (chunk_faces.y[i] & (1 << z)) != 0 {
+                quad_indices(&mut indices, vertices.len() as u32);
+                plus_y_vertices(&mut vertices, y_uv, x, y, z as f32, texture_atlas.tile_dim);
+            }
+            if (chunk_faces.z[i] & (1 << z)) != 0 {
+                quad_indices(&mut indices, vertices.len() as u32);
+                plus_z_vertices(&mut vertices, z_uv, x, y, z as f32, texture_atlas.tile_dim);
             }
         }
     }
-    Mesh {
-        vertices: verts,
-        indices: inds,
-    }
+
+    Mesh { vertices, indices }
 }
 
-fn neighbor(chunk: &Chunk, x: isize, y: isize, z: isize) -> Option<&BlockKind> {
-    if x < 0
-        || y < 0
-        || z < 0
-        || x >= chunk.blocks.len() as isize
-        || y >= chunk.blocks.len() as isize
-        || z >= chunk.blocks.len() as isize
-    {
-        return None;
-    }
-    Some(&chunk.blocks[x as usize][y as usize][z as usize])
+fn quad_indices(indices: &mut Vec<u32>, offset: u32) {
+    indices.extend([
+        offset + 0,
+        offset + 1,
+        offset + 2,
+        offset + 0,
+        offset + 2,
+        offset + 3,
+    ]);
+}
+
+fn plus_x_vertices(
+    vertices: &mut Vec<Vertex>,
+    uv_offset: Vec2,
+    x: f32,
+    y: f32,
+    z: f32,
+    tile_dim: f32,
+) {
+    vertices.extend([
+        Vertex {
+            position: Vec3::new(x, y + 1.0, z),
+            tex_coords: Vec2::new(uv_offset.x, uv_offset.y + tile_dim),
+        },
+        Vertex {
+            position: Vec3::new(x, y, z),
+            tex_coords: Vec2::new(uv_offset.x, uv_offset.y),
+        },
+        Vertex {
+            position: Vec3::new(x, y, z + 1.0),
+            tex_coords: Vec2::new(uv_offset.x + tile_dim, uv_offset.y),
+        },
+        Vertex {
+            position: Vec3::new(x, y + 1.0, z + 1.0),
+            tex_coords: Vec2::new(uv_offset.x + tile_dim, uv_offset.y + tile_dim),
+        },
+    ]);
+}
+
+fn plus_z_vertices(
+    vertices: &mut Vec<Vertex>,
+    uv_offset: Vec2,
+    x: f32,
+    y: f32,
+    z: f32,
+    tile_dim: f32,
+) {
+    vertices.extend([
+        Vertex {
+            position: Vec3::new(x, y + 1.0, z + 1.0),
+            tex_coords: Vec2::new(uv_offset.x, uv_offset.y),
+        },
+        Vertex {
+            position: Vec3::new(x, y, z + 1.0),
+            tex_coords: Vec2::new(uv_offset.x, uv_offset.y + tile_dim),
+        },
+        Vertex {
+            position: Vec3::new(x + 1.0, y, z + 1.0),
+            tex_coords: Vec2::new(uv_offset.x + tile_dim, uv_offset.y + tile_dim),
+        },
+        Vertex {
+            position: Vec3::new(x + 1.0, y + 1.0, z + 1.0),
+            tex_coords: Vec2::new(uv_offset.x + tile_dim, uv_offset.y),
+        },
+    ]);
+}
+
+fn plus_y_vertices(
+    vertices: &mut Vec<Vertex>,
+    uv_offset: Vec2,
+    x: f32,
+    y: f32,
+    z: f32,
+    tile_dim: f32,
+) {
+    vertices.extend([
+        Vertex {
+            position: Vec3::new(x, y + 1.0, z),
+            tex_coords: Vec2::new(uv_offset.x, uv_offset.y + tile_dim),
+        },
+        Vertex {
+            position: Vec3::new(x, y + 1.0, z + 1.0),
+            tex_coords: Vec2::new(uv_offset.x, uv_offset.y),
+        },
+        Vertex {
+            position: Vec3::new(x + 1.0, y + 1.0, z + 1.0),
+            tex_coords: Vec2::new(uv_offset.x + tile_dim, uv_offset.y),
+        },
+        Vertex {
+            position: Vec3::new(x + 1.0, y + 1.0, z),
+            tex_coords: Vec2::new(uv_offset.x + tile_dim, uv_offset.y + tile_dim),
+        },
+    ]);
 }
