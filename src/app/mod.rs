@@ -142,6 +142,8 @@ impl<'a> App<'a> {
         let chunk_pos_f32 = Vec3::new(chunk_pos.x as f32, chunk_pos.y as f32, chunk_pos.z as f32);
         let active_chunk_positions =
             utils::geo::discrete_sphere_pts(chunk_pos_f32, RENDER_DISTANCE);
+        
+        let active_chunk_positions = HashSet::from([IVec3::new(0, 0, 0),]);
 
         let renderer = self.renderer.as_mut().expect("renderer is none");
 

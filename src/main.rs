@@ -91,16 +91,16 @@ fn main() {
 
     // let atlas = Arc::new(texture::helpers::generate_texture_atlas());
     // _ = atlas.image.save("src/texture/images/atlas.png");
-    // 
+    //
     // let noise = noise::OpenSimplex::new(0);
-    // 
+    //
     // let mut chunks = Vec::new();
     // for i in 0..200 {
     //     let c_pos = IVec3::new(i as i32, 0, 0);
     //     let chunk = World::generate_chunk(&noise, c_pos);
     //     chunks.push(chunk);
     // }
-    // 
+    //
     // let start = Instant::now();
     // let mut total_verts = 0;
     // for c in chunks.iter() {
@@ -108,6 +108,6 @@ fn main() {
     //     total_verts += mesh.vertices.len();
     // }
     // println!("Time: {:?}", start.elapsed());
-    // 
+    //
     // println!("Total Verts: {}", total_verts);
 }
