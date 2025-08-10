@@ -1,4 +1,5 @@
-use crate::worldgen::types::{Block, CHUNK_SIZE, Chunk, ChunkBlocks};
+use crate::compute::array::Array3D;
+use crate::worldgen::types::{Block, CHUNK_DIM, Chunk, ChunkBlocks};
 use glam::{IVec3, Vec3};
 use noise::NoiseFn;
 use std::collections::HashSet;
@@ -44,13 +45,13 @@ impl World {
     }
 
     fn generate_chunk_blocks(noise: impl NoiseFn<f64, 3>, chunk_position: IVec3) -> ChunkBlocks {
-        let blocks: ChunkBlocks = std::array::from_fn(|x| {
+        let blocks: ChunkBlocks = Array3D(std::array::from_fn(|x| {
             std::array::from_fn(|y| {
                 std::array::from_fn(|z| {
                     if noise.get([
-                        (chunk_position.x * CHUNK_SIZE as i32 + x as i32) as f64 * NOISE_SCALE,
-                        (chunk_position.y * CHUNK_SIZE as i32 + y as i32) as f64 * NOISE_SCALE,
-                        (chunk_position.z * CHUNK_SIZE as i32 + z as i32) as f64 * NOISE_SCALE,
+                        (chunk_position.x * CHUNK_DIM as i32 + x as i32) as f64 * NOISE_SCALE,
+                        (chunk_position.y * CHUNK_DIM as i32 + y as i32) as f64 * NOISE_SCALE,
+                        (chunk_position.z * CHUNK_DIM as i32 + z as i32) as f64 * NOISE_SCALE,
                     ]) > 0.1
                     {
                         // fixme this is horrible
@@ -60,7 +61,7 @@ impl World {
                     }
                 })
             })
-        });
+        }));
         blocks
     }
 
@@ -100,7 +101,7 @@ impl World {
     }
 
     pub(crate) fn world_to_chunk_pos(vec: &Vec3) -> IVec3 {
-        let chunk_pos_float = vec / CHUNK_SIZE as f32;
+        let chunk_pos_float = vec / CHUNK_DIM as f32;
         IVec3::new(
             chunk_pos_float.x as i32,
             chunk_pos_float.y as i32,
@@ -109,7 +110,7 @@ impl World {
     }
 
     pub(crate) fn chunk_to_world_pos(chunk_pos: &IVec3) -> Vec3 {
-        let world_pos_round = chunk_pos * CHUNK_SIZE as i32;
+        let world_pos_round = chunk_pos * CHUNK_DIM as i32;
         Vec3::new(
             world_pos_round.x as f32,
             world_pos_round.y as f32,

@@ -1,9 +1,12 @@
+use crate::compute::array::Array3D;
 use crate::render::types::Mesh;
 use crate::worldgen::types::block::Block;
 use std::time::Instant;
 
-pub const CHUNK_SIZE: usize = 16;
-pub type ChunkBlocks = [[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+pub const CHUNK_DIM: usize = 16;
+pub const CHUNK_SLICE: usize = CHUNK_DIM * CHUNK_DIM;
+pub const CHUNK_VOLUME: usize = CHUNK_SLICE * CHUNK_DIM;
+pub type ChunkBlocks = Array3D<Block, CHUNK_DIM>;
 
 #[derive(Debug, Clone)]
 pub struct Chunk {

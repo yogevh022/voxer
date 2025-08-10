@@ -27,31 +27,31 @@ pub fn encode(encoder: &mut wgpu::CommandEncoder, context: RenderPassEncodeConte
         bytemuck::cast_slice(&[view_proj]),
     );
 
-    for (i, (c_pos, chunk_buffer_entry)) in context.resources.chunk_pool.iter().enumerate() {
-        let idx = chunk_buffer_entry.index_offset;
-        render_pass.set_bind_group(1, &context.resources.transform.bind_group, &[]);
-        render_pass.set_vertex_buffer(
-            0,
-            context
-                .resources
-                .chunk_pool
-                .get_index(i)
-                .1
-                .mesh_buffers
-                .vertex
-                .slice(..),
-        );
-        render_pass.set_index_buffer(
-            context
-                .resources
-                .chunk_pool
-                .get_index(i)
-                .1
-                .mesh_buffers
-                .index
-                .slice(..),
-            wgpu::IndexFormat::Uint32,
-        );
-        render_pass.draw_indexed(0..idx, 0, (i as u32)..(i as u32 + 1));
-    }
+    // for (i, (c_pos, chunk_buffer_entry)) in context.resources.chunk_pool.iter().enumerate() {
+    //     let idx = chunk_buffer_entry.index_offset;
+    //     render_pass.set_bind_group(1, &context.resources.transform.bind_group, &[]);
+    //     render_pass.set_vertex_buffer(
+    //         0,
+    //         context
+    //             .resources
+    //             .chunk_pool
+    //             .get_index(i)
+    //             .1
+    //             .mesh_buffers
+    //             .vertex
+    //             .slice(..),
+    //     );
+    //     render_pass.set_index_buffer(
+    //         context
+    //             .resources
+    //             .chunk_pool
+    //             .get_index(i)
+    //             .1
+    //             .mesh_buffers
+    //             .index
+    //             .slice(..),
+    //         wgpu::IndexFormat::Uint32,
+    //     );
+    //     render_pass.draw_indexed(0..idx, 0, (i as u32)..(i as u32 + 1));
+    // }
 }

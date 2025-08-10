@@ -91,23 +91,26 @@ fn main() {
 
     // let atlas = Arc::new(texture::helpers::generate_texture_atlas());
     // _ = atlas.image.save("src/texture/images/atlas.png");
-    //
+    // 
     // let noise = noise::OpenSimplex::new(0);
-    //
+    // 
     // let mut chunks = Vec::new();
     // for i in 0..200 {
-    //     let c_pos = IVec3::new(i as i32, 0, 0);
+    //     let c_pos = IVec3::new(i, 0, 0);
     //     let chunk = World::generate_chunk(&noise, c_pos);
     //     chunks.push(chunk);
     // }
-    //
+    // 
     // let start = Instant::now();
     // let mut total_verts = 0;
     // for c in chunks.iter() {
-    //     let mesh = meshing::chunk::generate_mesh(c, &atlas);
-    //     total_verts += mesh.vertices.len();
+    //     let size = compute::chunk::chunk_face_count(c);
+    //     total_verts += size;
     // }
     // println!("Time: {:?}", start.elapsed());
-    //
-    // println!("Total Verts: {}", total_verts);
+    // 
+    // println!(
+    //     "Total Verts: {}kb",
+    //     ((total_verts * 4 * 4 * 3) + (total_verts * 4 * 6)) / 1024
+    // );
 }

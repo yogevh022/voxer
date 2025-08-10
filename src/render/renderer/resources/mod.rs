@@ -12,7 +12,8 @@ use wgpu::naga::FastHashMap;
 pub struct RenderResources {
     pub terrain: TerrainResources,
     pub transform: TransformResources,
-    pub chunk_pool: ChunkPool,
+    pub vert_ind_buf: [wgpu::Buffer; 2],
+    pub compute_pip: wgpu::ComputePipeline,
     pub depth_texture_view: wgpu::TextureView,
 }
 

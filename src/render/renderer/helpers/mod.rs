@@ -1,4 +1,5 @@
 pub mod bind_group;
+pub mod chunk;
 pub mod chunk_model;
 pub mod compute_pipeline;
 pub mod index;

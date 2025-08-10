@@ -1,208 +1,74 @@
-use crate::worldgen::types::{CHUNK_SIZE, Chunk};
+use crate::compute;
+use crate::compute::array::Array3D;
+use crate::worldgen::types::{Block, CHUNK_DIM, CHUNK_SLICE, CHUNK_VOLUME, Chunk, ChunkBlocks};
 use simdeez::Simd;
 use simdeez::avx2::Avx2;
 use simdeez::scalar::Scalar;
 use simdeez::simd_runtime_generate;
 use simdeez::sse41::Sse2;
 use simdeez::sse41::Sse41;
+use std::ops::{Deref, DerefMut};
 
-type ChunkBits = [u16; CHUNK_SIZE * CHUNK_SIZE];
-type ChunkLayerBits = [u16; CHUNK_SIZE];
-pub const OPAQUE_LAYER: ChunkLayerBits = [1; CHUNK_SIZE];
-pub struct ChunkLayerBitData {
-    pub faces: ChunkLayerBits,
-    pub directions: ChunkLayerBits,
+pub type ChunkBits = [u16; CHUNK_DIM * CHUNK_DIM];
+type ChunkBits2D = [[u16; CHUNK_DIM]; CHUNK_DIM];
+type ChunkLayerBits = [u16; CHUNK_DIM];
+
+pub const OPAQUE_LAYER: [Block; CHUNK_SLICE] = [Block(1 << 15); CHUNK_SLICE];
+
+pub fn chunk_face_count(chunk: &Chunk) -> usize {
+    let x_blocks = &chunk.blocks;
+    let x_faces = faces_on_x(x_blocks);
+
+    let y_blocks = compute::array::rotated_z(x_blocks);
+    let y_faces = faces_on_x(&y_blocks);
+
+    let z_blocks = compute::array::rotated_y(x_blocks);
+    let z_faces = faces_on_x(&z_blocks);
+
+    x_faces.iter().map(|b| (b >> 15) as usize).sum::<usize>()
+        + y_faces.iter().map(|b| (b >> 15) as usize).sum::<usize>()
+        + z_faces.iter().map(|b| (b >> 15) as usize).sum::<usize>()
 }
 
-pub struct ChunkAxisFaceData {
-    pub faces: ChunkBits,
-    pub directions: ChunkBits,
-}
+fn faces_on_x(blocks: &ChunkBlocks) -> [u16; CHUNK_VOLUME] {
+    let yz_layers: &[[Block; CHUNK_SLICE]; CHUNK_DIM] =
+        unsafe { &*(blocks.as_ptr() as *const [[Block; CHUNK_SLICE]; CHUNK_DIM]) };
 
-pub struct ChunkFaceData {
-    pub x: ChunkAxisFaceData,
-    pub y: ChunkAxisFaceData,
-    pub z: ChunkAxisFaceData,
-}
+    let mut result = [0u16; CHUNK_VOLUME];
+    let result_layers: &mut [[u16; CHUNK_SLICE]; CHUNK_DIM] =
+        unsafe { &mut *(result.as_mut_ptr() as *mut [[u16; CHUNK_SLICE]; CHUNK_DIM]) };
 
-impl ChunkFaceData {
-    #[inline]
-    pub fn face_count(&self) -> usize {
-        self.x
-            .faces
-            .iter()
-            .map(|r| r.count_ones() as usize)
-            .sum::<usize>()
-            + self
-                .y
-                .faces
-                .iter()
-                .map(|r| r.count_ones() as usize)
-                .sum::<usize>()
-            + self
-                .z
-                .faces
-                .iter()
-                .map(|r| r.count_ones() as usize)
-                .sum::<usize>()
+    for i in 0..CHUNK_DIM - 1 {
+        let layer_a = &yz_layers[i];
+        let layer_b = &yz_layers[i + 1];
+        result_layers[i] = layer_face_data_runtime_select(layer_a, layer_b);
     }
-}
+    let layer_a = &yz_layers[CHUNK_DIM - 1];
+    result_layers[CHUNK_DIM - 1] = layer_face_data_runtime_select(layer_a, &OPAQUE_LAYER);
 
-pub fn chunk_faces(
-    chunk: &Chunk,
-    next_x: &ChunkLayerBits,
-    next_y: &ChunkLayerBits,
-    next_z: &ChunkLayerBits,
-) -> ChunkFaceData {
-    let bits = block_bits(chunk);
-    let x_data = first_axis_face_data(&bits, next_x);
-
-    let y_axis_bits = rotate_forward_y(&bits);
-    let y_data = first_axis_face_data(&y_axis_bits, next_y);
-    let y_data = ChunkAxisFaceData {
-        faces: rotate_backward_y(&y_data.faces),
-        directions: rotate_backward_y(&y_data.directions),
-    };
-
-    let z_axis_bits = rotate_forward_z(&bits);
-    let z_data = first_axis_face_data(&z_axis_bits, next_z);
-    let z_data = ChunkAxisFaceData {
-        faces: rotate_backward_z(&z_data.faces),
-        directions: rotate_backward_z(&z_data.directions),
-    };
-
-    ChunkFaceData {
-        x: x_data,
-        y: y_data,
-        z: z_data,
-    }
-}
-
-fn first_axis_face_data(bits: &ChunkBits, next_layer: &ChunkLayerBits) -> ChunkAxisFaceData {
-    let mut faces_2d: [[u16; CHUNK_SIZE]; CHUNK_SIZE] = [[0u16; CHUNK_SIZE]; CHUNK_SIZE];
-    let mut dirs_2d: [[u16; CHUNK_SIZE]; CHUNK_SIZE] = [[0u16; CHUNK_SIZE]; CHUNK_SIZE];
-
-    for i in 0..CHUNK_SIZE - 1 {
-        let layer_a = chunk_bits_layer(&bits, i);
-        let layer_b = chunk_bits_layer(&bits, i + 1);
-        let face_data = layer_face_data_runtime_select(layer_a, layer_b);
-        faces_2d[i] = face_data.faces;
-        dirs_2d[i] = face_data.directions;
-    }
-    let layer_b = chunk_bits_layer(&bits, CHUNK_SIZE - 1);
-    let face_data = layer_face_data_runtime_select(layer_b, next_layer);
-    faces_2d[CHUNK_SIZE - 1] = face_data.faces;
-    dirs_2d[CHUNK_SIZE - 1] = face_data.directions;
-
-    unsafe {
-        ChunkAxisFaceData {
-            faces: std::mem::transmute(faces_2d),
-            directions: std::mem::transmute(dirs_2d),
-        }
-    }
+    result
 }
 
 simd_runtime_generate!(
-    fn layer_face_data(a_u16: &ChunkLayerBits, b_u16: &ChunkLayerBits) -> ChunkLayerBitData {
-        let a_i32: &[i32; CHUNK_SIZE / 2] = unsafe { std::mem::transmute(a_u16) };
-        let b_i32: &[i32; CHUNK_SIZE / 2] = unsafe { std::mem::transmute(b_u16) };
+    fn layer_face_data(
+        a_u16: &[Block; CHUNK_SLICE],
+        b_u16: &[Block; CHUNK_SLICE],
+    ) -> [u16; CHUNK_SLICE] {
+        let a_i32: &[i32; CHUNK_SLICE / 2] = unsafe { std::mem::transmute(a_u16) };
+        let b_i32: &[i32; CHUNK_SLICE / 2] = unsafe { std::mem::transmute(b_u16) };
 
-        let mut faces = [0i32; CHUNK_SIZE / 2];
-        let mut directions = [0i32; CHUNK_SIZE / 2];
-        let s_chunks = (CHUNK_SIZE / 2) / S::VF32_WIDTH;
+        let mut faces = [0i32; CHUNK_SLICE / 2];
+        let s_chunks = CHUNK_SLICE / S::VI16_WIDTH;
         unsafe {
             for i in 0..s_chunks {
                 let va = S::loadu_epi32(&a_i32[i * S::VF32_WIDTH]);
                 let vb = S::loadu_epi32(&b_i32[i * S::VF32_WIDTH]);
 
                 let face_bits = S::xor_epi32(va, vb);
-                let not_vb = S::not_epi32(vb);
-                let dir_bits = S::and_epi32(va, not_vb);
 
                 S::storeu_epi32(&mut faces[i * S::VF32_WIDTH], face_bits);
-                S::storeu_epi32(&mut directions[i * S::VF32_WIDTH], dir_bits);
             }
-        }
-
-        unsafe {
-            ChunkLayerBitData {
-                faces: std::mem::transmute(faces),
-                directions: std::mem::transmute(directions),
-            }
+            std::mem::transmute(faces)
         }
     }
 );
-
-#[inline(always)]
-fn chunk_bits_layer(bits: &ChunkBits, index: usize) -> &ChunkLayerBits {
-    let layer = &bits[index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE];
-    layer.try_into().unwrap()
-}
-
-fn block_bits(chunk: &Chunk) -> ChunkBits {
-    let mut bytes = [0u16; CHUNK_SIZE * CHUNK_SIZE];
-
-    for (byte_idx, row) in chunk.blocks.iter().flatten().enumerate() {
-        let mut bits = 0u16;
-        for (i, b) in row.iter().enumerate() {
-            if !b.is_transparent() {
-                bits |= 1 << i;
-            }
-        }
-
-        bytes[byte_idx] = bits;
-    }
-
-    bytes
-}
-
-fn rotate_forward_z(arr: &ChunkBits) -> ChunkBits {
-    let mut output = [0u16; CHUNK_SIZE * CHUNK_SIZE];
-    for x in 0..CHUNK_SIZE {
-        for y in 0..CHUNK_SIZE {
-            output[y * CHUNK_SIZE + (CHUNK_SIZE - 1 - x)] = arr[x * CHUNK_SIZE + y];
-        }
-    }
-    output
-}
-
-fn rotate_backward_z(arr: &ChunkBits) -> ChunkBits {
-    let mut output = [0u16; CHUNK_SIZE * CHUNK_SIZE];
-    for x in 0..CHUNK_SIZE {
-        for y in 0..CHUNK_SIZE {
-            output[x * CHUNK_SIZE + y] = arr[y * CHUNK_SIZE + (CHUNK_SIZE - 1 - x)];       
-        }
-    }
-    output
-}
-
-fn rotate_forward_y(arr: &ChunkBits) -> ChunkBits {
-    let mut output = [0u16; CHUNK_SIZE * CHUNK_SIZE];
-    for z in 0..CHUNK_SIZE {
-        for y in 0..CHUNK_SIZE {
-            let z_data = arr[(CHUNK_SIZE - 1 - z) * CHUNK_SIZE + y];
-            for x in 0..CHUNK_SIZE {
-                if (z_data >> (CHUNK_SIZE - 1 - x)) & 1 == 1 {
-                    output[x * CHUNK_SIZE + y] |= 1 << z; // shift by z we determine new z here
-                    // ^ into > z_data[max-x]
-                }
-            }
-        }
-    }
-    output
-}
-
-fn rotate_backward_y(arr: &ChunkBits) -> ChunkBits {
-    let mut output = [0u16; CHUNK_SIZE * CHUNK_SIZE];
-    for x in 0..CHUNK_SIZE {
-        for y in 0..CHUNK_SIZE {
-            let z_data = arr[x * CHUNK_SIZE + y];
-            for z in 0..CHUNK_SIZE {
-                if (z_data >> z) & 1 == 1 {
-                    output[(CHUNK_SIZE - 1 - z) * CHUNK_SIZE + y] |= 1 << (CHUNK_SIZE - 1 - x);
-                }
-            }
-        }
-    }
-    output
-}

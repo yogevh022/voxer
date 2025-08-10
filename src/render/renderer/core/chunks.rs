@@ -23,40 +23,41 @@ impl Renderer<'_> {
             0,
             bytemuck::cast_slice(&chunk_mesh.indices),
         );
-
-        let chunk_entry = ChunkPoolEntry {
-            mesh_buffers,
-            index_offset: chunk_mesh.indices.len() as u32,
-        };
-        self.render_resources
-            .chunk_pool
-            .queue_load(chunk_position, chunk_entry);
+        //
+        // let chunk_entry = ChunkPoolEntry {
+        //     mesh_buffers,
+        //     index_offset: chunk_mesh.indices.len() as u32,
+        // };
+        // self.render_resources
+        //     .chunk_pool
+        //     .queue_load(chunk_position, chunk_entry);
     }
 
     pub(crate) fn remove_chunk_buffer(&mut self, index: usize) {
-        self.render_resources.chunk_pool.queue_remove(index);
+        // self.render_resources.chunk_pool.queue_remove(index);
+        unimplemented!()
     }
 
-    pub(crate) fn emerging_chunks(
-        &mut self,
-        active_positions: Vec<IVec3>,
-    ) -> impl Iterator<Item = IVec3> {
-        active_positions
-            .into_iter()
-            .filter(|c_pos| !self.render_resources.chunk_pool.contains(c_pos))
+    pub(crate) fn emerging_chunks(&mut self, active_positions: Vec<IVec3>) -> ! {
+        // -> impl Iterator<Item = IVec3>
+        // active_positions
+        //     .into_iter()
+        //     .filter(|c_pos| !self.render_resources.chunk_pool.contains(c_pos))
+        unimplemented!()
     }
 
     pub(crate) fn expired_chunks(&mut self, active_positions: &HashSet<IVec3>) -> Vec<usize> {
         // returns asc sorted indices of unactive chunk entries
-        let mut expired_chunks: Vec<usize> = self
-            .render_resources
-            .chunk_pool
-            .iter()
-            .enumerate()
-            .filter(|(_, (c_pos, _))| !active_positions.contains(*c_pos))
-            .map(|(c_idx, _)| c_idx)
-            .collect();
-        expired_chunks.sort();
-        expired_chunks
+        unimplemented!()
+        // let mut expired_chunks: Vec<usize> = self
+        //     .render_resources
+        //     .chunk_pool
+        //     .iter()
+        //     .enumerate()
+        //     .filter(|(_, (c_pos, _))| !active_positions.contains(*c_pos))
+        //     .map(|(c_idx, _)| c_idx)
+        //     .collect();
+        // expired_chunks.sort();
+        // expired_chunks
     }
 }

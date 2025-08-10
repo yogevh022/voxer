@@ -1,11 +1,12 @@
+mod app_renderer;
+
 use crate::input::Input;
 use crate::meshing::generation::MeshGenHandle;
-use crate::render::Renderer;
+use crate::render::{Renderer, RendererBuilder};
 use crate::worldgen::types::{World, WorldGenHandle};
 use crate::{input, types, utils};
 use glam::{IVec3, Vec3};
 use parking_lot::RwLock;
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -45,8 +46,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             let attributes = Window::default_attributes()
                 .with_title("Tech")
                 .with_inner_size(winit::dpi::PhysicalSize::new(1280, 720));
-            let window = event_loop.create_window(attributes);
-            let arc_window = Arc::new(window.unwrap());
+            let arc_window = Arc::new(event_loop.create_window(attributes).unwrap());
             self.window = Some(arc_window.clone());
 
             self.camera.set_aspect_ratio(
@@ -56,10 +56,8 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             self.test_data.last_chunk_pos =
                 utils::vec3_to_ivec3(&(self.camera.transform.position + 1f32));
 
-            self.renderer = Some(pollster::block_on(Renderer::new(
-                arc_window,
-                RENDER_DISTANCE,
-            )));
+            let renderer = app_renderer::make_app_renderer(arc_window, RENDER_DISTANCE);
+            self.renderer = Some(renderer);
         }
     }
 
@@ -142,19 +140,19 @@ impl<'a> App<'a> {
         let chunk_pos_f32 = Vec3::new(chunk_pos.x as f32, chunk_pos.y as f32, chunk_pos.z as f32);
         let active_chunk_positions =
             utils::geo::discrete_sphere_pts(chunk_pos_f32, RENDER_DISTANCE);
-        
-        let active_chunk_positions = HashSet::from([IVec3::new(0, 0, 0),]);
+
+        // let active_chunk_positions = HashSet::from([IVec3::new(0, 0, 0),]);
 
         let renderer = self.renderer.as_mut().expect("renderer is none");
 
         // UNLOAD FROM RENDERER
-        for expired_entry_index in renderer
-            .expired_chunks(&active_chunk_positions)
-            .iter()
-            .rev()
-        {
-            renderer.remove_chunk_buffer(*expired_entry_index);
-        }
+        // for expired_entry_index in renderer
+        //     .expired_chunks(&active_chunk_positions)
+        //     .iter()
+        //     .rev()
+        // {
+        //     renderer.remove_chunk_buffer(*expired_entry_index);
+        // }
 
         // RECEIVE FROM WORLDGEN WORKER
         if let Ok(generated_chunks) = self.worker_handles.worldgen.receive.try_recv() {
@@ -173,69 +171,69 @@ impl<'a> App<'a> {
         }
 
         // CHECK CHUNK STATUS *AFTER* RECEIVING FROM WORKERS
-        let chunks_status = self.scene.world.chunks_status(&active_chunk_positions);
+        // let chunks_status = self.scene.world.chunks_status(&active_chunk_positions);
 
         // SEND TO WORLDGEN WORKER
-        self.worker_handles
-            .worldgen
-            .send
-            .send(
-                chunks_status
-                    .not_found
-                    .into_iter()
-                    .map(|c_pos| {
-                        self.scene.world.active_generation.chunks.insert(c_pos);
-                        c_pos
-                    })
-                    .collect(),
-            )
-            .unwrap();
+        // self.worker_handles
+        //     .worldgen
+        //     .send
+        //     .send(
+        //         chunks_status
+        //             .not_found
+        //             .into_iter()
+        //             .map(|c_pos| {
+        //                 self.scene.world.active_generation.chunks.insert(c_pos);
+        //                 c_pos
+        //             })
+        //             .collect(),
+        //     )
+        //     .unwrap();
 
         // SEND TO MESHGEN WORKER
-        self.worker_handles
-            .meshgen
-            .send
-            .send(
-                chunks_status
-                    .meshless
-                    .into_iter()
-                    .map(|c_pos| {
-                        self.scene.world.active_generation.meshes.insert(c_pos);
-                        (
-                            c_pos,
-                            self.scene
-                                .world
-                                .chunks
-                                .get_mut(&c_pos)
-                                .unwrap()
-                                .take()
-                                .unwrap(),
-                        )
-                    })
-                    .collect(),
-            )
-            .unwrap();
+        // self.worker_handles
+        //     .meshgen
+        //     .send
+        //     .send(
+        //         chunks_status
+        //             .meshless
+        //             .into_iter()
+        //             .map(|c_pos| {
+        //                 self.scene.world.active_generation.meshes.insert(c_pos);
+        //                 (
+        //                     c_pos,
+        //                     self.scene
+        //                         .world
+        //                         .chunks
+        //                         .get_mut(&c_pos)
+        //                         .unwrap()
+        //                         .take()
+        //                         .unwrap(),
+        //                 )
+        //             })
+        //             .collect(),
+        //     )
+        //     .unwrap();
 
         // fixme fix the collect atrocity
         // LOAD TO RENDERER
-        for emerging_chunk in renderer
-            .emerging_chunks(chunks_status.to_render)
-            .collect::<HashSet<_>>()
-            .iter()
-        {
-            let mesh = self
-                .scene
-                .world
-                .chunks
-                .get(emerging_chunk)
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .mesh
-                .as_ref()
-                .unwrap();
-            renderer.add_chunk_buffer(*emerging_chunk, mesh);
-        }
+        // for emerging_chunk in renderer
+        //     .emerging_chunks(chunks_status.to_render)
+        //     .collect::<HashSet<_>>()
+        //     .iter()
+        // {
+        //     let mesh = self
+        //         .scene
+        //         .world
+        //         .chunks
+        //         .get(emerging_chunk)
+        //         .unwrap()
+        //         .as_ref()
+        //         .unwrap()
+        //         .mesh
+        //         .as_ref()
+        //         .unwrap();
+        //     renderer.add_chunk_buffer(*emerging_chunk, mesh);
+        // }
     }
 
     fn update(&mut self) {

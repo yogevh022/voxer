@@ -1,5 +1,3 @@
-use crate::utils;
-
 pub fn create_buffer(device: &wgpu::Device, chunk_capacity: usize) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("chunk_model_buffer"),
