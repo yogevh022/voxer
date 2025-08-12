@@ -1,11 +1,12 @@
 use super::Array3D;
 use crate::compute;
+use bytemuck::{NoUninit, Pod, Zeroable};
 use std::ops::BitXor;
 
 #[inline]
 pub fn xor<T, const N: usize>(a: &[T; N], b: &[T; N]) -> [T; N]
 where
-    T: BitXor<Output = T> + Default + Copy,
+    T: BitXor<Output = T> + Copy + Default + Pod + Zeroable + NoUninit,
 {
     let mut faces = [T::default(); N];
 
@@ -17,7 +18,7 @@ where
 
 pub fn rotated_z<T, const N: usize>(arr_3d: &Array3D<T, N>) -> Array3D<T, N>
 where
-    T: Copy + Default,
+    T: Copy + Default + Pod + Zeroable + NoUninit,
 {
     let mut output = Array3D::default();
     for x in 0..N {
@@ -32,7 +33,7 @@ where
 
 pub fn rotated_y<T, const N: usize>(arr_3d: &Array3D<T, N>) -> Array3D<T, N>
 where
-    T: Copy + Default,
+    T: Copy + Default + Pod + Zeroable + NoUninit,
 {
     let mut output = Array3D::default();
     for x in 0..N {

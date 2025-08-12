@@ -32,11 +32,3 @@ impl Deref for Block {
         &self.0
     }
 }
-
-pub fn blocks_to_u16s<const N: usize>(blocks: [Block; N]) -> [u16; N] {
-    unsafe {
-        let ptr = &blocks as *const [Block; N];
-        let u16_ptr = ptr as *const [u16; N];
-        *u16_ptr
-    }
-}

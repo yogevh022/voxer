@@ -1,67 +1,27 @@
 mod app;
 pub mod compute;
-mod input;
-mod meshing;
-mod render;
-mod texture;
-mod types;
-mod utils;
+mod renderer;
+mod vtypes;
 mod world;
 
-use crate::app::{AppTestData, WorkerHandles};
-use crate::input::Input;
-use crate::world::types::{World, WorldGenRequest, WorldGenResponse};
-use glam::IVec3;
-use parking_lot::RwLock;
-use std::sync::Arc;
-use std::time::Instant;
+use crate::world::types::{WorldServer, WorldServerConfig};
+use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
+const SIMULATION_AND_RENDER_DISTANCE: usize = 6; // fixme temp location
+
 fn run_app() {
-    let atlas = Arc::new(texture::helpers::generate_texture_atlas());
-    _ = atlas.image.save("src/texture/images/atlas.png");
-
-    let world = world::types::World::new(0);
-
-    let (worldgen_response_send, worldgen_response_recv) =
-        crossbeam::channel::unbounded::<WorldGenResponse>();
-    let (worldgen_request_send, worldgen_request_recv) =
-        crossbeam::channel::unbounded::<WorldGenRequest>();
-
-    std::thread::spawn(move || {
-        world::types::world_generation_task(
-            world.seed,
-            worldgen_response_send,
-            worldgen_request_recv,
-        )
+    let mut server = WorldServer::new(WorldServerConfig {
+        seed: 0,
+        simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
     });
-
-    let worldgen_handle = world::types::WorldGenHandle {
-        send: worldgen_request_send,
-        receive: worldgen_response_recv,
+    let voxer_engine = vtypes::Voxer::default();
+    let scene = vtypes::Scene {
+        objects: vec![VObject::Camera(CameraController::default())],
     };
 
-    let scene = types::Scene {
-        world,
-        ..Default::default()
-    };
-
-    let camera = types::Camera::default();
-    let camera_controller = types::CameraController::default();
-
-    let mut app = app::App {
-        window: None,
-        app_renderer: None,
-        input: Arc::new(RwLock::new(Input::default())),
-        time: utils::Timer::new(),
-        worker_handles: WorkerHandles {
-            world: worldgen_handle,
-        },
-        scene,
-        camera,
-        camera_controller,
-        test_data: AppTestData::default(),
-    };
+    server.start_generation_thread();
+    let mut app = app::App::new(voxer_engine, server, scene);
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);

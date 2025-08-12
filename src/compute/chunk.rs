@@ -16,13 +16,22 @@ pub fn face_count(blocks: &ChunkBlocks) -> usize {
     let packed_rot_y = compute::array::rotated_y_bits(packed_blocks_2d);
     let z_blocks = unsafe { &*(packed_rot_y.as_ptr() as *const [u16; CHUNK_SLICE]) };
 
-    let x_faces = faces_on_x(&packed_blocks, &OPAQUE_BITS_SLICE);
+    let x_faces = faces_on_x(&packed_blocks, &OPAQUE_BITS_SLICE); // fixme chunk culling
     let y_faces = faces_on_x(y_blocks, &OPAQUE_BITS_SLICE);
     let z_faces = faces_on_x(z_blocks, &OPAQUE_BITS_SLICE);
 
-    x_faces.iter().map(|b| (b >> 15) as usize).sum::<usize>()
-        + y_faces.iter().map(|b| (b >> 15) as usize).sum::<usize>()
-        + z_faces.iter().map(|b| (b >> 15) as usize).sum::<usize>()
+    x_faces
+        .iter()
+        .map(|b| b.count_ones() as usize)
+        .sum::<usize>()
+        + y_faces
+            .iter()
+            .map(|b| b.count_ones() as usize)
+            .sum::<usize>()
+        + z_faces
+            .iter()
+            .map(|b| b.count_ones() as usize)
+            .sum::<usize>()
 }
 
 fn faces_on_x(
