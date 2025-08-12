@@ -1,7 +1,7 @@
 use crate::meshing::chunk::generate_mesh;
 use crate::render::types::Mesh;
 use crate::texture::TextureAtlas;
-use crate::worldgen::types::Chunk;
+use crate::world::types::Chunk;
 use crossbeam::channel;
 use glam::IVec3;
 use rayon::iter::IntoParallelIterator;

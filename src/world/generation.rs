@@ -1,4 +1,4 @@
-use crate::worldgen::types::{Chunk, World};
+use crate::world::types::{Chunk, World};
 use crossbeam::channel;
 use glam::IVec3;
 use noise::OpenSimplex;

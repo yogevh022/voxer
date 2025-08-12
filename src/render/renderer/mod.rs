@@ -1,4 +1,4 @@
-mod alloc;
+pub mod alloc;
 mod builder;
 mod core;
 pub mod encoders;

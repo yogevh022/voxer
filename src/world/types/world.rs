@@ -1,37 +1,24 @@
 use crate::compute::array::Array3D;
-use crate::worldgen::types::{Block, CHUNK_DIM, Chunk, ChunkBlocks};
+use crate::world::types::chunk_manager::ChunkManager;
+use crate::world::types::{Block, CHUNK_DIM, Chunk, ChunkBlocks};
 use glam::{IVec3, Vec3};
+use indexmap::{IndexMap, IndexSet};
 use noise::NoiseFn;
-use std::collections::HashSet;
-use wgpu::naga::{FastHashMap, FastHashSet};
+use std::collections::{HashMap, HashSet};
 
 const NOISE_SCALE: f64 = 0.05;
-
-#[derive(Debug, Default, Clone)]
-pub struct WorldGenerationState {
-    pub chunks: FastHashSet<IVec3>,
-    pub meshes: FastHashSet<IVec3>,
-}
-
-pub struct ChunksStatus {
-    pub to_render: Vec<IVec3>,
-    pub not_found: Vec<IVec3>,
-    pub meshless: Vec<IVec3>,
-}
 
 #[derive(Default, Debug)]
 pub struct World {
     pub seed: u32,
-    pub chunks: FastHashMap<IVec3, Option<Chunk>>,
-    pub active_generation: WorldGenerationState,
+    pub chunk_manager: ChunkManager,
 }
 
 impl World {
     pub fn new(seed: u32) -> Self {
         Self {
             seed,
-            chunks: FastHashMap::default(),
-            active_generation: WorldGenerationState::default(),
+            chunk_manager: ChunkManager::with_capacity(1000), //fixme
         }
     }
 
@@ -63,41 +50,6 @@ impl World {
             })
         }));
         blocks
-    }
-
-    pub fn chunks_status(&self, chunk_positions: &HashSet<IVec3>) -> ChunksStatus {
-        let mut to_render = Vec::new();
-        let mut not_found = Vec::new();
-        let mut meshless = Vec::new();
-
-        for pos in chunk_positions {
-            match self.chunks.get(pos) {
-                Some(Some(chunk)) => match &chunk.mesh {
-                    Some(mesh) => {
-                        if !mesh.indices.is_empty() {
-                            to_render.push(*pos)
-                        }
-                    }
-                    None => {
-                        if !self.active_generation.meshes.contains(pos) {
-                            meshless.push(*pos)
-                        }
-                    }
-                },
-                Some(None) => {} // this chunk's mesh is being generated
-                None => {
-                    if !self.active_generation.chunks.contains(pos) {
-                        not_found.push(*pos)
-                    }
-                }
-            }
-        }
-
-        ChunksStatus {
-            to_render,
-            not_found,
-            meshless,
-        }
     }
 
     pub(crate) fn world_to_chunk_pos(vec: &Vec3) -> IVec3 {

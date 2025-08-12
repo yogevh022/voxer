@@ -1,4 +1,4 @@
-use crate::worldgen::types::World;
+use crate::world::types::World;
 use glam::{IVec3, Mat4};
 
 pub fn model_matrix(c_pos: &IVec3) -> Mat4 {

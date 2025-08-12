@@ -1,6 +1,6 @@
 pub fn create_buffer(device: &wgpu::Device, chunk_capacity: usize) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("chunk_model_buffer"),
+        label: Some("chunk_model_mat_buffer"),
         size: (chunk_capacity * size_of::<[[f32; 4]; 4]>()) as u64,
         usage: wgpu::BufferUsages::VERTEX
             | wgpu::BufferUsages::STORAGE

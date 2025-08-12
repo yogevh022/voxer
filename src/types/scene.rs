@@ -1,5 +1,5 @@
 use crate::types::SceneObject;
-use crate::worldgen::types::World;
+use crate::world::types::World;
 
 #[derive(Default)]
 pub struct Scene {

@@ -1,12 +1,12 @@
 mod app_renderer;
 
+use crate::app::app_renderer::AppRenderer;
 use crate::input::Input;
-use crate::meshing::generation::MeshGenHandle;
-use crate::render::{Renderer, RendererBuilder};
-use crate::worldgen::types::{World, WorldGenHandle};
+use crate::world::types::{World, WorldGenHandle};
 use crate::{input, types, utils};
 use glam::{IVec3, Vec3};
 use parking_lot::RwLock;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -24,13 +24,12 @@ pub struct AppTestData {
 }
 
 pub struct WorkerHandles {
-    pub worldgen: WorldGenHandle,
-    pub meshgen: MeshGenHandle,
+    pub world: WorldGenHandle,
 }
 
 pub struct App<'a> {
     pub window: Option<Arc<Window>>,
-    pub renderer: Option<Renderer<'a>>,
+    pub app_renderer: Option<AppRenderer<'a>>,
     pub test_data: AppTestData,
     pub worker_handles: WorkerHandles,
     pub time: utils::Timer,
@@ -56,8 +55,8 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             self.test_data.last_chunk_pos =
                 utils::vec3_to_ivec3(&(self.camera.transform.position + 1f32));
 
-            let renderer = app_renderer::make_app_renderer(arc_window, RENDER_DISTANCE);
-            self.renderer = Some(renderer);
+            let app_renderer = app_renderer::make_app_renderer(arc_window, RENDER_DISTANCE);
+            self.app_renderer = Some(app_renderer);
         }
     }
 
@@ -74,7 +73,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             match event {
                 WindowEvent::CloseRequested => event_loop.exit(),
                 WindowEvent::RedrawRequested => {
-                    if let Some(state) = &mut self.renderer {
+                    if let Some(app_renderer) = &mut self.app_renderer {
                         self.time.tick();
 
                         // temp fps display logic
@@ -82,8 +81,13 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                             window.set_title(&format!("Tech - {:.2} FPS", self.time.fps));
                             self.test_data.last_fps = self.time.fps;
                         }
-
-                        if let Err(e) = state.render(&self.camera) {
+                        // app_renderer
+                        //     .unload_chunks(self.scene.world.chunk_manager.dequeue_pending_unload());
+                        app_renderer.load_chunks(
+                            self.scene.world.chunk_manager.loaded_chunks.len(),
+                            &self.scene.world.chunk_manager.dequeue_pending_load(),
+                        );
+                        if let Err(e) = app_renderer.render(&self.camera) {
                             println!("{:?}", e);
                         }
                     }
@@ -141,53 +145,49 @@ impl<'a> App<'a> {
         let active_chunk_positions =
             utils::geo::discrete_sphere_pts(chunk_pos_f32, RENDER_DISTANCE);
 
-        // let active_chunk_positions = HashSet::from([IVec3::new(0, 0, 0),]);
+        let active_chunk_positions = HashSet::from([IVec3::new(0, 0, 0)]);
 
-        let renderer = self.renderer.as_mut().expect("renderer is none");
+        let app_renderer = self.app_renderer.as_mut().expect("app_renderer is none");
 
         // UNLOAD FROM RENDERER
-        // for expired_entry_index in renderer
-        //     .expired_chunks(&active_chunk_positions)
-        //     .iter()
-        //     .rev()
-        // {
-        //     renderer.remove_chunk_buffer(*expired_entry_index);
-        // }
+        let to_unload = self
+            .scene
+            .world
+            .chunk_manager
+            .loaded_chunks_at_positions(&active_chunk_positions);
+        self.scene
+            .world
+            .chunk_manager
+            .enqueue_pending_unload(to_unload);
 
         // RECEIVE FROM WORLDGEN WORKER
-        if let Ok(generated_chunks) = self.worker_handles.worldgen.receive.try_recv() {
-            for (c_pos, chunk) in generated_chunks {
-                self.scene.world.chunks.insert(c_pos, Some(chunk));
-                self.scene.world.active_generation.chunks.remove(&c_pos);
-            }
+        if let Ok(generated_chunks) = self.worker_handles.world.receive.try_recv() {
+            self.scene
+                .world
+                .chunk_manager
+                .insert_chunks(generated_chunks);
         }
-
-        // RECEIVE FROM MESHGEN WORKER
-        if let Ok(generated_meshes) = self.worker_handles.meshgen.receive.try_recv() {
-            for (c_pos, chunk) in generated_meshes {
-                self.scene.world.chunks.insert(c_pos, Some(chunk));
-                self.scene.world.active_generation.meshes.remove(&c_pos);
-            }
-        }
-
-        // CHECK CHUNK STATUS *AFTER* RECEIVING FROM WORKERS
-        // let chunks_status = self.scene.world.chunks_status(&active_chunk_positions);
 
         // SEND TO WORLDGEN WORKER
-        // self.worker_handles
-        //     .worldgen
-        //     .send
-        //     .send(
-        //         chunks_status
-        //             .not_found
-        //             .into_iter()
-        //             .map(|c_pos| {
-        //                 self.scene.world.active_generation.chunks.insert(c_pos);
-        //                 c_pos
-        //             })
-        //             .collect(),
-        //     )
-        //     .unwrap();
+        let to_gen = self
+            .scene
+            .world
+            .chunk_manager
+            .ungenerated_chunks_at_positions(&active_chunk_positions);
+        self.scene
+            .world
+            .chunk_manager
+            .enqueue_pending_generation(&to_gen);
+
+        self.worker_handles.world.send.send(to_gen).unwrap();
+
+        // LOAD TO RENDERER
+        let to_load = self
+            .scene
+            .world
+            .chunk_manager
+            .unloaded_chunks_at_positions(&active_chunk_positions);
+        self.scene.world.chunk_manager.enqueue_pending_load(to_load);
 
         // SEND TO MESHGEN WORKER
         // self.worker_handles
@@ -213,27 +213,6 @@ impl<'a> App<'a> {
         //             .collect(),
         //     )
         //     .unwrap();
-
-        // fixme fix the collect atrocity
-        // LOAD TO RENDERER
-        // for emerging_chunk in renderer
-        //     .emerging_chunks(chunks_status.to_render)
-        //     .collect::<HashSet<_>>()
-        //     .iter()
-        // {
-        //     let mesh = self
-        //         .scene
-        //         .world
-        //         .chunks
-        //         .get(emerging_chunk)
-        //         .unwrap()
-        //         .as_ref()
-        //         .unwrap()
-        //         .mesh
-        //         .as_ref()
-        //         .unwrap();
-        //     renderer.add_chunk_buffer(*emerging_chunk, mesh);
-        // }
     }
 
     fn update(&mut self) {

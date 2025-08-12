@@ -1,7 +1,7 @@
-mod functions;
+pub mod functions;
+use bytemuck::{Pod, Zeroable};
+pub use functions::*;
 use std::ops::{Deref, DerefMut};
-
-pub use functions::{rotated_y, rotated_z};
 
 #[repr(C)]
 #[derive(Clone, Debug)]

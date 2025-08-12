@@ -2,23 +2,15 @@ use crate::render::encoders;
 use crate::render::renderer::core::Renderer;
 use crate::render::renderer::gpu;
 use crate::render::renderer::resources::ChunkPool;
-use crate::worldgen::types::World;
+use crate::world::types::World;
 use crate::{types, utils};
 use glam::Mat4;
 use std::mem;
+use wgpu::CommandEncoder;
 
 impl Renderer<'_> {
-    pub(crate) fn render(&mut self, camera: &types::Camera) -> Result<(), wgpu::SurfaceError> {
-        let frame = self.surface.get_current_texture()?;
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("render_encoder"),
-            });
-
+    pub(crate) fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        todo!();
         // FIRST REMOVE PENDING REMOVALS
         // let chunk_pool_indices = self.render_resources.chunk_pool.take_remove_queue();
         // if !chunk_pool_indices.is_empty() {
@@ -73,10 +65,6 @@ impl Renderer<'_> {
         //         view_projection: camera.get_view_projection(),
         //     },
         // );
-
-        self.queue.submit(Some(encoder.finish()));
-        frame.present();
-
-        Ok(())
+        
     }
 }

@@ -1,7 +1,7 @@
 use crate::compute;
 use crate::render::types::{Mesh, Vertex};
 use crate::texture::{Texture, TextureAtlas};
-use crate::worldgen::types::{CHUNK_DIM, Chunk};
+use crate::world::types::{CHUNK_DIM, Chunk};
 use glam::{Vec2, Vec3};
 const X_VERTICES_BY_DIR: [fn(&mut Vec<Vertex>, Vec2, f32, f32, f32, f32); 2] =
     [minus_x_vertices, plus_x_vertices];
