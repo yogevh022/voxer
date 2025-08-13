@@ -14,6 +14,7 @@ parking_lot = "0.12.4"
 noise = "0.9.0"
 rayon = "1.10.0"
 crossbeam = "0.8.4"
+slab = "0.4.11"
 
 [profile.release]
 debug = true

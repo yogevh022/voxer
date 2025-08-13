@@ -23,12 +23,7 @@ impl<'window> From<RendererBuilder<'window>> for Renderer<'window> {
 }
 
 impl Renderer<'_> {
-    pub fn write_buffer(
-        &self,
-        buffer: &wgpu::Buffer,
-        offset: wgpu::BufferAddress,
-        data: &[u8],
-    ) {
+    pub fn write_buffer(&self, buffer: &wgpu::Buffer, offset: wgpu::BufferAddress, data: &[u8]) {
         self.queue.write_buffer(buffer, offset, data)
     }
 }

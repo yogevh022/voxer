@@ -17,6 +17,14 @@ impl VirtualMemAlloc {
         }
     }
 
+    pub fn with_offset(size: usize, offset: usize) -> Self {
+        Self {
+            size,
+            free_blocks: HashMap::from([(offset, size)]),
+            allocated_blocks: HashMap::new(),
+        }
+    }
+
     pub fn alloc(&mut self, size: usize) -> Result<usize, &str> {
         let ff_slot = self
             .free_blocks

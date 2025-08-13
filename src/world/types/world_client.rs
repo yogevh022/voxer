@@ -1,17 +1,18 @@
 use crate::SIMULATION_AND_RENDER_DISTANCE;
 use crate::app::app_renderer;
 use crate::app::app_renderer::AppRenderer;
-use crate::world::types::{Chunk, WorldServer};
+use crate::world::types::Chunk;
 use glam::IVec3;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use winit::window::Window;
+use crate::compute::ds::Slas;
 
 pub struct WorldClient<'window> {
     pub renderer: AppRenderer<'window>,
     chunk_load_delta: HashMap<IVec3, Chunk>,
     chunk_unload_delta: HashSet<IVec3>,
-    loaded_chunks: HashSet<IVec3>,
+    loaded_chunks: Slas<IVec3>,
 }
 
 impl<'window> WorldClient<'window> {
@@ -23,7 +24,7 @@ impl<'window> WorldClient<'window> {
             ),
             chunk_load_delta: HashMap::new(),
             chunk_unload_delta: HashSet::new(),
-            loaded_chunks: HashSet::new(),
+            loaded_chunks: Slas::new(),
         }
     }
 
@@ -62,7 +63,8 @@ impl<'window> WorldClient<'window> {
 
         let mut load_delta = HashMap::new();
         std::mem::swap(&mut load_delta, &mut self.chunk_load_delta);
-        self.loaded_chunks.extend(load_delta.keys());
-        self.renderer.load_chunks(load_delta);
+        self.loaded_chunks.extend(load_delta.keys().cloned());
+        self.renderer.write_new_chunks(load_delta);
+        self.renderer.compute_chunks();
     }
 }

@@ -8,7 +8,7 @@ use crate::world::types::{WorldServer, WorldServerConfig};
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
-const SIMULATION_AND_RENDER_DISTANCE: usize = 6; // fixme temp location
+const SIMULATION_AND_RENDER_DISTANCE: usize = 2; // fixme temp location
 
 fn run_app() {
     let mut server = WorldServer::new(WorldServerConfig {
@@ -17,7 +17,7 @@ fn run_app() {
     });
     let voxer_engine = vtypes::Voxer::default();
     let scene = vtypes::Scene {
-        objects: vec![VObject::Camera(CameraController::default())],
+        objects: vec![VObject::Camera(CameraController::with_sensitivity(0.01))],
     };
 
     server.start_generation_thread();

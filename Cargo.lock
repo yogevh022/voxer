@@ -2302,6 +2302,7 @@ dependencies = [
  "parking_lot",
  "pollster",
  "rayon",
+ "slab",
  "wgpu",
  "winit",
 ]

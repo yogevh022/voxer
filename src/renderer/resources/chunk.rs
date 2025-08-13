@@ -1,4 +1,4 @@
-use crate::world::types::GPU_CHUNK_SIZE;
+use crate::renderer::gpu::GPU_CHUNK_SIZE;
 
 pub fn create_block_buffer(device: &wgpu::Device, chunk_capacity: usize) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {

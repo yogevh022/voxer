@@ -45,12 +45,31 @@ impl Default for CameraProperties {
     }
 }
 
-#[derive(Default)]
 pub struct CameraController {
     pitch_angle: f32,
     sensitivity: f64,
     pub yaw: Quat,
     pub pitch: Quat,
+}
+
+impl CameraController {
+    pub fn with_sensitivity(sensitivity: f64) -> Self {
+        Self {
+            sensitivity,
+            ..Default::default()
+        }
+    }
+}
+
+impl Default for CameraController {
+    fn default() -> Self {
+        Self {
+            sensitivity: 0.005,
+            pitch_angle: 0.0,
+            yaw: Quat::IDENTITY,
+            pitch: Quat::IDENTITY,
+        }
+    }
 }
 
 impl CameraController {
