@@ -1,83 +1,3 @@
-const CHUNK_DIM_U16 = 16u;
-const CHUNK_DIM_U32 = 8u;
-const VOID_REF_OFFSET = 128u;
-const TILE_DIM: f32 = 16.0;
-
-struct GPUChunkEntry {
-    vertex_offset: u32,
-    index_offset: u32,
-    vertex_count: u32,
-    index_count: u32,
-    world_position: vec3<f32>,
-    blocks: ChunkBlocks,
-}
-
-
-struct Vertex {
-    position: vec3<f32>,
-    tex_coords: vec2<f32>,
-}
-
-struct LayerFaceData {
-    faces: array<array<u32, CHUNK_DIM_U32>, CHUNK_DIM_U16>,
-    dirs: array<array<u32, CHUNK_DIM_U32>, CHUNK_DIM_U16>,
-}
-
-struct IndexBuffer {
-    indices: array<u32>,
-}
-
-struct VertexBuffer {
-    vertices: array<Vertex>,
-}
-
-@group(0) @binding(0)
-var<storage, read_write> chunk_storage: array<GPUChunkEntry>;
-@group(0) @binding(1)
-var<storage, read_write> vertex_buffer: VertexBuffer;
-@group(0) @binding(2)
-var<storage, read_write> index_buffer: IndexBuffer;
-@group(0) @binding(3)
-var<storage, read_write> chunk_model_mats_buffer: array<mat4x4<f32>>;
-
-
-var<private> chunk_face: array<array<LayerFaceData, CHUNK_DIM_U16>, 3>;
-var<private> rot_output: ChunkBlocks;
-
-fn bit_at(value: u32, index: u32) -> u32 {
-    return (value >> index) & 1u;
-}
-
-fn rotate_z(arr: ChunkBlocks) {
-    for (var x: u32 = 0u; x < CHUNK_DIM_U16; x += 1u) {
-        for (var y: u32 = 0u; y < CHUNK_DIM_U16; y += 1u) {
-            rot_output[y][CHUNK_DIM_U16 - 1 - x] = arr[x][y];
-        }
-    }
-}
-
-fn rotate_y(arr: ChunkBlocks) {
-    for (var x: u32 = 0u; x < CHUNK_DIM_U16; x += 1u) {
-        for (var y: u32 = 0u; y < CHUNK_DIM_U16; y += 1u) {
-            for (var z: u32 = 0u; z < CHUNK_DIM_U32; z += 1u) {
-                rot_output[x][y][z] = arr[x][y][z];
-            }
-        }
-    }
-}
-
-fn calc_face_data(blocks: ChunkBlocks, face_axis: u32) {
-    for (var x: u32 = 0u; x < CHUNK_DIM_U16 - 1u; x += 1u) {
-        var arr_a: array<array<u32, CHUNK_DIM_U32>, CHUNK_DIM_U16> = blocks[x];
-        var arr_b: array<array<u32, CHUNK_DIM_U32>, CHUNK_DIM_U16> = blocks[x+1u];
-        for (var y: u32 = 0u; y < CHUNK_DIM_U16; y += 1u) {
-            for (var z: u32 = 0u; z < CHUNK_DIM_U32; z += 1u) {
-                chunk_face[face_axis][x].faces[y][z] = arr_a[y][z] ^ arr_b[y][z];
-                chunk_face[face_axis][x].dirs[y][z] = arr_a[y][z] & (~arr_b[y][z]);
-            }
-        }
-    }
-}
 
 fn quad_indices(index_index: u32, offset: u32) {
     index_buffer.indices[index_index + 0u] = offset + 0u;
@@ -168,10 +88,7 @@ fn minus_y_vertices(
     vertex_buffer.vertices[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
 }
 
-struct FaceMask {
-    face_bit: u32,
-    dir_bit: u32,
-}
+
 
 fn face_mask_for_axis(axis: u32, x: u32, y: u32, z: u32) -> FaceMask {
 //        let face_bit = (chunk_face[0u][x].faces[y][z] >> ((16u << n) - 1u)) & 1u;
@@ -275,27 +192,3 @@ fn model_matrix_from_position(position: vec3<f32>) -> mat4x4<f32> {
     );
     return result;
 }
-
-@compute @workgroup_size(256)
-fn compute_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let chunk_index = global_id.x;
-    let chunk = chunk_storage[chunk_index];
-    if (chunk.vertex_offset != 0) {
-        let blocks = chunk.blocks;
-        calc_face_data(blocks, 0u);
-        rotate_z(blocks);
-        calc_face_data(rot_output, 1u);
-        rotate_y(blocks);
-        calc_face_data(rot_output, 2u);
-
-        let index_offset = chunk.index_offset;
-        let vertex_offset = chunk.vertex_offset;
-
-        write_mesh_into_buffers(index_offset, vertex_offset);
-        chunk_model_mats_buffer[chunk_index] = model_matrix_from_position(chunk.world_position);
-    }
-}
-
-
-
-alias ChunkBlocks = array<array<array<u32, CHUNK_DIM_U32>, CHUNK_DIM_U16>, CHUNK_DIM_U16>; // wgsl has no u16 :D

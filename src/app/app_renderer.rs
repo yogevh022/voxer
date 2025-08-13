@@ -38,23 +38,29 @@ pub struct AppRenderer<'window> {
 }
 
 impl AppRenderer<'_> {
-    pub fn write_new_chunks(&mut self, chunks: HashMap<IVec3, Chunk>) {
+    pub fn write_new_chunks(&mut self, chunks: Vec<(usize, IVec3, Chunk)>) {
         let mut slice_buffer = Vec::with_capacity(chunks.len() * GPU_CHUNK_SIZE);
-        for (chunk_pos, chunk) in chunks.iter() {
+        for (slab_index, chunk_pos, chunk) in chunks.into_iter() {
             let face_count = compute::chunk::face_count(&chunk.blocks);
             let vertex_count = face_count * 4;
             let index_count = face_count * 6;
             let gpu_chunk_header = GPUChunkEntryHeader::new(
-                self.gpu_vertex_malloc.alloc(vertex_count * size_of::<Vertex>()).unwrap() as u32,
-                self.gpu_index_malloc.alloc(index_count * size_of::<Index>()).unwrap() as u32,
+                self.gpu_vertex_malloc
+                    .alloc(vertex_count * size_of::<Vertex>())
+                    .unwrap() as u32,
+                self.gpu_index_malloc
+                    .alloc(index_count * size_of::<Index>())
+                    .unwrap() as u32,
                 vertex_count as u32,
                 index_count as u32,
-                compute::geo::chunk_to_world_pos(chunk_pos),
+                slab_index as u32,
+                compute::geo::chunk_to_world_pos(&chunk_pos),
             );
             slice_buffer.extend_from_slice(bytemuck::bytes_of(&gpu_chunk_header));
-            slice_buffer.extend(std::iter::repeat(0).take(12));
+            // slice_buffer.extend(std::iter::repeat(0).take(12));
             slice_buffer.extend_from_slice(bytemuck::bytes_of(&chunk.blocks));
-            self.gpu_loaded_chunk_entries.insert(*chunk_pos, gpu_chunk_header);
+            self.gpu_loaded_chunk_entries
+                .insert(chunk_pos, gpu_chunk_header);
         }
 
         self.renderer
@@ -64,8 +70,10 @@ impl AppRenderer<'_> {
     pub fn unload_chunks(&mut self, chunks: HashSet<IVec3>) {
         for c_pos in chunks {
             let chunk_entry = self.gpu_loaded_chunk_entries.remove(&c_pos).unwrap();
-            self.gpu_vertex_malloc.free(chunk_entry.vertex_allocation as usize);
-            self.gpu_index_malloc.free(chunk_entry.index_allocation as usize);
+            self.gpu_vertex_malloc
+                .free(chunk_entry.vertex_allocation as usize);
+            self.gpu_index_malloc
+                .free(chunk_entry.index_allocation as usize);
             // self.renderer.write_buffer(
             //     &self.chunk_buff,
             //     (0 * GPU_CHUNK_SIZE) as u64,
@@ -112,7 +120,7 @@ impl AppRenderer<'_> {
                 instance_count: 1,
                 first_index: chunk_entry.index_allocation >> 2,
                 base_vertex: (chunk_entry.vertex_allocation / 20) as i32,
-                first_instance: 0,
+                first_instance: chunk_entry.slab_index,
             });
         }
         if !indirect_buffer_commands.is_empty() {
@@ -280,7 +288,10 @@ pub fn block_compute_pipeline(
     )
 }
 
-pub fn temp_indirect_buffer(device: &wgpu::Device, args: Vec<DrawIndexedIndirectArgs>) -> wgpu::Buffer {
+pub fn temp_indirect_buffer(
+    device: &wgpu::Device,
+    args: Vec<DrawIndexedIndirectArgs>,
+) -> wgpu::Buffer {
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("temp_indirect_buffer"),
         contents: bytemuck::cast_slice(&args),

@@ -1,12 +1,12 @@
 use crate::SIMULATION_AND_RENDER_DISTANCE;
 use crate::app::app_renderer;
 use crate::app::app_renderer::AppRenderer;
+use crate::compute::ds::Slas;
 use crate::world::types::Chunk;
 use glam::IVec3;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use winit::window::Window;
-use crate::compute::ds::Slas;
 
 pub struct WorldClient<'window> {
     pub renderer: AppRenderer<'window>,
@@ -45,7 +45,7 @@ impl<'window> WorldClient<'window> {
         (to_load_positions, to_unload_positions)
     }
 
-    pub fn update_by_delta(
+    pub fn update_chunks_by_delta(
         &mut self,
         new_chunks: Vec<(IVec3, Chunk)>,
         unload_positions: HashSet<IVec3>,
@@ -63,8 +63,11 @@ impl<'window> WorldClient<'window> {
 
         let mut load_delta = HashMap::new();
         std::mem::swap(&mut load_delta, &mut self.chunk_load_delta);
-        self.loaded_chunks.extend(load_delta.keys().cloned());
-        self.renderer.write_new_chunks(load_delta);
+        let indexed_allocated_delta: Vec<_> = load_delta
+            .into_iter()
+            .map(|(c_pos, chunk)| (self.loaded_chunks.insert(c_pos), c_pos, chunk))
+            .collect();
+        self.renderer.write_new_chunks(indexed_allocated_delta);
         self.renderer.compute_chunks();
     }
 }

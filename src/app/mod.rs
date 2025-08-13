@@ -218,7 +218,7 @@ impl<'a> App<'a> {
             self.client
                 .as_mut()
                 .unwrap()
-                .update_by_delta(new_chunks, unload_positions);
+                .update_chunks_by_delta(new_chunks, unload_positions);
         }
 
         // if self
