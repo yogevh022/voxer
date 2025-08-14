@@ -1,5 +1,5 @@
 pub mod array;
-pub mod bits;
+pub mod bytes;
 pub mod chunk;
 mod constants;
 pub mod ds;

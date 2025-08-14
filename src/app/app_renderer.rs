@@ -57,7 +57,6 @@ impl AppRenderer<'_> {
                 compute::geo::chunk_to_world_pos(&chunk_pos),
             );
             slice_buffer.extend_from_slice(bytemuck::bytes_of(&gpu_chunk_header));
-            // slice_buffer.extend(std::iter::repeat(0).take(12));
             slice_buffer.extend_from_slice(bytemuck::bytes_of(&chunk.blocks));
             self.gpu_loaded_chunk_entries
                 .insert(chunk_pos, gpu_chunk_header);
@@ -65,6 +64,8 @@ impl AppRenderer<'_> {
 
         self.renderer
             .write_buffer(&self.chunk_buff, 0, bytemuck::cast_slice(&slice_buffer));
+
+        self.gpu_vertex_malloc.draw_cli();
     }
 
     pub fn unload_chunks(&mut self, chunks: HashSet<IVec3>) {
@@ -161,7 +162,7 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
 
     // >upper bound of max chunks to be buffered at once
     let max_rendered_chunks = compute::geo::max_discrete_sphere_pts(render_distance);
-    let temp_size = (compute::MIB * 128) as u64;
+    let temp_size = (compute::MIB * 32) as u64;
 
     // buffers
     let vertex_buff = renderer_builder.make_vertex_buffer(temp_size);
@@ -213,11 +214,11 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
         chunk_buff: chunk_data_buff,
         chunk_mmat_buff: chunk_model_mat_buff,
         gpu_loaded_chunk_entries: HashMap::new(),
-        gpu_vertex_malloc: gpu::VirtualMemAlloc::with_offset(
+        gpu_vertex_malloc: gpu::VirtualMemAlloc::new(
             temp_size as usize,
             MESH_BUFFER_VOID_OFFSET as usize,
         ),
-        gpu_index_malloc: gpu::VirtualMemAlloc::with_offset(
+        gpu_index_malloc: gpu::VirtualMemAlloc::new(
             temp_size as usize,
             MESH_BUFFER_VOID_OFFSET as usize,
         ),

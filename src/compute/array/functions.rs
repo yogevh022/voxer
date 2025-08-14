@@ -61,7 +61,7 @@ pub fn rotated_y_bits<const N: usize>(arr_2d: &[[u16; N]; N]) -> [[u16; N]; N] {
     for x in 0..N {
         for y in 0..N {
             for z in 0..N {
-                output[z][y] |= compute::bits::bit_at(arr_2d[x][y], z) << (N - 1 - x);
+                output[z][y] |= compute::bytes::bit_at(arr_2d[x][y], z) << (N - 1 - x);
             }
         }
     }

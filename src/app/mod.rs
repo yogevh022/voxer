@@ -207,7 +207,9 @@ impl<'a> App<'a> {
             self.v.camera.transform.position += move_vec * MOVE_SPEED * self.v.time.delta();
         }
 
-        self.server.set_player(0, &self.v.camera.transform.position);
+        let player_pos = self.v.camera.transform.position;
+        // let player_pos = Vec3::default();
+        self.server.set_player(0, &player_pos);
 
         if self.v.time.temp_200th_frame() {
             self.server.update();
