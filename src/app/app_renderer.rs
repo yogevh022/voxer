@@ -1,19 +1,19 @@
 use crate::renderer::builder::RendererAtlas;
 use crate::renderer::gpu;
-use crate::renderer::gpu::{GPU_CHUNK_SIZE, GPUChunkEntryHeader};
+use crate::renderer::gpu::{GPU_CHUNK_SIZE, GPUChunkEntry, GPUChunkEntryHeader};
 use crate::renderer::resources;
 use crate::renderer::{Index, Renderer, RendererBuilder, Vertex};
 use crate::world::types::Chunk;
 use crate::{compute, vtypes};
-use glam::IVec3;
+use encase::{ShaderType, StorageBuffer};
+use glam::{IVec3, Vec2, Vec3};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use wgpu::util::{DeviceExt, DrawIndexedIndirectArgs};
 use winit::window::Window;
 
-// 0..void_offset is basically devnull DONT CHANGE THIS
+// 0..void_offset is basically devnull MUST ALWAYS BE MULTIPLE OF VERTEX SIZE AND INDEX SIZE (respectively)
 // 128 is hard coded into the shader
-const MESH_BUFFER_VOID_OFFSET: u64 = 128;
 
 pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
@@ -39,36 +39,45 @@ pub struct AppRenderer<'window> {
 
 impl AppRenderer<'_> {
     pub fn write_new_chunks(&mut self, chunks: Vec<(usize, IVec3, Chunk)>) {
-        let mut slice_buffer = Vec::with_capacity(chunks.len() * GPU_CHUNK_SIZE);
+        return;
+        let mut storage_buffer =
+            StorageBuffer::new(Vec::with_capacity(chunks.len() * GPU_CHUNK_SIZE));
         for (slab_index, chunk_pos, chunk) in chunks.into_iter() {
             let face_count = compute::chunk::face_count(&chunk.blocks);
             let vertex_count = face_count * 4;
             let index_count = face_count * 6;
-            let gpu_chunk_header = GPUChunkEntryHeader::new(
-                self.gpu_vertex_malloc
-                    .alloc(vertex_count * size_of::<Vertex>())
-                    .unwrap() as u32,
-                self.gpu_index_malloc
-                    .alloc(index_count * size_of::<Index>())
-                    .unwrap() as u32,
+            let header = GPUChunkEntryHeader::new(
+                    self
+                        .gpu_vertex_malloc
+                        .alloc(vertex_count * size_of::<Vertex>())
+                        .unwrap() as u32,
+                    self
+                        .gpu_index_malloc
+                        .alloc(index_count * size_of::<Index>())
+                        .unwrap() as u32,
                 vertex_count as u32,
                 index_count as u32,
                 slab_index as u32,
                 compute::geo::chunk_to_world_pos(&chunk_pos),
             );
-            slice_buffer.extend_from_slice(bytemuck::bytes_of(&gpu_chunk_header));
-            slice_buffer.extend_from_slice(bytemuck::bytes_of(&chunk.blocks));
             self.gpu_loaded_chunk_entries
-                .insert(chunk_pos, gpu_chunk_header);
+                .insert(chunk_pos, header.clone());
+            let gpu_entry = GPUChunkEntry::new(header, chunk.blocks);
+
+            storage_buffer
+                .write(&gpu_entry)
+                .expect("failed writing chunks to buffer");
         }
 
         self.renderer
-            .write_buffer(&self.chunk_buff, 0, bytemuck::cast_slice(&slice_buffer));
+            .write_buffer(&self.chunk_buff, 0, &storage_buffer.into_inner());
 
-        self.gpu_vertex_malloc.draw_cli();
+
+        // self.gpu_vertex_malloc.draw_cli();
     }
 
     pub fn unload_chunks(&mut self, chunks: HashSet<IVec3>) {
+        return;
         for c_pos in chunks {
             let chunk_entry = self.gpu_loaded_chunk_entries.remove(&c_pos).unwrap();
             self.gpu_vertex_malloc
@@ -110,20 +119,18 @@ impl AppRenderer<'_> {
             0u64,
             bytemuck::cast_slice(&[view_proj]),
         );
-        render_pass.set_vertex_buffer(0, self.vertex_buff.slice(..));
-        render_pass.set_index_buffer(self.index_buff.slice(..), wgpu::IndexFormat::Uint32);
+        render_pass.set_vertex_buffer(0, self.vertex_buff.slice((Vertex::size() << 2)..));
+        render_pass.set_index_buffer(self.index_buff.slice((size_of::<Index>() as u64 * 6)..), wgpu::IndexFormat::Uint32);
         render_pass.set_bind_group(1, &self.trans_mats_bind_group, &[]);
 
         let mut indirect_buffer_commands = Vec::with_capacity(self.gpu_loaded_chunk_entries.len());
-        for (_, chunk_entry) in self.gpu_loaded_chunk_entries.iter() {
-            indirect_buffer_commands.push(DrawIndexedIndirectArgs {
-                index_count: chunk_entry.index_count,
-                instance_count: 1,
-                first_index: chunk_entry.index_allocation >> 2,
-                base_vertex: (chunk_entry.vertex_allocation / 20) as i32,
-                first_instance: chunk_entry.slab_index,
-            });
-        }
+        indirect_buffer_commands.push(DrawIndexedIndirectArgs {
+            index_count: 6,
+            instance_count: 1,
+            first_index: 0,
+            base_vertex: 0,
+            first_instance: 0,
+        });
         if !indirect_buffer_commands.is_empty() {
             let buff = temp_indirect_buffer(&self.renderer.device, indirect_buffer_commands);
             render_pass.draw_indexed_indirect(&buff, 0);
@@ -149,6 +156,7 @@ impl AppRenderer<'_> {
 
         let mut encoder = self.create_encoder();
         std::mem::swap(&mut self.encoder, &mut encoder);
+
 
         self.renderer.queue.submit(Some(encoder.finish()));
         frame.present();
@@ -214,14 +222,8 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
         chunk_buff: chunk_data_buff,
         chunk_mmat_buff: chunk_model_mat_buff,
         gpu_loaded_chunk_entries: HashMap::new(),
-        gpu_vertex_malloc: gpu::VirtualMemAlloc::new(
-            temp_size as usize,
-            MESH_BUFFER_VOID_OFFSET as usize,
-        ),
-        gpu_index_malloc: gpu::VirtualMemAlloc::new(
-            temp_size as usize,
-            MESH_BUFFER_VOID_OFFSET as usize,
-        ),
+        gpu_vertex_malloc: gpu::VirtualMemAlloc::new(temp_size as usize, (Vertex::size() as usize) << 2usize),
+        gpu_index_malloc: gpu::VirtualMemAlloc::new(temp_size as usize, size_of::<Index>() * 6),
         chunk_compute_bind_group,
         trans_mats_bind_group: t_bg,
         texture_atlas: atlas,
@@ -301,7 +303,16 @@ pub fn temp_indirect_buffer(
 }
 
 pub fn get_atlas_image() -> image::RgbaImage {
+    let q = std::env::current_exe().unwrap();
+    let project_root = q
+        .parent()   // target/debug
+        .unwrap()
+        .parent()   // target
+        .unwrap()
+        .parent()   // project root
+        .unwrap();
+
     let atlas_image =
-        image::open("src/renderer/texture/images/atlas.png").expect("failed to load atlas.png");
+        image::open(project_root.join("src/renderer/texture/images/atlas.png")).expect("failed to load atlas.png");
     atlas_image.to_rgba8()
 }

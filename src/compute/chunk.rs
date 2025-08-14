@@ -13,7 +13,8 @@ pub fn face_count(blocks: &ChunkBlocks) -> usize {
     let packed_rot_z = compute::array::rotated_z_bits(packed_blocks_2d);
     let y_blocks = unsafe { &*(packed_rot_z.as_ptr() as *const [u16; CHUNK_SLICE]) };
     // rot on y, z is on x
-    let packed_rot_y = compute::array::rotated_y_bits(packed_blocks_2d);
+    let packed_rot_y =
+        compute::array::rotated_y_bits::<CHUNK_DIM, CHUNK_DIM, CHUNK_DIM>(packed_blocks_2d);
     let z_blocks = unsafe { &*(packed_rot_y.as_ptr() as *const [u16; CHUNK_SLICE]) };
 
     let x_faces = faces_on_x(&packed_blocks, &OPAQUE_BITS_SLICE); // fixme chunk culling
@@ -53,7 +54,9 @@ fn faces_on_x(
     result
 }
 
-fn pack_solid_blocks(blocks: &Array3D<Block, CHUNK_DIM>) -> [u16; CHUNK_SLICE] {
+fn pack_solid_blocks(
+    blocks: &Array3D<Block, CHUNK_DIM, CHUNK_DIM, CHUNK_DIM>,
+) -> [u16; CHUNK_SLICE] {
     // packs chunk blocks into a bit (u16) array, 1 for solid 0 for transparent
     // Array3D<Block, CHUNK_DIM> -> Array1D<u16, CHUNK_SLICE>
     // compiles to SIMD

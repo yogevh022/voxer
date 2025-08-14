@@ -115,9 +115,9 @@ fn generate_chunk_blocks(gen_config: WorldGenConfig, chunk_position: IVec3) -> C
                 ]) > 0.1
                 {
                     // fixme this is horrible
-                    Block(1u16 << 15)
+                    Block { value: 1u16 << 15 }
                 } else {
-                    Block(1u16)
+                    Block { value: 1u16 }
                 }
             })
         })

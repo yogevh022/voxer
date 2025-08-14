@@ -16,52 +16,58 @@ where
     faces
 }
 
-pub fn rotated_z<T, const N: usize>(arr_3d: &Array3D<T, N>) -> Array3D<T, N>
+pub fn rotated_z<T, const X: usize, const Y: usize, const Z: usize>(
+    arr_3d: &Array3D<T, X, Y, Z>,
+) -> Array3D<T, X, Y, Z>
 where
     T: Copy + Default + Pod + Zeroable + NoUninit,
 {
     let mut output = Array3D::default();
-    for x in 0..N {
-        for y in 0..N {
-            for z in 0..N {
-                output[N - 1 - y][x][z] = arr_3d[x][y][z];
+    for x in 0..X {
+        for y in 0..Y {
+            for z in 0..Z {
+                output[Y - 1 - y][x][z] = arr_3d[x][y][z];
             }
         }
     }
     output
 }
 
-pub fn rotated_y<T, const N: usize>(arr_3d: &Array3D<T, N>) -> Array3D<T, N>
+pub fn rotated_y<T, const X: usize, const Y: usize, const Z: usize>(
+    arr_3d: &Array3D<T, X, Y, Z>,
+) -> Array3D<T, X, Y, Z>
 where
     T: Copy + Default + Pod + Zeroable + NoUninit,
 {
     let mut output = Array3D::default();
-    for x in 0..N {
-        for y in 0..N {
-            for z in 0..N {
-                output[z][y][N - 1 - x] = arr_3d[x][y][z];
+    for x in 0..X {
+        for y in 0..Y {
+            for z in 0..Z {
+                output[z][y][X - 1 - x] = arr_3d[x][y][z];
             }
         }
     }
     output
 }
 
-pub fn rotated_z_bits<const N: usize>(arr_2d: &[[u16; N]; N]) -> [[u16; N]; N] {
-    let mut output = [[0; N]; N];
-    for x in 0..N {
-        for y in 0..N {
-            output[y][N - 1 - x] = arr_2d[x][y];
+pub fn rotated_z_bits<const X: usize, const Y: usize>(arr_2d: &[[u16; Y]; X]) -> [[u16; Y]; X] {
+    let mut output = [[0; Y]; X];
+    for x in 0..X {
+        for y in 0..Y {
+            output[y][X - 1 - x] = arr_2d[x][y];
         }
     }
     output
 }
 
-pub fn rotated_y_bits<const N: usize>(arr_2d: &[[u16; N]; N]) -> [[u16; N]; N] {
-    let mut output = [[0; N]; N];
-    for x in 0..N {
-        for y in 0..N {
-            for z in 0..N {
-                output[z][y] |= compute::bytes::bit_at(arr_2d[x][y], z) << (N - 1 - x);
+pub fn rotated_y_bits<const X: usize, const Y: usize, const Z: usize>(
+    arr_2d: &[[u16; Y]; X],
+) -> [[u16; Y]; X] {
+    let mut output = [[0; Y]; X];
+    for x in 0..X {
+        for y in 0..Y {
+            for z in 0..Z {
+                output[z][y] |= compute::bytes::bit_at(arr_2d[x][y], z) << (X - 1 - x);
             }
         }
     }

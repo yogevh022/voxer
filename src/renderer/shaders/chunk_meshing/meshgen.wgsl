@@ -15,17 +15,17 @@ fn plus_x_vertices(
     y: f32,
     z: f32,
 ) {
-    vertex_buffer.vertices[vertex_index + 0].position = vec3<f32>(x, y + 1.0, z);
-    vertex_buffer.vertices[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
+    vertex_buffer.vertices[vertex_index + 0].position = vec3<f32>(x, y, z);
+    vertex_buffer.vertices[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
 
-    vertex_buffer.vertices[vertex_index + 1].position = vec3<f32>(x, y, z);
-    vertex_buffer.vertices[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
+    vertex_buffer.vertices[vertex_index + 1].position = vec3<f32>(x, y, z + 1.0);
+    vertex_buffer.vertices[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
 
-    vertex_buffer.vertices[vertex_index + 2].position = vec3<f32>(x, y, z + 1.0);
-    vertex_buffer.vertices[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y);
+    vertex_buffer.vertices[vertex_index + 2].position = vec3<f32>(x, y + 1.0, z + 1.0);
+    vertex_buffer.vertices[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
 
-    vertex_buffer.vertices[vertex_index + 3].position = vec3<f32>(x, y + 1.0, z + 1.0);
-    vertex_buffer.vertices[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
+    vertex_buffer.vertices[vertex_index + 3].position = vec3<f32>(x, y + 1.0, z);
+    vertex_buffer.vertices[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y);
 }
 
 fn minus_x_vertices(
@@ -35,16 +35,16 @@ fn minus_x_vertices(
     y: f32,
     z: f32,
 ) {
-    vertex_buffer.vertices[vertex_index + 0].position = vec3<f32>(x, y + 1.0, z + 1.0);
+    vertex_buffer.vertices[vertex_index + 0].position = vec3<f32>(x, y, z + 1.0);
     vertex_buffer.vertices[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
 
-    vertex_buffer.vertices[vertex_index + 1].position = vec3<f32>(x, y, z + 1.0);
+    vertex_buffer.vertices[vertex_index + 1].position = vec3<f32>(x, y, z);
     vertex_buffer.vertices[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
 
-    vertex_buffer.vertices[vertex_index + 2].position = vec3<f32>(x, y, z);
+    vertex_buffer.vertices[vertex_index + 2].position = vec3<f32>(x, y + 1.0, z);
     vertex_buffer.vertices[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y);
 
-    vertex_buffer.vertices[vertex_index + 3].position = vec3<f32>(x, y + 1.0, z);
+    vertex_buffer.vertices[vertex_index + 3].position = vec3<f32>(x, y + 1.0, z + 1.0);
     vertex_buffer.vertices[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
 }
 
@@ -55,17 +55,17 @@ fn plus_y_vertices(
     y: f32,
     z: f32,
 ) {
-    vertex_buffer.vertices[vertex_index + 0].position = vec3<f32>(x, y + 1.0, z);
-    vertex_buffer.vertices[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
+    vertex_buffer.vertices[vertex_index + 0].position = vec3<f32>(x, y, z);
+    vertex_buffer.vertices[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
 
-    vertex_buffer.vertices[vertex_index + 1].position = vec3<f32>(x, y + 1.0, z + 1.0);
-    vertex_buffer.vertices[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
+    vertex_buffer.vertices[vertex_index + 1].position = vec3<f32>(x, y, z + 1.0);
+    vertex_buffer.vertices[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
 
-    vertex_buffer.vertices[vertex_index + 2].position = vec3<f32>(x + 1.0, y + 1.0, z + 1.0);
-    vertex_buffer.vertices[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y);
+    vertex_buffer.vertices[vertex_index + 2].position = vec3<f32>(x + 1.0, y, z + 1.0);
+    vertex_buffer.vertices[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
 
-    vertex_buffer.vertices[vertex_index + 3].position = vec3<f32>(x, y + 1.0, z + 1.0);
-    vertex_buffer.vertices[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
+    vertex_buffer.vertices[vertex_index + 3].position = vec3<f32>(x + 1.0, y, z);
+    vertex_buffer.vertices[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y);
 }
 
 fn minus_y_vertices(
@@ -114,8 +114,8 @@ fn write_faces_x(
     // logic for both u16s packed into the u32
     for (var n = 0u; n < 2u; n += 1u) {
         let face_mask = face_mask_for_axis(0u, x, y, z);
-        let i_masked = (VOID_REF_OFFSET + index_offset + (*index_count)) * face_mask.face_bit;
-        let v_masked = (VOID_REF_OFFSET + vertex_offset + (*vertex_count)) * face_mask.face_bit;
+        let i_masked = (index_offset + (*index_count)) * face_mask.face_bit;
+        let v_masked = (vertex_offset + (*vertex_count)) * face_mask.face_bit;
 
         quad_indices(i_masked, v_masked);
         plus_x_vertices(v_masked * face_mask.dir_bit, temp_uv ,x_f32 ,y_f32, z_f32);
@@ -143,8 +143,8 @@ fn write_faces_y(
     // logic for both u16s packed into the u32
     for (var n = 0u; n < 2u; n += 1u) {
         let face_mask = face_mask_for_axis(1u, x, y, z);
-        let i_masked = (VOID_REF_OFFSET + index_offset + (*index_count)) * face_mask.face_bit;
-        let v_masked = (VOID_REF_OFFSET + vertex_offset + (*vertex_count)) * face_mask.face_bit;
+        let i_masked = (index_offset + (*index_count)) * face_mask.face_bit;
+        let v_masked = (vertex_offset + (*vertex_count)) * face_mask.face_bit;
 
         quad_indices(i_masked, v_masked);
         plus_y_vertices(v_masked * face_mask.dir_bit, temp_uv ,x_f32 ,y_f32, z_f32);

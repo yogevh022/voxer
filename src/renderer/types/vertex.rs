@@ -1,16 +1,16 @@
-use glam::{Vec2, Vec3};
+use glam::{Vec2, Vec3, Vec3A};
 
 #[repr(C)]
-#[derive(Copy, Debug, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Debug, Clone, bytemuck::Zeroable)]
 pub struct Vertex {
-    pub position: Vec3,
+    pub position: Vec3A,
     pub tex_coords: Vec2,
 }
 
 impl Vertex {
     pub(crate) fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
-            array_stride: size_of::<Vertex>() as wgpu::BufferAddress,
+            array_stride: 32u64,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {
@@ -19,11 +19,16 @@ impl Vertex {
                     format: wgpu::VertexFormat::Float32x3,
                 },
                 wgpu::VertexAttribute {
-                    offset: size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    offset: size_of::<Vec3A>() as wgpu::BufferAddress,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x2,
                 },
             ],
         }
+    }
+    
+    #[inline(always)]
+    pub(crate) const fn size() -> u64 {
+        32
     }
 }
