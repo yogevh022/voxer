@@ -119,8 +119,8 @@ impl AppRenderer<'_> {
             0u64,
             bytemuck::cast_slice(&[view_proj]),
         );
-        render_pass.set_vertex_buffer(0, self.vertex_buff.slice((Vertex::size() << 2)..));
-        render_pass.set_index_buffer(self.index_buff.slice((size_of::<Index>() as u64 * 6)..), wgpu::IndexFormat::Uint32);
+        render_pass.set_vertex_buffer(0, self.vertex_buff.slice(..));
+        render_pass.set_index_buffer(self.index_buff.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.set_bind_group(1, &self.trans_mats_bind_group, &[]);
 
         let mut indirect_buffer_commands = Vec::with_capacity(self.gpu_loaded_chunk_entries.len());
@@ -222,8 +222,8 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
         chunk_buff: chunk_data_buff,
         chunk_mmat_buff: chunk_model_mat_buff,
         gpu_loaded_chunk_entries: HashMap::new(),
-        gpu_vertex_malloc: gpu::VirtualMemAlloc::new(temp_size as usize, (Vertex::size() as usize) << 2usize),
-        gpu_index_malloc: gpu::VirtualMemAlloc::new(temp_size as usize, size_of::<Index>() * 6),
+        gpu_vertex_malloc: gpu::VirtualMemAlloc::new(temp_size as usize, 0), // fixme remove offset
+        gpu_index_malloc: gpu::VirtualMemAlloc::new(temp_size as usize, 0),
         chunk_compute_bind_group,
         trans_mats_bind_group: t_bg,
         texture_atlas: atlas,

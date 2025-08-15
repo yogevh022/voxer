@@ -12,6 +12,7 @@ struct GPUChunkEntry {
 struct Vertex {
     position: vec3<f32>,
     tex_coords: vec2<f32>,
+    padding: vec2<f32>, // for bit cast
 }
 
 struct IndexBuffer {

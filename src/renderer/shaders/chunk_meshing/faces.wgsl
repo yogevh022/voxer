@@ -1,6 +1,3 @@
-fn bit_at(value: u32, index: u32) -> u32 {
-    return (value >> index) & 1u;
-}
 
 fn rotate_z(arr: ChunkBlocks) {
     for (var x: u32 = 0u; x < CHUNK_DIM_U16; x++) {
@@ -21,14 +18,27 @@ fn rotate_y(arr: ChunkBlocks) {
 }
 
 fn calc_face_data(blocks: ChunkBlocks, face_axis: u32) {
+    var index_count: u32 = 0u;
+    var vertex_count: u32 = 0u;
     for (var x: u32 = 0u; x < CHUNK_DIM_U16 - 1u; x++) {
-        var arr_a: array<array<u32, CHUNK_DIM_U32>, CHUNK_DIM_U16> = blocks[x];
-        var arr_b: array<array<u32, CHUNK_DIM_U32>, CHUNK_DIM_U16> = blocks[x+1u];
-        for (var y: u32 = 0u; y < CHUNK_DIM_U16; y++) {
+        for (var y: u32 = 0u; y < CHUNK_DIM_U16 - 1u; y++) {
+            var z_blocks: array<u32, CHUNK_DIM_U16>;
             for (var z: u32 = 0u; z < CHUNK_DIM_U32; z++) {
-                chunk_face[face_axis][x].faces[y][z] = arr_a[y][z] ^ arr_b[y][z];
-                chunk_face[face_axis][x].dirs[y][z] = arr_a[y][z] & (~arr_b[y][z]);
+                // x data no rotation
+                let x_faces = blocks[x][y][z] ^ blocks[x+1u][y][z];
+                let x_dirs = blocks[x][y][z] & (~blocks[x+1u][y][z]);
+                // y data rotate cw on z
+                let y_faces = blocks[y][x][z] ^ blocks[y+1u][x][z];
+                let y_dirs = blocks[y][x][z] & (~blocks[y+1u][x][z]);
+                // z data rotate cw on y
+                // LOOP TWICE X 0-7 8-15
+                z_blocks[z] |= ((blocks[z][y][x] >> x) & 1) << x;
+                z_blocks[8u+z] |= ((blocks[8u+z][y][x] >> x) & 1) << x;
             }
+            let z_faces = z_blocks[y][x] ^ blocks[z+1u][y][x];
+            let z_dirs = z_blocks[y][x] & (~blocks[z+1u][y][x]);
+            // z_arr logic
         }
+        // y pos +1 code
     }
 }
