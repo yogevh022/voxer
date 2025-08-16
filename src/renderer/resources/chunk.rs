@@ -1,9 +1,9 @@
-use crate::renderer::gpu::GPU_CHUNK_SIZE;
+use crate::renderer::gpu::GPUChunkEntry;
 
-pub fn create_block_buffer(device: &wgpu::Device, chunk_capacity: usize) -> wgpu::Buffer {
+pub fn create_chunk_buffer(device: &wgpu::Device, chunk_capacity: usize) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("chunk_block_buffer"),
-        size: (chunk_capacity * GPU_CHUNK_SIZE) as u64,
+        label: Some("chunk_buffer"),
+        size: (chunk_capacity * GPUChunkEntry::size()) as u64,
         usage: wgpu::BufferUsages::STORAGE
             | wgpu::BufferUsages::COPY_SRC
             | wgpu::BufferUsages::COPY_DST,
@@ -11,9 +11,9 @@ pub fn create_block_buffer(device: &wgpu::Device, chunk_capacity: usize) -> wgpu
     })
 }
 
-pub fn block_buffer_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+pub fn chunk_buffer_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("chunk_block_buffer_compute_bind_group_layout"),
+        label: Some("chunk_buffer_compute_bind_group_layout"),
         entries: &[
             wgpu::BindGroupLayoutEntry {
                 binding: 0, // chunk block data

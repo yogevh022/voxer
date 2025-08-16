@@ -12,7 +12,6 @@ struct GPUChunkEntry {
 struct Vertex {
     position: vec3<f32>,
     tex_coords: vec2<f32>,
-    padding: vec2<f32>, // for bit cast
 }
 
 struct IndexBuffer {
@@ -22,3 +21,5 @@ struct IndexBuffer {
 struct VertexBuffer {
     vertices: array<Vertex>,
 }
+
+alias ChunkBlocks = array<array<array<u32, CHUNK_DIM_U32>, CHUNK_DIM_U16>, CHUNK_DIM_U16>; // wgsl has no u16 :D

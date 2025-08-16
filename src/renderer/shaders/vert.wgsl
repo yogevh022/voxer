@@ -15,14 +15,14 @@ fn vs_main(
     @builtin(instance_index) inst_id: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
-//    out.position = view_proj * model_mats[inst_id] * vec4<f32>(position, 1.0);
-    let identity: mat4x4<f32> = mat4x4<f32>(
-        vec4<f32>(1.0, 0.0, 0.0, 0.0),
-        vec4<f32>(0.0, 1.0, 0.0, 0.0),
-        vec4<f32>(0.0, 0.0, 1.0, 0.0),
-        vec4<f32>(0.0, 0.0, 0.0, 1.0)
-    );
-    out.position = view_proj * identity * vec4<f32>(position, 1.0);
+    out.position = view_proj * model_mats[inst_id] * vec4<f32>(position, 1.0);
+//    let identity: mat4x4<f32> = mat4x4<f32>(
+//        vec4<f32>(1.0, 0.0, 0.0, 0.0),
+//        vec4<f32>(0.0, 1.0, 0.0, 0.0),
+//        vec4<f32>(0.0, 0.0, 1.0, 0.0),
+//        vec4<f32>(0.0, 0.0, 0.0, 1.0)
+//    );
+//    out.position = view_proj * vec4<f32>(position, 1.0);
     out.tex_coords = tex_coords;
     return out;
 }

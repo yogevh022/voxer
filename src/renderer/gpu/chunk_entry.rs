@@ -1,12 +1,13 @@
 use crate::world::types::{CHUNK_DIM, ChunkBlocks, PACKED_CHUNK_DIM};
+use bytemuck::{Pod, Zeroable};
 use encase::ShaderType;
 use glam::Vec3;
 
-pub const GPU_CHUNK_SIZE: usize = size_of::<GPUChunkEntry>();
 type GPUPackedBlockPair = u32;
 type GPUChunkBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM];
 
-#[derive(ShaderType)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, ShaderType, Pod, Zeroable)]
 pub struct GPUChunkEntry {
     pub header: GPUChunkEntryHeader,
     pub blocks: GPUChunkBlocks,
@@ -20,16 +21,21 @@ impl GPUChunkEntry {
             blocks: gpu_blocks,
         }
     }
+
+    pub const fn size() -> usize {
+        size_of::<GPUChunkEntry>() + 16
+    }
 }
 
-#[derive(Clone, Copy, Debug, ShaderType)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable, ShaderType)]
 pub struct GPUChunkEntryHeader {
-    pub vertex_allocation: u32,
-    pub index_allocation: u32,
+    pub vertex_offset: u32, // in position not bytes
+    pub index_offset: u32, // in position not bytes
     pub vertex_count: u32,
     pub index_count: u32,
     pub slab_index: u32,
-    pub world_position: Vec3,
+    pub world_position: Vec3, // 32
 }
 
 impl GPUChunkEntryHeader {
@@ -42,8 +48,8 @@ impl GPUChunkEntryHeader {
         world_position: Vec3,
     ) -> Self {
         Self {
-            vertex_allocation,
-            index_allocation,
+            vertex_offset: vertex_allocation,
+            index_offset: index_allocation,
             vertex_count,
             index_count,
             slab_index,

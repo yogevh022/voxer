@@ -67,7 +67,9 @@ impl<'window> WorldClient<'window> {
             .into_iter()
             .map(|(c_pos, chunk)| (self.loaded_chunks.insert(c_pos), c_pos, chunk))
             .collect();
-        self.renderer.write_new_chunks(indexed_allocated_delta);
-        self.renderer.compute_chunks();
+        if !indexed_allocated_delta.is_empty() {
+            self.renderer.write_new_chunks(indexed_allocated_delta);
+            self.renderer.compute_chunks();
+        }
     }
 }

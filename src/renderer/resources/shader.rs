@@ -17,10 +17,6 @@ const FRAG_SHADER: &str = include_str!(concat!(
 const MESHGEN_SHADER: &str = concat!(
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/src/renderer/shaders/chunk_meshing/types.wgsl"
-    )),
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
         "/src/renderer/shaders/chunk_meshing/entry.wgsl"
     )),
     include_str!(concat!(

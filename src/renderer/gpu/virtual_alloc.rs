@@ -5,7 +5,6 @@ use std::io::Write;
 
 pub struct VirtualMemAlloc {
     pub size: usize,
-    pub global_offset: usize,
     free_blocks: HashMap<usize, VirtualMemSlot>,
     allocated_blocks: HashMap<usize, VirtualMemSlot>,
 }
@@ -17,14 +16,13 @@ pub struct VirtualMemSlot {
 }
 
 impl VirtualMemAlloc {
-    pub fn new(size: usize, offset: usize) -> Self {
+    pub fn new(size: usize) -> Self {
         let initial_slot = VirtualMemSlot {
-            size: size - offset,
+            size: size,
             prev_free: None,
         };
         Self {
             size,
-            global_offset: offset,
             free_blocks: HashMap::from([(0, initial_slot)]),
             allocated_blocks: HashMap::new(),
         }
@@ -36,12 +34,11 @@ impl VirtualMemAlloc {
             .iter()
             .find(|(_, slot)| slot.size >= size)
             .map(|(i, _)| *i);
-        let offset = self.global_offset + self.alloc_slot(available_slot, size)?;
+        let offset = self.alloc_slot(available_slot, size)?;
         Ok(offset)
     }
 
-    pub fn free(&mut self, mut offset: usize) {
-        offset -= self.global_offset;
+    pub fn free(&mut self, offset: usize) {
         let mut slot = self.allocated_blocks.remove(&offset).unwrap();
         let next_slot = self.free_blocks.remove(&(offset + slot.size));
         slot.size += next_slot.map(|s| s.size).unwrap_or(0);

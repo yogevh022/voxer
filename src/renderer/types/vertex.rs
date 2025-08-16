@@ -26,9 +26,9 @@ impl Vertex {
             ],
         }
     }
-    
+
     #[inline(always)]
-    pub(crate) const fn size() -> u64 {
+    pub(crate) const fn size() -> usize {
         32
     }
 }
