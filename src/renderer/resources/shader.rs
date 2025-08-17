@@ -25,7 +25,7 @@ const MESHGEN_SHADER: &str = concat!(
     )),
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/src/renderer/shaders/chunk_meshing/meshgen.wgsl"
+        "/src/renderer/shaders/chunk_meshing/quads.wgsl"
     )),
 );
 

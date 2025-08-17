@@ -6,7 +6,7 @@ struct VertexOutput {
 @group(1) @binding(0)
 var<uniform> view_proj: mat4x4<f32>;
 @group(1) @binding(1)
-var<storage, read> model_mats: array<mat4x4<f32>>;
+var<storage, read> chunk_mmats: array<mat4x4<f32>>;
 
 @vertex
 fn vs_main(
@@ -15,13 +15,7 @@ fn vs_main(
     @builtin(instance_index) inst_id: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
-    out.position = view_proj * model_mats[inst_id] * vec4<f32>(position, 1.0);
-//    let identity: mat4x4<f32> = mat4x4<f32>(
-//        vec4<f32>(1.0, 0.0, 0.0, 0.0),
-//        vec4<f32>(0.0, 1.0, 0.0, 0.0),
-//        vec4<f32>(0.0, 0.0, 1.0, 0.0),
-//        vec4<f32>(0.0, 0.0, 0.0, 1.0)
-//    );
+    out.position = view_proj * chunk_mmats[inst_id] * vec4<f32>(position, 1.0);
 //    out.position = view_proj * vec4<f32>(position, 1.0);
     out.tex_coords = tex_coords;
     return out;

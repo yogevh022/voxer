@@ -1,14 +1,20 @@
 pub mod app_renderer;
 
+use std::collections::HashSet;
 use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::types::{WorldClient, WorldServer};
 use crate::{compute, vtypes};
-use glam::Vec3;
+use glam::{IVec3, Vec3};
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
+
+#[derive(Default)]
+pub struct AppDebug {
+    pub last_chunk_pos: IVec3,
+}
 
 pub struct App<'a> {
     pub window: Option<Arc<Window>>,
@@ -16,6 +22,7 @@ pub struct App<'a> {
     pub server: WorldServer,
     pub client: Option<WorldClient<'a>>,
     pub scene: Scene,
+    pub debug: AppDebug,
 }
 
 impl App<'_> {
@@ -26,6 +33,7 @@ impl App<'_> {
             server,
             client: None,
             scene,
+            debug: Default::default(),
         }
     }
 }
@@ -43,6 +51,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                 arc_window.inner_size().width as f32 / arc_window.inner_size().height as f32,
             );
             self.client = Some(WorldClient::new(arc_window));
+            self.debug.last_chunk_pos = IVec3::new(100, 100, 100);
         }
     }
 
@@ -64,7 +73,6 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
 
                         if self.v.time.temp_200th_frame() {
                             window.set_title(&format!("Tech - {:.2} FPS", self.v.time.fps()));
-                            client.sync_with_renderer();
                         }
 
                         if let Err(e) = client.renderer.render(&self.v.camera) {
@@ -116,83 +124,6 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
 }
 
 impl<'a> App<'a> {
-    fn update_active_chunks(&mut self) {
-        let pos = self.v.camera.transform.position;
-        let chunk_pos = compute::geo::world_to_chunk_pos(&pos);
-
-        let chunk_pos_f32 = Vec3::new(chunk_pos.x as f32, chunk_pos.y as f32, chunk_pos.z as f32);
-        let active_chunk_positions = compute::geo::discrete_sphere_pts(&chunk_pos_f32, 0.0);
-
-        // let active_chunk_positions = HashSet::from([IVec3::new(0, 0, 0)]);
-
-        let app_renderer = &mut self.client.as_mut().expect("client is none").renderer;
-
-        // UNLOAD FROM RENDERER
-        // let to_unload = self
-        //     .scene
-        //     .world
-        //     .chunk_manager
-        //     .loaded_chunks_at_positions(&active_chunk_positions);
-        // self.scene
-        //     .world
-        //     .chunk_manager
-        //     .enqueue_pending_unload(to_unload);
-
-        // RECEIVE FROM WORLDGEN WORKER
-        // if let Ok(generated_chunks) = self.worker_handles.world.receive.try_recv() {
-        //     self.scene
-        //         .world
-        //         .chunk_manager
-        //         .insert_chunks(generated_chunks);
-        // }
-
-        // SEND TO WORLDGEN WORKER
-        // let to_gen = self
-        //     .scene
-        //     .world
-        //     .chunk_manager
-        //     .ungenerated_chunks_at_positions(&active_chunk_positions);
-        // self.scene
-        //     .world
-        //     .chunk_manager
-        //     .enqueue_pending_generation(&to_gen);
-        //
-        // self.worker_handles.world.send.send(to_gen).unwrap();
-
-        // LOAD TO RENDERER
-        // let to_load = self
-        //     .scene
-        //     .world
-        //     .chunk_manager
-        //     .unloaded_chunks_at_positions(&active_chunk_positions);
-        // self.scene.world.chunk_manager.enqueue_pending_load(to_load);
-
-        // SEND TO MESHGEN WORKER
-        // self.worker_handles
-        //     .meshgen
-        //     .send
-        //     .send(
-        //         chunks_status
-        //             .meshless
-        //             .into_iter()
-        //             .map(|c_pos| {
-        //                 self.scene.world.active_generation.meshes.insert(c_pos);
-        //                 (
-        //                     c_pos,
-        //                     self.scene
-        //                         .world
-        //                         .chunks
-        //                         .get_mut(&c_pos)
-        //                         .unwrap()
-        //                         .take()
-        //                         .unwrap(),
-        //                 )
-        //             })
-        //             .collect(),
-        //     )
-        //     .unwrap();
-    }
-
     fn update(&mut self) {
         {
             let input = self.v.input.read();
@@ -221,21 +152,9 @@ impl<'a> App<'a> {
                 .as_mut()
                 .unwrap()
                 .update_chunks_by_delta(new_chunks, unload_positions);
+    
+            self.client.as_mut().unwrap().sync_with_renderer();
         }
 
-        // if self
-        //     .test_data
-        //     .world_gen_check
-        //     .map_or(true, |t| t.elapsed().as_secs_f32() > 0.2)
-        // {
-        //     self.test_data.world_gen_check = Some(Instant::now());
-        //     self.update_active_chunks();
-        // }
-
-        // let chunk_pos = World::world_to_chunk_pos(&self.camera.transform.position);
-        // if self.test_data.last_chunk_pos != chunk_pos {
-        //     self.test_data.last_chunk_pos = chunk_pos;
-        //     self.update_active_chunks();
-        // }
     }
 }

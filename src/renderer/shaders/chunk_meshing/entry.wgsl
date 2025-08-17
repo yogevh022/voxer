@@ -13,19 +13,30 @@ var<storage, read_write> index_buffer: IndexBuffer;
 var<storage, read_write> chunk_model_mats_buffer: array<mat4x4<f32>>;
 
 
-var<private> chunk_vertex_offset: u32 = 0u;
-var<private> chunk_index_offset: u32 = 0u;
+var<private> chunk_vertex_offset: u32;
+var<private> chunk_index_offset: u32;
 
 
-@compute @workgroup_size(1)
-fn compute_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let chunk_index = global_id.x;
+@compute @workgroup_size(128)
+fn compute_main(@builtin(local_invocation_id) local_id: vec3<u32>) {
+    let chunk_index = local_id.x;
     let chunk = chunk_storage[chunk_index];
-//    chunk_vertex_offset = chunk.vertex_offset;
-//    chunk_index_offset = chunk.index_offset;
-    let temp_uv: vec2<f32> = vec2<f32>(0.0, 0.0);
-    let blocks = chunk.blocks;
-    calc_face_data(blocks);
 
-    chunk_model_mats_buffer[chunk.slab_index] = model_matrix_from_position(chunk.world_position);
+    chunk_vertex_offset = chunk.vertex_offset;
+    chunk_index_offset = chunk.index_offset;
+
+    if (chunk_vertex_offset != 0) {
+        calc_face_data(chunk.blocks);
+        chunk_model_mats_buffer[chunk.slab_index] = model_matrix_from_position(chunk.world_position);
+    }
+}
+
+fn model_matrix_from_position(position: vec3<f32>) -> mat4x4<f32> {
+    var result: mat4x4<f32> = mat4x4<f32>(
+        vec4<f32>(1.0, 0.0, 0.0, 0.0),
+        vec4<f32>(0.0, 1.0, 0.0, 0.0),
+        vec4<f32>(0.0, 0.0, 1.0, 0.0),
+        vec4<f32>(position, 1.0),
+    );
+    return result;
 }

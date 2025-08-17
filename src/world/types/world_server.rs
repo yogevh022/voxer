@@ -41,12 +41,13 @@ impl WorldServer {
 
     pub(crate) fn update(&mut self) {
         let mut active_chunk_positions = HashSet::new();
-        for (_, player_pos) in self.players.iter() {
-            active_chunk_positions.extend(geo::discrete_sphere_pts(
-                player_pos,
-                self.config.simulation_distance as f32,
-            ));
-        }
+        // for (_, player_pos) in self.players.iter() {
+        //     active_chunk_positions.extend(geo::discrete_sphere_pts(
+        //         player_pos,
+        //         self.config.simulation_distance as f32,
+        //     ));
+        // }
+        active_chunk_positions.insert(IVec3::new(1,0,0));
         let (generated, ungenerated): (Vec<_>, Vec<_>) =
             self.partition_chunks_by_existence(active_chunk_positions);
         self.try_receive_generation();
