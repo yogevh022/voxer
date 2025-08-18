@@ -1,33 +1,30 @@
 use crate::renderer::builder::RendererAtlas;
-use crate::renderer::gpu;
-use crate::renderer::gpu::{GPUChunkEntry, GPUChunkEntryHeader};
+use crate::renderer::gpu::{
+    ChunkVMA, GPUChunkEntryBuffer, GPUChunkEntryHeader, VirtualMemAlloc,
+};
 use crate::renderer::resources;
 use crate::renderer::{Index, Renderer, RendererBuilder, Vertex};
 use crate::world::types::Chunk;
 use crate::{compute, vtypes};
-use encase::{ShaderType, StorageBuffer};
-use glam::{IVec3, Vec2, Vec3};
+use glam::IVec3;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use wgpu::util::{DeviceExt, DrawIndexedIndirectArgs};
 use winit::window::Window;
 
 const VOID_MESH_OFFSET: usize = 8;
 
 pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
-    pub encoder: wgpu::CommandEncoder,
+    pub global_encoder: wgpu::CommandEncoder,
 
     pub indirect_buff: wgpu::Buffer,
     pub vertex_buff: wgpu::Buffer,
     pub index_buff: wgpu::Buffer,
     pub chunk_buff: wgpu::Buffer,
-    pub chunk_mmat_buff: wgpu::Buffer,
 
-    pub gpu_loaded_chunk_entries: HashMap<IVec3, GPUChunkEntryHeader>,
+    pub loaded_chunks: HashMap<IVec3, GPUChunkEntryHeader>,
 
-    pub gpu_vertex_malloc: gpu::VirtualMemAlloc,
-    pub gpu_index_malloc: gpu::VirtualMemAlloc,
+    pub chunk_malloc: ChunkVMA,
 
     pub chunk_compute_bind_group: wgpu::BindGroup,
     pub trans_mats_bind_group: wgpu::BindGroup,
@@ -39,53 +36,44 @@ pub struct AppRenderer<'window> {
 
 impl AppRenderer<'_> {
     pub fn write_new_chunks(&mut self, chunks: Vec<(usize, IVec3, Chunk)>) {
-        let mut storage_buffer =
-            StorageBuffer::new(Vec::with_capacity(chunks.len() * GPUChunkEntry::size()));
+        let chunks_count = chunks.len();
+        let mut chunk_entries = GPUChunkEntryBuffer::new(chunks_count);
         for (slab_index, chunk_pos, chunk) in chunks.into_iter() {
-            let face_count = compute::chunk::face_count(&chunk.blocks);
-            let vertex_count = face_count * 4;
-            let index_count = face_count * 6;
-            let header = GPUChunkEntryHeader::new(
-                (VOID_MESH_OFFSET + self.gpu_vertex_malloc.alloc(vertex_count).unwrap()) as u32,
-                (VOID_MESH_OFFSET + self.gpu_index_malloc.alloc(index_count).unwrap()) as u32,
-                vertex_count as u32,
-                index_count as u32,
+            let header = GPUChunkEntryHeader::from_chunk_data(
+                &mut self.chunk_malloc,
+                &chunk,
+                chunk_pos,
                 slab_index as u32,
-                compute::geo::chunk_to_world_pos(&chunk_pos),
             );
-            self.gpu_loaded_chunk_entries
-                .insert(chunk_pos, header.clone());
-            let gpu_entry = GPUChunkEntry::new(header, chunk.blocks);
+            self.loaded_chunks.insert(chunk_pos, header.clone());
 
-            storage_buffer
-                .write(&gpu_entry)
-                .expect("failed writing chunks to buffer");
+            chunk_entries.insert(header, chunk.blocks);
         }
+
         self.renderer
-            .write_buffer(&self.chunk_buff, 0, &storage_buffer.into_inner());
+            .write_buffer(&self.chunk_buff, 0, &bytemuck::bytes_of(&(chunks_count as u32)));
+        self.renderer
+            .write_buffer(&self.chunk_buff, 16, &bytemuck::cast_slice(&chunk_entries));
 
         // self.gpu_vertex_malloc.draw_cli();
     }
 
     pub fn unload_chunks(&mut self, chunks: HashSet<IVec3>) {
         for c_pos in chunks {
-            let chunk_entry = self.gpu_loaded_chunk_entries.remove(&c_pos).unwrap();
-            self.gpu_vertex_malloc
-                .free(chunk_entry.vertex_offset as usize - VOID_MESH_OFFSET);
-            self.gpu_index_malloc
-                .free(chunk_entry.index_offset as usize - VOID_MESH_OFFSET);
-            self.renderer.write_buffer(
-                &self.chunk_buff,
-                chunk_entry.slab_index as u64 * GPUChunkEntry::size() as u64,
-                &[0u8; 32],
-            );
+            let chunk_entry = self.loaded_chunks.remove(&c_pos).unwrap();
+            self.chunk_malloc
+                .vertex
+                .free(chunk_entry.vertex_offset as usize);
+            self.chunk_malloc
+                .index
+                .free(chunk_entry.index_offset as usize);
         }
         // self.gpu_vertex_malloc.draw_cli();
     }
 
     pub fn compute_chunks(&mut self) {
         let mut compute_pass = self
-            .encoder
+            .global_encoder
             .begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("compute_pass"),
                 timestamp_writes: None,
@@ -97,7 +85,7 @@ impl AppRenderer<'_> {
 
     pub fn encode_render_pass(&mut self, view: &wgpu::TextureView, camera: &vtypes::Camera) {
         let mut render_pass = resources::render_pass::begin(
-            &mut self.encoder,
+            &mut self.global_encoder,
             view,
             &self.renderer.depth_texture_view,
         );
@@ -114,9 +102,9 @@ impl AppRenderer<'_> {
         render_pass.set_index_buffer(self.index_buff.slice(..), wgpu::IndexFormat::Uint32);
         render_pass.set_bind_group(1, &self.trans_mats_bind_group, &[]);
 
-        if !self.gpu_loaded_chunk_entries.is_empty() {
+        if !self.loaded_chunks.is_empty() {
             let buffer_commands = self
-                .gpu_loaded_chunk_entries
+                .loaded_chunks
                 .values()
                 .map(|header| header.draw_indexed_indirect_args())
                 .collect::<Vec<_>>();
@@ -125,14 +113,15 @@ impl AppRenderer<'_> {
                 0,
                 &bytemuck::cast_slice(&buffer_commands),
             );
-            render_pass.draw_indexed_indirect(&self.indirect_buff, 0);
+            // dbg!(&self.loaded_chunks.iter().collect::<Vec<_>>());
+            render_pass.multi_draw_indexed_indirect(&self.indirect_buff, 0, buffer_commands.len() as u32);
         }
     }
 
-    fn take_encoder(&mut self) -> wgpu::CommandEncoder {
-        // returns owned current encoder, and replaces it with a new one
+    fn take_global_encoder(&mut self) -> wgpu::CommandEncoder {
+        // returns owned global encoder, and replaces it with a new one
         let mut encoder = create_encoder(&self.renderer.device);
-        std::mem::swap(&mut self.encoder, &mut encoder);
+        std::mem::swap(&mut self.global_encoder, &mut encoder);
         encoder
     }
 
@@ -144,7 +133,7 @@ impl AppRenderer<'_> {
 
         self.encode_render_pass(&view, camera);
 
-        let encoder = self.take_encoder();
+        let encoder = self.take_global_encoder();
 
         self.renderer.queue.submit(Some(encoder.finish()));
         frame.present();
@@ -158,15 +147,15 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
 
     // >upper bound of max chunks to be buffered at once
     let max_rendered_chunks = compute::geo::max_discrete_sphere_pts(render_distance);
-    let temp_size = (compute::MIB * 32) as u64;
+    let temp_size = (compute::MIB * 128) as u64;
     // buffers
     let vertex_buff = renderer_builder.make_vertex_buffer(temp_size);
     let index_buff = renderer_builder.make_index_buffer(temp_size);
     let (chunk_buff, chunk_buff_layout) =
-        chunk_blocks_buffer(&renderer_builder, max_rendered_chunks);
+        chunk_blocks_buffer(&renderer_builder, temp_size as usize);
     let chunk_mmat_buff = model_matrix_buffer(&renderer_builder, max_rendered_chunks);
 
-    let (t_bgl, t_bg) = transform_matrices_binds(
+    let (transform_mats_bgl, transform_mats_bg) = transform_matrices_binds(
         &renderer_builder,
         renderer_builder.view_projection_buffer.as_ref().unwrap(),
         &chunk_mmat_buff,
@@ -175,8 +164,8 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
     // pipelines
     let cb_compute_pipeline = block_compute_pipeline(&renderer_builder, &[&chunk_buff_layout]);
     let render_pipeline = renderer_builder.make_render_pipeline(
-        resources::shader::main_shader_source().into(),
-        &[&atlas.texture_bind_group_layout, &t_bgl],
+        resources::shader::main_shader().into(),
+        &[&atlas.texture_bind_group_layout, &transform_mats_bgl],
     );
 
     let chunk_compute_bind_group =
@@ -204,19 +193,22 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
 
     let indirect_buff = indirect_buffer(&renderer.device, 250 * compute::KIB as u64);
 
+    let chunk_malloc = ChunkVMA {
+        vertex: VirtualMemAlloc::new(temp_size as usize / Vertex::size(), VOID_MESH_OFFSET),
+        index: VirtualMemAlloc::new(temp_size as usize / size_of::<Index>(), VOID_MESH_OFFSET),
+    };
+
     AppRenderer {
         renderer,
-        encoder,
+        global_encoder: encoder,
         indirect_buff,
         vertex_buff,
         index_buff,
         chunk_buff,
-        chunk_mmat_buff,
-        gpu_loaded_chunk_entries: HashMap::new(),
-        gpu_vertex_malloc: gpu::VirtualMemAlloc::new(temp_size as usize / Vertex::size()),
-        gpu_index_malloc: gpu::VirtualMemAlloc::new(temp_size as usize / size_of::<Index>()),
+        loaded_chunks: HashMap::new(),
+        chunk_malloc,
         chunk_compute_bind_group,
-        trans_mats_bind_group: t_bg,
+        trans_mats_bind_group: transform_mats_bg,
         texture_atlas: atlas,
         render_pipeline,
         compute_pipeline: cb_compute_pipeline,
@@ -254,12 +246,10 @@ pub fn transform_matrices_binds(
 
 pub fn chunk_blocks_buffer(
     renderer_builder: &RendererBuilder,
-    max_rendered_chunks: usize,
+    size: usize,
 ) -> (wgpu::Buffer, wgpu::BindGroupLayout) {
-    let block_buffer = resources::chunk::create_chunk_buffer(
-        renderer_builder.device.as_ref().unwrap(),
-        max_rendered_chunks,
-    );
+    let block_buffer =
+        resources::chunk::create_chunk_buffer(renderer_builder.device.as_ref().unwrap(), size);
     (
         block_buffer,
         resources::chunk::chunk_buffer_bind_group_layout(renderer_builder.device.as_ref().unwrap()),
@@ -272,7 +262,7 @@ pub fn block_compute_pipeline(
 ) -> wgpu::ComputePipeline {
     let shader = resources::shader::create(
         renderer_builder.device.as_ref().unwrap(),
-        resources::shader::meshgen_shader_source().into(),
+        resources::shader::chunk_meshing().into(),
     );
     resources::pipeline::create_compute(
         renderer_builder.device.as_ref().unwrap(),

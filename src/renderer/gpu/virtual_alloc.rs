@@ -3,6 +3,11 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::io::Write;
 
+pub struct ChunkVMA {
+    pub vertex: VirtualMemAlloc,
+    pub index: VirtualMemAlloc,
+}
+
 pub struct VirtualMemAlloc {
     pub size: usize,
     free_blocks: HashMap<usize, VirtualMemSlot>,
@@ -16,14 +21,14 @@ pub struct VirtualMemSlot {
 }
 
 impl VirtualMemAlloc {
-    pub fn new(size: usize) -> Self {
+    pub fn new(size: usize, offset: usize) -> Self {
         let initial_slot = VirtualMemSlot {
-            size: size,
+            size,
             prev_free: None,
         };
         Self {
             size,
-            free_blocks: HashMap::from([(0, initial_slot)]),
+            free_blocks: HashMap::from([(offset, initial_slot)]),
             allocated_blocks: HashMap::new(),
         }
     }

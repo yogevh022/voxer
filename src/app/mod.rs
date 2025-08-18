@@ -1,10 +1,10 @@
 pub mod app_renderer;
 
-use std::collections::HashSet;
 use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::types::{WorldClient, WorldServer};
 use crate::{compute, vtypes};
 use glam::{IVec3, Vec3};
+use std::collections::HashSet;
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
@@ -152,9 +152,8 @@ impl<'a> App<'a> {
                 .as_mut()
                 .unwrap()
                 .update_chunks_by_delta(new_chunks, unload_positions);
-    
+
             self.client.as_mut().unwrap().sync_with_renderer();
         }
-
     }
 }

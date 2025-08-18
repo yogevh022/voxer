@@ -45,7 +45,7 @@ where
         idx
     }
 
-    pub fn remove(&mut self, value: T) -> Option<usize> {
+    pub fn remove(&mut self, value: &T) -> Option<usize> {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         value.hash(&mut hasher);
         let value_hash = hasher.finish();

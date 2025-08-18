@@ -1,5 +1,4 @@
 use bytemuck::{Pod, Zeroable};
-use encase::ShaderType;
 use std::ops::{BitXor, Deref};
 
 #[repr(transparent)]

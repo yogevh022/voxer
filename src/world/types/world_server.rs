@@ -1,7 +1,7 @@
 use crate::compute::geo;
 use crate::vtypes::Scene;
 use crate::world::generation::{WorldGenConfig, WorldGenHandle};
-use crate::world::types::Chunk;
+use crate::world::types::{Chunk, CHUNK_DIM};
 use glam::{IVec3, Vec3};
 use std::collections::{HashMap, HashSet};
 
@@ -41,18 +41,17 @@ impl WorldServer {
 
     pub(crate) fn update(&mut self) {
         let mut active_chunk_positions = HashSet::new();
-        // for (_, player_pos) in self.players.iter() {
-        //     active_chunk_positions.extend(geo::discrete_sphere_pts(
-        //         player_pos,
-        //         self.config.simulation_distance as f32,
-        //     ));
-        // }
-        active_chunk_positions.insert(IVec3::new(1,0,0));
-        let (generated, ungenerated): (Vec<_>, Vec<_>) =
+        for (_, player_pos) in self.players.iter() {
+            active_chunk_positions.extend(geo::discrete_sphere_pts(
+                &(*player_pos / CHUNK_DIM as f32),
+                self.config.simulation_distance as f32,
+            ));
+        }
+        let (generated, ungenerated): (HashSet<_>, HashSet<_>) =
             self.partition_chunks_by_existence(active_chunk_positions);
         self.try_receive_generation();
         self.request_generation(ungenerated);
-        self.stop_distant_simulation(&generated);
+        self.simulated_chunks = generated;
     }
 
     pub fn set_player(&mut self, player_id: usize, player_pos: &Vec3) {
@@ -74,15 +73,10 @@ impl WorldServer {
     fn partition_chunks_by_existence(
         &self,
         chunk_positions: HashSet<IVec3>,
-    ) -> (Vec<IVec3>, Vec<IVec3>) {
+    ) -> (HashSet<IVec3>, HashSet<IVec3>) {
         chunk_positions.into_iter().partition(|c_pos| {
             self.chunks.contains_key(c_pos) || self.generation_handle.is_pending(c_pos)
         })
-    }
-
-    fn stop_distant_simulation(&mut self, chunk_positions: &Vec<IVec3>) {
-        self.simulated_chunks
-            .retain(|c| chunk_positions.contains(c));
     }
 
     fn try_receive_generation(&mut self) {
@@ -92,9 +86,9 @@ impl WorldServer {
         }
     }
 
-    fn request_generation(&mut self, chunk_positions: Vec<IVec3>) {
+    fn request_generation(&mut self, chunk_positions: HashSet<IVec3>) {
         self.generation_handle
-            .send(chunk_positions.clone())
+            .send(chunk_positions.into_iter().collect::<HashSet<_>>())
             .expect("Failed to send generation request");
     }
 }

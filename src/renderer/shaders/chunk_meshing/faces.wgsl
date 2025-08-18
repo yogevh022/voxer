@@ -19,8 +19,8 @@ fn write_faces_x(
         let bit_index = (16u << n) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;
         let face_dir = (packed_dirs >> bit_index) & 1u;
-        let i_index = draw_face * (chunk_index_offset + (*index_count));
-        let v_index = draw_face * (chunk_vertex_offset + (*vertex_count));
+        let i_index = draw_face * (*index_count);
+        let v_index = draw_face * (*vertex_count);
 
         quad_indices(i_index, v_index);
         plus_x_vertices(face_dir * v_index, temp_uv ,x_f32 ,y_f32, z_f32);
@@ -50,8 +50,8 @@ fn write_faces_y(
         let bit_index = (16u << n) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;
         let face_dir = (packed_dirs >> bit_index) & 1u;
-        let i_index = draw_face * (chunk_index_offset + (*index_count));
-        let v_index = draw_face * (chunk_vertex_offset + (*vertex_count));
+        let i_index = draw_face * (*index_count);
+        let v_index = draw_face * (*vertex_count);
 
         quad_indices(i_index, v_index);
         plus_y_vertices(face_dir * v_index, temp_uv ,x_f32 ,y_f32, z_f32);
@@ -76,13 +76,13 @@ fn write_faces_z(
     let y_f32 = f32(y);
 
     // logic for both u16s packed into the u32
-    for (var n = 0u; n < 2u; n ++) {
+    for (var n = 2u; n > 0; n--) {
         let z_f32 = f32(z - n);
         let bit_index = (16u << n) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;
         let face_dir = (packed_dirs >> bit_index) & 1u;
-        let i_index = draw_face * (chunk_index_offset + (*index_count));
-        let v_index = draw_face * (chunk_vertex_offset + (*vertex_count));
+        let i_index = draw_face * (*index_count);
+        let v_index = draw_face * (*vertex_count);
 
         quad_indices(i_index, v_index);
         plus_z_vertices(face_dir * v_index, temp_uv ,x_f32 ,y_f32, z_f32);
@@ -92,14 +92,14 @@ fn write_faces_z(
     }
 }
 
-fn calc_face_data(blocks: ChunkBlocks) {
-    var index_count: u32 = 0u;
-    var vertex_count: u32 = 0u;
-    for (var x: u32 = 0u; x < CHUNK_DIM_U16; x++) {
-        for (var y: u32 = 0u; y < CHUNK_DIM_U16; y++) {
-            for (var z: u32 = 0u; z < CHUNK_DIM_U32; z++) {
+fn mesh_chunk_to_buffers(blocks: ChunkBlocks, vertex_offset: u32, index_offset: u32) {
+    var vertex_count: u32 = vertex_offset;
+    var index_count: u32 = index_offset;
+    for (var x: u32 = 0u; x < CHUNK_DIM; x++) {
+        for (var y: u32 = 0u; y < CHUNK_DIM; y++) {
+            for (var z: u32 = 0u; z < CHUNK_DIM_HALF; z++) {
                 let current = blocks[x][y][z];
-                if (x < (CHUNK_DIM_U16 - 1)) {
+                if (x < (CHUNK_DIM - 1)) {
                     let next_x = blocks[x+1u][y][z];
                     let x_faces = current ^ next_x;
                     let x_dirs = current & (~next_x);
@@ -114,7 +114,7 @@ fn calc_face_data(blocks: ChunkBlocks) {
                     );
                 }
 
-                if (y < (CHUNK_DIM_U16 - 1)) {
+                if (y < (CHUNK_DIM - 1)) {
                     let next_y = blocks[x][y+1u][z];
                     let y_faces = current ^ next_y;
                     let y_dirs = current & (~next_y);
@@ -135,7 +135,7 @@ fn calc_face_data(blocks: ChunkBlocks) {
                var z_faces = current_z_a ^ current_z_b;
                var z_dirs = current_z_a & (~current_z_b);
 
-               if (z < (CHUNK_DIM_U32 - 1)) {
+               if (z < (CHUNK_DIM_HALF - 1)) {
                    let next_z = blocks[x][y][z+1u];
                    let next_z_a = next_z & 0xFFFFu;
 
@@ -154,5 +154,4 @@ fn calc_face_data(blocks: ChunkBlocks) {
             }
         }
     }
-
 }

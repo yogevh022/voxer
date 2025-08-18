@@ -8,7 +8,7 @@ use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use std::collections::HashSet;
 
-pub type WorldGenRequest = Vec<IVec3>;
+pub type WorldGenRequest = HashSet<IVec3>;
 pub type WorldGenResponse = Vec<(IVec3, Chunk)>;
 
 #[derive(Clone, Copy, Debug)]

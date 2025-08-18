@@ -57,8 +57,9 @@ impl<'window> WorldClient<'window> {
     pub fn sync_with_renderer(&mut self) {
         let mut unload_delta = HashSet::new();
         std::mem::swap(&mut unload_delta, &mut self.chunk_unload_delta);
-        self.loaded_chunks
-            .retain(|chunk_pos| !unload_delta.contains(chunk_pos));
+        unload_delta.iter().for_each(|chunk_pos| {
+            self.loaded_chunks.remove(chunk_pos);
+        });
         self.renderer.unload_chunks(unload_delta);
 
         let mut load_delta = HashMap::new();

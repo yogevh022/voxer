@@ -31,7 +31,8 @@ impl<'window> RendererBuilder<'window> {
 
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             required_features: wgpu::Features::VERTEX_WRITABLE_STORAGE
-                | wgpu::Features::INDIRECT_FIRST_INSTANCE,
+                | wgpu::Features::INDIRECT_FIRST_INSTANCE
+                | wgpu::Features::MULTI_DRAW_INDIRECT,
             required_limits: wgpu::Limits::default(),
             label: None,
             memory_hints: Default::default(),
