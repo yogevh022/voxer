@@ -1,7 +1,7 @@
 use crate::compute::geo;
 use crate::vtypes::Scene;
 use crate::world::generation::{WorldGenConfig, WorldGenHandle};
-use crate::world::types::{Chunk, CHUNK_DIM};
+use crate::world::types::{CHUNK_DIM, Chunk};
 use glam::{IVec3, Vec3};
 use std::collections::{HashMap, HashSet};
 
@@ -58,16 +58,14 @@ impl WorldServer {
         self.players.insert(player_id, *player_pos);
     }
 
-    pub fn get_chunks(&self, positions: HashSet<IVec3>) -> Vec<(IVec3, Chunk)> {
+    pub fn get_chunks(
+        &self,
+        positions: impl Iterator<Item = IVec3>,
+    ) -> Vec<(IVec3, Option<Chunk>)> {
         // cloning here because the server will have to send clones to clients anyway
         positions
-            .into_iter()
-            .map(|c_pos| (c_pos, self.chunks.get(&c_pos).unwrap().clone()))
+            .map(|c_pos| (c_pos, self.chunks.get(&c_pos).cloned()))
             .collect()
-    }
-
-    pub fn get_simulated_chunks(&self) -> HashSet<IVec3> {
-        self.simulated_chunks.clone()
     }
 
     fn partition_chunks_by_existence(

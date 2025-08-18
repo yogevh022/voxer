@@ -55,10 +55,10 @@ pub struct GPUChunkEntryHeader {
     pub index_offset: u32,  // in position not bytes
     pub vertex_count: u32,
     pub index_count: u32,
-    pub slab_index: u32,      // 20
-    _pad0: [u32; 3],          // pad to 32
+    pub slab_index: u32,       // 20
+    _pad0: [u32; 3],           // pad to 32
     pub chunk_position: IVec3, // 44
-    _pad3: u32,               // pad to 48
+    _pad3: u32,                // pad to 48
 }
 
 impl GPUChunkEntryHeader {

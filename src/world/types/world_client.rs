@@ -2,71 +2,83 @@ use crate::SIMULATION_AND_RENDER_DISTANCE;
 use crate::app::app_renderer;
 use crate::app::app_renderer::AppRenderer;
 use crate::compute::ds::Slas;
-use crate::world::types::Chunk;
-use glam::IVec3;
+use crate::compute::geo;
+use crate::world::types::{CHUNK_DIM, Chunk};
+use glam::{IVec3, Vec3};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use winit::window::Window;
 
+pub struct WorldClientConfig {
+    pub render_distance: usize,
+}
+
 pub struct WorldClient<'window> {
+    pub config: WorldClientConfig,
     pub renderer: AppRenderer<'window>,
-    chunk_load_delta: HashMap<IVec3, Chunk>,
-    chunk_unload_delta: HashSet<IVec3>,
-    loaded_chunks: Slas<IVec3>,
+    nearby_chunks_delta: Vec<IVec3>,
+    nearby_chunks_neg_delta: Vec<IVec3>,
+    player_position: Vec3,
+    nearby_chunks: Slas<IVec3>,
 }
 
 impl<'window> WorldClient<'window> {
-    pub fn new(window: Arc<Window>) -> Self {
+    pub fn new(window: Arc<Window>, config: WorldClientConfig) -> Self {
         Self {
-            renderer: app_renderer::make_app_renderer(
-                window,
-                SIMULATION_AND_RENDER_DISTANCE as f32,
-            ),
-            chunk_load_delta: HashMap::new(),
-            chunk_unload_delta: HashSet::new(),
-            loaded_chunks: Slas::new(),
+            renderer: app_renderer::make_app_renderer(window, config.render_distance as f32),
+            config,
+            nearby_chunks_delta: Vec::new(),
+            nearby_chunks_neg_delta: Vec::new(),
+            player_position: Vec3::ZERO,
+            nearby_chunks: Slas::new(),
         }
     }
 
-    pub fn compare_for_delta(
-        &self,
-        server_chunks: &HashSet<IVec3>,
-    ) -> (HashSet<IVec3>, HashSet<IVec3>) {
-        let sym_diff = self.loaded_chunks.symmetric_difference(server_chunks);
-        let mut to_unload_positions = HashSet::new();
-        let mut to_load_positions = HashSet::new();
-        for chunk_pos in sym_diff {
-            if self.loaded_chunks.contains(chunk_pos) {
-                to_unload_positions.insert(*chunk_pos);
-            } else if !self.chunk_load_delta.contains_key(chunk_pos) {
-                to_load_positions.insert(*chunk_pos);
+    pub fn update(&mut self) {
+        let nearby_chunk_positions = geo::discrete_sphere_pts(
+            &(self.player_position / CHUNK_DIM as f32),
+            self.config.render_distance as f32,
+        );
+        for chunk_position in nearby_chunk_positions.iter() {
+            if !self.nearby_chunks.contains(&chunk_position) {
+                self.nearby_chunks_delta.push(*chunk_position);
             }
         }
-        (to_load_positions, to_unload_positions)
+        for chunk_position in self.nearby_chunks.iter() {
+            if !nearby_chunk_positions.contains(chunk_position) {
+                self.nearby_chunks_neg_delta.push(*chunk_position);
+            }
+        }
     }
 
-    pub fn update_chunks_by_delta(
-        &mut self,
-        new_chunks: Vec<(IVec3, Chunk)>,
-        unload_positions: HashSet<IVec3>,
-    ) {
-        self.chunk_unload_delta.extend(unload_positions);
-        self.chunk_load_delta.extend(new_chunks);
+    pub fn set_player_position(&mut self, position: Vec3) {
+        self.player_position = position;
     }
 
-    pub fn sync_with_renderer(&mut self) {
-        let mut unload_delta = HashSet::new();
-        std::mem::swap(&mut unload_delta, &mut self.chunk_unload_delta);
-        unload_delta.iter().for_each(|chunk_pos| {
-            self.loaded_chunks.remove(chunk_pos);
-        });
-        self.renderer.unload_chunks(unload_delta);
+    pub fn take_nearby_chunks_delta(&mut self) -> Vec<IVec3> {
+        let mut new_delta = Vec::new();
+        std::mem::swap(&mut self.nearby_chunks_delta, &mut new_delta);
+        new_delta
+    }
 
-        let mut load_delta = HashMap::new();
-        std::mem::swap(&mut load_delta, &mut self.chunk_load_delta);
-        let indexed_allocated_delta: Vec<_> = load_delta
+    fn take_nearby_chunks_neg_delta(&mut self) -> Vec<IVec3> {
+        let mut neg_delta = Vec::new();
+        std::mem::swap(&mut self.nearby_chunks_neg_delta, &mut neg_delta);
+        neg_delta
+    }
+
+    pub fn sync_with_renderer(&mut self, new_chunks: Vec<(IVec3, Option<Chunk>)>) {
+        let neg_delta = self.take_nearby_chunks_neg_delta();
+        for chunk_pos in neg_delta.iter() {
+            self.nearby_chunks.remove(chunk_pos);
+        }
+        self.renderer.unload_chunks(neg_delta);
+
+        let indexed_allocated_delta: Vec<_> = new_chunks
             .into_iter()
-            .map(|(c_pos, chunk)| (self.loaded_chunks.insert(c_pos), c_pos, chunk))
+            .filter_map(|(c_pos, chunk_opt)| {
+                chunk_opt.map(|chunk| (self.nearby_chunks.insert(c_pos), c_pos, chunk))
+            })
             .collect();
         if !indexed_allocated_delta.is_empty() {
             self.renderer.write_new_chunks(indexed_allocated_delta);

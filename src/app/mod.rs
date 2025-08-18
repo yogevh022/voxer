@@ -1,10 +1,9 @@
 pub mod app_renderer;
 
 use crate::vtypes::{Scene, Voxer, VoxerObject};
-use crate::world::types::{WorldClient, WorldServer};
-use crate::{compute, vtypes};
-use glam::{IVec3, Vec3};
-use std::collections::HashSet;
+use crate::world::types::{WorldClient, WorldClientConfig, WorldServer};
+use crate::{SIMULATION_AND_RENDER_DISTANCE, vtypes};
+use glam::IVec3;
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
@@ -25,7 +24,7 @@ pub struct App<'a> {
     pub debug: AppDebug,
 }
 
-impl App<'_> {
+impl<'a> App<'a> {
     pub fn new(v: Voxer, server: WorldServer, scene: Scene) -> Self {
         Self {
             window: None,
@@ -50,7 +49,10 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             self.v.camera.set_aspect_ratio(
                 arc_window.inner_size().width as f32 / arc_window.inner_size().height as f32,
             );
-            self.client = Some(WorldClient::new(arc_window));
+            let client_config = WorldClientConfig {
+                render_distance: SIMULATION_AND_RENDER_DISTANCE,
+            };
+            self.client = Some(WorldClient::new(arc_window, client_config));
             self.debug.last_chunk_pos = IVec3::new(100, 100, 100);
         }
     }
@@ -139,21 +141,22 @@ impl<'a> App<'a> {
         }
 
         let player_pos = self.v.camera.transform.position;
-        // let player_pos = Vec3::default();
         self.server.set_player(0, &player_pos);
+        self.client
+            .as_mut()
+            .unwrap()
+            .set_player_position(player_pos);
 
         if self.v.time.temp_200th_frame() {
             self.server.update();
-            let sim_chunks = self.server.get_simulated_chunks();
-            let (load_positions, unload_positions) =
-                self.client.as_ref().unwrap().compare_for_delta(&sim_chunks);
-            let new_chunks = self.server.get_chunks(load_positions);
+            self.client.as_mut().unwrap().update();
+            let client_nearby_chunks = self.client.as_mut().unwrap().take_nearby_chunks_delta();
+            let nearby_chunks_data = self.server.get_chunks(client_nearby_chunks.into_iter());
+
             self.client
                 .as_mut()
                 .unwrap()
-                .update_chunks_by_delta(new_chunks, unload_positions);
-
-            self.client.as_mut().unwrap().sync_with_renderer();
+                .sync_with_renderer(nearby_chunks_data);
         }
     }
 }

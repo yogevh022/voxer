@@ -1,7 +1,5 @@
 use crate::renderer::builder::RendererAtlas;
-use crate::renderer::gpu::{
-    ChunkVMA, GPUChunkEntryBuffer, GPUChunkEntryHeader, VirtualMemAlloc,
-};
+use crate::renderer::gpu::{ChunkVMA, GPUChunkEntryBuffer, GPUChunkEntryHeader, VirtualMemAlloc};
 use crate::renderer::resources;
 use crate::renderer::{Index, Renderer, RendererBuilder, Vertex};
 use crate::world::types::Chunk;
@@ -50,15 +48,18 @@ impl AppRenderer<'_> {
             chunk_entries.insert(header, chunk.blocks);
         }
 
-        self.renderer
-            .write_buffer(&self.chunk_buff, 0, &bytemuck::bytes_of(&(chunks_count as u32)));
+        self.renderer.write_buffer(
+            &self.chunk_buff,
+            0,
+            &bytemuck::bytes_of(&(chunks_count as u32)),
+        );
         self.renderer
             .write_buffer(&self.chunk_buff, 16, &bytemuck::cast_slice(&chunk_entries));
 
         // self.gpu_vertex_malloc.draw_cli();
     }
 
-    pub fn unload_chunks(&mut self, chunks: HashSet<IVec3>) {
+    pub fn unload_chunks(&mut self, chunks: Vec<IVec3>) {
         for c_pos in chunks {
             let chunk_entry = self.loaded_chunks.remove(&c_pos).unwrap();
             self.chunk_malloc
@@ -72,12 +73,12 @@ impl AppRenderer<'_> {
     }
 
     pub fn compute_chunks(&mut self) {
-        let mut compute_pass = self
-            .global_encoder
-            .begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("compute_pass"),
-                timestamp_writes: None,
-            });
+        let mut compute_pass =
+            self.global_encoder
+                .begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("compute_pass"),
+                    timestamp_writes: None,
+                });
         compute_pass.set_pipeline(&self.compute_pipeline);
         compute_pass.set_bind_group(0, &self.chunk_compute_bind_group, &[]);
         compute_pass.dispatch_workgroups(1, 1, 1);
@@ -114,7 +115,11 @@ impl AppRenderer<'_> {
                 &bytemuck::cast_slice(&buffer_commands),
             );
             // dbg!(&self.loaded_chunks.iter().collect::<Vec<_>>());
-            render_pass.multi_draw_indexed_indirect(&self.indirect_buff, 0, buffer_commands.len() as u32);
+            render_pass.multi_draw_indexed_indirect(
+                &self.indirect_buff,
+                0,
+                buffer_commands.len() as u32,
+            );
         }
     }
 
