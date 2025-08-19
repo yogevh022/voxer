@@ -3,7 +3,7 @@ use crate::renderer::gpu::{ChunkVMA, GPUChunkEntryBuffer, GPUChunkEntryHeader, V
 use crate::renderer::resources;
 use crate::renderer::{Index, Renderer, RendererBuilder, Vertex};
 use crate::world::types::Chunk;
-use crate::{compute, vtypes};
+use crate::{call_every, compute, vtypes};
 use glam::IVec3;
 use std::collections::{HashMap, HashSet};
 use std::mem;
@@ -224,7 +224,8 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
     );
 
     // pipelines
-    let cb_compute_pipeline = block_compute_pipeline(&renderer_builder, &[&staging_chunk_buff_layout]);
+    let cb_compute_pipeline =
+        block_compute_pipeline(&renderer_builder, &[&staging_chunk_buff_layout]);
     let render_pipeline = renderer_builder.make_render_pipeline(
         resources::shader::main_shader().into(),
         &[&atlas.texture_bind_group_layout, &transform_mats_bgl],
@@ -275,16 +276,6 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
         render_pipeline,
         compute_pipeline: cb_compute_pipeline,
     }
-}
-
-pub fn model_matrix_buffer(
-    renderer_builder: &RendererBuilder,
-    max_rendered_chunks: usize,
-) -> wgpu::Buffer {
-    resources::chunk_model::create_buffer(
-        renderer_builder.device.as_ref().unwrap(),
-        max_rendered_chunks,
-    )
 }
 
 pub fn transform_matrices_binds(

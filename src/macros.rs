@@ -21,3 +21,20 @@ macro_rules! avg {
         })
     }};
 }
+
+#[macro_export]
+macro_rules! call_every {
+    ($name:ident, $interval:expr, $func:expr) => {
+        thread_local! {
+            static $name: std::cell::RefCell<usize> = std::cell::RefCell::new(0);
+        }
+
+        $name.with(|counter| {
+            let mut c = counter.borrow_mut();
+            *c += 1;
+            if *c % $interval == 0 {
+                $func();
+            }
+        });
+    };
+}

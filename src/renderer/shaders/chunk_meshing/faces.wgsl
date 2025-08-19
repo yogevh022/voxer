@@ -103,10 +103,10 @@ fn mesh_chunk_position(blocks: ptr<function, ChunkBlocks>, x: u32, y: u32) {
     var index_array: array<Index, MAX_INDICES_PER_THREAD>;
     var local_vertex_count: u32 = 0u;
     var local_index_count: u32 = 0u;
-    for (var z: u32 = 1u; z <= CHUNK_DIM_HALF; z++) {
-        let current = (*blocks)[x][y][z - 1u];
+    for (var z: u32 = 0u; z < CHUNK_DIM_HALF; z++) {
+        let current = (*blocks)[x][y][z];
         if (x < (CHUNK_DIM - 1)) {
-            let next_x = (*blocks)[x+1u][y][z - 1u];
+            let next_x = (*blocks)[x+1u][y][z];
             let x_faces = current ^ next_x;
             let x_dirs = current & (~next_x);
             write_faces_x(
@@ -118,11 +118,11 @@ fn mesh_chunk_position(blocks: ptr<function, ChunkBlocks>, x: u32, y: u32) {
                 &local_vertex_count,
                 x,
                 y,
-                z*2,
+                (z+1u)*2,
             );
         }
         if (y < (CHUNK_DIM - 1)) {
-            let next_y = (*blocks)[x][y+1u][z - 1u];
+            let next_y = (*blocks)[x][y+1u][z];
             let y_faces = current ^ next_y;
             let y_dirs = current & (~next_y);
             write_faces_y(
@@ -134,7 +134,7 @@ fn mesh_chunk_position(blocks: ptr<function, ChunkBlocks>, x: u32, y: u32) {
                 &local_vertex_count,
                 x,
                 y,
-                z*2,
+                (z+1u)*2,
             );
         }
         let current_z_a = current & 0xFFFFu;
@@ -143,8 +143,8 @@ fn mesh_chunk_position(blocks: ptr<function, ChunkBlocks>, x: u32, y: u32) {
         var z_faces = current_z_a ^ current_z_b;
         var z_dirs = current_z_a & (~current_z_b);
 
-        if (z < CHUNK_DIM_HALF) {
-           let next_z = (*blocks)[x][y][z];
+        if (z < CHUNK_DIM_HALF - 1) {
+           let next_z = (*blocks)[x][y][z + 1u];
            let next_z_a = next_z & 0xFFFFu;
 
            z_faces |= (current_z_b ^ next_z_a) << 16u;
@@ -159,7 +159,7 @@ fn mesh_chunk_position(blocks: ptr<function, ChunkBlocks>, x: u32, y: u32) {
             &local_vertex_count,
             x,
             y,
-            z*2,
+            (z+1u)*2,
         );
     }
     let vertex_offset: u32 = atomicAdd(&vertex_count, local_vertex_count);
