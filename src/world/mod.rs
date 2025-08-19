@@ -1,4 +1,4 @@
-mod generation;
+pub(crate) mod generation;
 pub mod types;
 
 use noise;

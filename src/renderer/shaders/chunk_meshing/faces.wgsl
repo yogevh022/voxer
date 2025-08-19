@@ -4,8 +4,8 @@ fn write_faces_x(
     packed_dirs: u32,
     index_array: ptr<function, array<Index, MAX_INDICES_PER_THREAD>>,
     vertex_array: ptr<function, array<Vertex, MAX_VERTICES_PER_THREAD>>,
-    index_count: ptr<function, u32>,
-    vertex_count: ptr<function, u32>,
+    local_index_count: ptr<function, u32>,
+    local_vertex_count: ptr<function, u32>,
     x: u32,
     y: u32,
     z: u32,
@@ -16,19 +16,21 @@ fn write_faces_x(
     let y_f32 = f32(y);
 
     // logic for both u16s packed into the u32
-    for (var n = 2u; n > 0u; n--) {
+    for (var n = 2u; n >= 1u; n--) {
         let z_f32 = f32(z - n);
-        let bit_index = (16u << n) - 1u;
+        let bit_index = (16u << (2u - n)) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;
         let face_dir = (packed_dirs >> bit_index) & 1u;
-        let i_index = draw_face * (*index_count);
-        let v_index = draw_face * (*vertex_count);
+//        let draw_face = 1u;
+//        let face_dir = 1u;
+        let i_index = draw_face * (*local_index_count);
+        let v_index = draw_face * (*local_vertex_count);
 
         quad_indices(index_array, i_index, v_index);
         plus_x_vertices(vertex_array, face_dir * v_index, temp_uv ,x_f32 ,y_f32, z_f32);
         minus_x_vertices(vertex_array, (1u ^ face_dir) * v_index, temp_uv, x_f32, y_f32, z_f32);
-        (*index_count) += 6u * draw_face;
-        (*vertex_count) += 4u * draw_face;
+        (*local_index_count) += 6u * draw_face;
+        (*local_vertex_count) += 4u * draw_face;
     }
 }
 
@@ -37,8 +39,8 @@ fn write_faces_y(
     packed_dirs: u32,
     index_array: ptr<function, array<Index, MAX_INDICES_PER_THREAD>>,
     vertex_array: ptr<function, array<Vertex, MAX_VERTICES_PER_THREAD>>,
-    index_count: ptr<function, u32>,
-    vertex_count: ptr<function, u32>,
+    local_index_count: ptr<function, u32>,
+    local_vertex_count: ptr<function, u32>,
     x: u32,
     y: u32,
     z: u32,
@@ -49,19 +51,21 @@ fn write_faces_y(
     let y_f32 = f32(y);
 
     // logic for both u16s packed into the u32
-    for (var n = 2u; n > 0u; n--) {
+    for (var n = 2u; n >= 1u; n--) {
         let z_f32 = f32(z - n);
-        let bit_index = (16u << n) - 1u;
+        let bit_index = (16u << (2u - n)) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;
         let face_dir = (packed_dirs >> bit_index) & 1u;
-        let i_index = draw_face * (*index_count);
-        let v_index = draw_face * (*vertex_count);
+//        let draw_face = 1u;
+//        let face_dir = 1u;
+        let i_index = draw_face * (*local_index_count);
+        let v_index = draw_face * (*local_vertex_count);
 
         quad_indices(index_array, i_index, v_index);
         plus_y_vertices(vertex_array, face_dir * v_index, temp_uv ,x_f32 ,y_f32, z_f32);
         minus_y_vertices(vertex_array, (1u ^ face_dir) * v_index, temp_uv, x_f32, y_f32, z_f32);
-        (*index_count) += 6u * draw_face;
-        (*vertex_count) += 4u * draw_face;
+        (*local_index_count) += 6u * draw_face;
+        (*local_vertex_count) += 4u * draw_face;
     }
 }
 
@@ -70,8 +74,8 @@ fn write_faces_z(
     packed_dirs: u32,
     index_array: ptr<function, array<Index, MAX_INDICES_PER_THREAD>>,
     vertex_array: ptr<function, array<Vertex, MAX_VERTICES_PER_THREAD>>,
-    index_count: ptr<function, u32>,
-    vertex_count: ptr<function, u32>,
+    local_index_count: ptr<function, u32>,
+    local_vertex_count: ptr<function, u32>,
     x: u32,
     y: u32,
     z: u32,
@@ -82,27 +86,29 @@ fn write_faces_z(
     let y_f32 = f32(y);
 
     // logic for both u16s packed into the u32
-    for (var n = 2u; n > 0u; n--) {
+    for (var n = 2u; n >= 1u; n--) {
         let z_f32 = f32(z - n);
-        let bit_index = (16u << n) - 1u;
+        let bit_index = (16u << (2u - n)) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;
         let face_dir = (packed_dirs >> bit_index) & 1u;
-        let i_index = draw_face * (*index_count);
-        let v_index = draw_face * (*vertex_count);
+//        let draw_face = 1u;
+//        let face_dir = 1u;
+        let i_index = draw_face * (*local_index_count);
+        let v_index = draw_face * (*local_vertex_count);
 
         quad_indices(index_array, i_index, v_index);
         plus_z_vertices(vertex_array, face_dir * v_index, temp_uv ,x_f32 ,y_f32, z_f32);
         minus_z_vertices(vertex_array, (1u ^ face_dir) * v_index, temp_uv, x_f32, y_f32, z_f32);
-        (*index_count) += 6u * draw_face;
-        (*vertex_count) += 4u * draw_face;
+        (*local_index_count) += 6u * draw_face;
+        (*local_vertex_count) += 4u * draw_face;
     }
 }
 
 fn mesh_chunk_position(blocks: ptr<function, ChunkBlocks>, x: u32, y: u32) {
     var vertex_array: array<Vertex, MAX_VERTICES_PER_THREAD>;
     var index_array: array<Index, MAX_INDICES_PER_THREAD>;
-    var local_vertex_count: u32 = 0u;
-    var local_index_count: u32 = 0u;
+    var local_vertex_count: u32 = VOID_OFFSET;
+    var local_index_count: u32 = VOID_OFFSET;
     for (var z: u32 = 0u; z < CHUNK_DIM_HALF; z++) {
         let current = (*blocks)[x][y][z];
         if (x < (CHUNK_DIM - 1)) {
@@ -162,13 +168,15 @@ fn mesh_chunk_position(blocks: ptr<function, ChunkBlocks>, x: u32, y: u32) {
             (z+1u)*2,
         );
     }
-    let vertex_offset: u32 = atomicAdd(&vertex_count, local_vertex_count);
-    let index_offset: u32 = atomicAdd(&index_count, local_index_count);
-    for (var i = 0u; i < local_vertex_count; i++) {
-        staging_vertex_buffer[vertex_offset + i] = vertex_array[i];
+    let v_count_no_offset = local_vertex_count - VOID_OFFSET;
+    let i_count_no_offset = local_index_count - VOID_OFFSET;
+    let vertex_offset: u32 = atomicAdd(&vertex_count, v_count_no_offset);
+    let index_offset: u32 = atomicAdd(&index_count, i_count_no_offset);
+    for (var i = 0u; i < v_count_no_offset; i++) {
+        staging_vertex_buffer[vertex_offset + i] = vertex_array[VOID_OFFSET + i];
     }
-    for (var i = 0u; i < local_index_count; i++) {
-        staging_index_buffer[index_offset + i] = index_array[i] + vertex_offset;
+    for (var i = 0u; i < i_count_no_offset; i++) {
+        staging_index_buffer[index_offset + i] = index_array[VOID_OFFSET + i] + vertex_offset;
     }
 }
 //

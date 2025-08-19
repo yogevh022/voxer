@@ -49,6 +49,7 @@ impl AppRenderer<'_> {
                 slab_index as u32,
             );
             self.staged_chunks.insert(chunk_pos, header.clone());
+            dbg!(header.vertex_count, header.index_count);
             chunk_entries.insert(header, chunk.blocks);
         }
 
