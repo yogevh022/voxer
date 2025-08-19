@@ -4,8 +4,7 @@ pub fn create_buffer(device: &wgpu::Device, chunk_capacity: usize) -> wgpu::Buff
         size: (chunk_capacity * size_of::<[[f32; 4]; 4]>()) as u64,
         usage: wgpu::BufferUsages::VERTEX
             | wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::COPY_DST
-            | wgpu::BufferUsages::COPY_SRC,
+            | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     })
 }

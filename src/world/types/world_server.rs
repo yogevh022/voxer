@@ -47,9 +47,9 @@ impl WorldServer {
                 self.config.simulation_distance as f32,
             ));
         }
+        self.try_receive_generation();
         let (generated, ungenerated): (HashSet<_>, HashSet<_>) =
             self.partition_chunks_by_existence(active_chunk_positions);
-        self.try_receive_generation();
         self.request_generation(ungenerated);
         self.simulated_chunks = generated;
     }
@@ -86,7 +86,7 @@ impl WorldServer {
 
     fn request_generation(&mut self, chunk_positions: HashSet<IVec3>) {
         self.generation_handle
-            .send(chunk_positions.into_iter().collect::<HashSet<_>>())
+            .send(chunk_positions.into_iter().collect::<Vec<_>>())
             .expect("Failed to send generation request");
     }
 }

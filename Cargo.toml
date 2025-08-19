@@ -15,7 +15,16 @@ noise = "0.9.0"
 rayon = "1.10.0"
 crossbeam = "0.8.4"
 slab = "0.4.11"
+tracy-client = "0.18.2"
+
+[profile.dev]
+strip = false
+debug = true
 
 [profile.release]
+strip = "none"
 debug = true
-opt-level = 3
+opt-level = 2
+lto = false           # Disable link-time optimization
+codegen-units = 1     # Use single codegen unit
+panic = "unwind"      # Keep stack unwinding

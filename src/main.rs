@@ -29,6 +29,7 @@ fn run_app() {
 }
 
 fn main() {
+    tracy_client::set_thread_name!("main");
     run_app();
     //
     // let atlas = Arc::new(texture::helpers::generate_texture_atlas());

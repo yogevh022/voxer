@@ -8,7 +8,7 @@ use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use std::collections::HashSet;
 
-pub type WorldGenRequest = HashSet<IVec3>;
+pub type WorldGenRequest = Vec<IVec3>;
 pub type WorldGenResponse = Vec<(IVec3, Chunk)>;
 
 #[derive(Clone, Copy, Debug)]
@@ -84,6 +84,13 @@ pub fn world_generation_task(
     receive: channel::Receiver<WorldGenRequest>,
 ) {
     while let Ok(chunk_positions) = receive.recv() {
+        // for chunks in chunk_positions.chunks(16) {
+        //     let generated_chunks = chunks
+        //         .into_par_iter()
+        //         .map(|&chunk_pos| (chunk_pos, generate_chunk(config, chunk_pos)))
+        //         .collect();
+        //     send.send(generated_chunks).unwrap();
+        // }
         let generated_chunks = chunk_positions
             .into_par_iter()
             .map(|chunk_pos| (chunk_pos, generate_chunk(config, chunk_pos)))
