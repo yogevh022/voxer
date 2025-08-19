@@ -49,7 +49,6 @@ impl AppRenderer<'_> {
                 slab_index as u32,
             );
             self.staged_chunks.insert(chunk_pos, header.clone());
-            dbg!(header.vertex_count, header.index_count);
             chunk_entries.insert(header, chunk.blocks);
         }
 
@@ -59,7 +58,7 @@ impl AppRenderer<'_> {
             &bytemuck::cast_slice(&chunk_entries),
         );
 
-        // self.gpu_vertex_malloc.draw_cli();
+        self.chunk_malloc.vertex.draw_cli();
     }
 
     pub fn unload_chunks(&mut self, chunks: Vec<IVec3>) {

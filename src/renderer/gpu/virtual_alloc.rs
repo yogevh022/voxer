@@ -114,7 +114,7 @@ impl Debug for VirtualMemAlloc {
             "*".repeat((self.size / resolution) - current_bar_size)
                 .as_str(),
         );
-        let used_bytes = self
+        let used = self
             .allocated_blocks
             .iter()
             .map(|(_, slot)| slot.size)
@@ -125,12 +125,12 @@ impl Debug for VirtualMemAlloc {
             alloc: {:>6} ~avg: {:>6}\n\
             free:  {:>6} ~avg: {:>6}\n\
             {}",
-            compute::bytes::repr_bytes(used_bytes),
-            compute::bytes::repr_bytes(self.size),
+            used,
+            self.size,
             self.allocated_blocks.len(),
-            compute::bytes::repr_bytes(used_bytes / self.allocated_blocks.len().max(1)),
+            used / self.allocated_blocks.len().max(1),
             self.free_blocks.len(),
-            compute::bytes::repr_bytes((self.size - used_bytes) / self.free_blocks.len().max(1)),
+            (self.size - used) / self.free_blocks.len().max(1),
             mem_bar
         )
     }
