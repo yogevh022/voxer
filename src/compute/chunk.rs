@@ -3,43 +3,50 @@ use crate::compute::array::Array3D;
 use crate::world::types::{Block, BlockBytewise, CHUNK_DIM, CHUNK_SLICE, ChunkBlocks};
 use std::array;
 
-pub const OPAQUE_BITS_SLICE: [u16; CHUNK_DIM] = [1u16 << 15; CHUNK_DIM];
+pub const TRANSPARENT_LAYER_BITS: [u16; CHUNK_DIM] = [0u16; CHUNK_DIM];
 
 pub fn face_count(blocks: &ChunkBlocks) -> usize {
     let packed_blocks = pack_solid_blocks(blocks);
-
+    
     let faces = faces(packed_blocks);
     faces.iter().map(|b| b.count_ones() as usize).sum::<usize>()
 }
 
-pub fn faces(packed_blocks: [u16; CHUNK_SLICE]) -> [u16; CHUNK_SLICE * 3] {
+fn faces(packed_blocks: [u16; CHUNK_SLICE]) -> [u16; CHUNK_SLICE * 3] {
     let mut result = [0u16; CHUNK_SLICE * 3];
     let result_layers: &mut [[u16; CHUNK_DIM]; CHUNK_DIM * 3] =
         unsafe { &mut *(result.as_mut_ptr() as *mut [[u16; CHUNK_DIM]; CHUNK_DIM * 3]) };
 
+    let mut xa = [0u16; CHUNK_DIM];
+    let mut xb = [0u16; CHUNK_DIM];
+    let mut ya = [0u16; CHUNK_DIM];
+    let mut yb = [0u16; CHUNK_DIM];
+    let mut zb = [0u16; CHUNK_DIM];
+
     for i in 0..CHUNK_DIM - 1 {
-        // y faces
-        let ya: [u16; CHUNK_DIM] = packed_blocks[i * CHUNK_DIM..(i + 1) * CHUNK_DIM]
-            .try_into()
-            .unwrap();
-        let yb: [u16; CHUNK_DIM] = packed_blocks[(i + 1) * CHUNK_DIM..(i + 2) * CHUNK_DIM]
-            .try_into()
-            .unwrap();
-
-        // z faces
-        let mut slice_za_iterator = packed_blocks.iter().cloned().skip(i).step_by(CHUNK_DIM);
-        let mut slice_zb_iterator = packed_blocks.iter().cloned().skip(i + 1).step_by(CHUNK_DIM);
-        let za: [u16; CHUNK_DIM] = array::from_fn(|_| slice_za_iterator.next().unwrap());
-        let zb: [u16; CHUNK_DIM] = array::from_fn(|_| slice_zb_iterator.next().unwrap());
-
         // x faces
-        let xb: [u16; CHUNK_DIM] = array::from_fn(|i| ya[i] >> 1);
+        xa = packed_blocks[i * CHUNK_DIM..(i + 1) * CHUNK_DIM]
+            .try_into()
+            .unwrap();
+        xb = packed_blocks[(i + 1) * CHUNK_DIM..(i + 2) * CHUNK_DIM]
+            .try_into()
+            .unwrap();
+        // y faces
+        for j in 0..CHUNK_DIM {
+            ya[j] = packed_blocks[j + (i * CHUNK_DIM)];
+            yb[j] = packed_blocks[j + ((i + 1) * CHUNK_DIM)];
+        }
+        // x faces
+        zb = array::from_fn(|i| xa[i] >> 1);
 
-        result_layers[i * 3] = compute::array::xor(&ya, &yb);
-        result_layers[(i * 3) + 1] = compute::array::xor(&za, &zb);
-        result_layers[(i * 3) + 2] = compute::array::xor(&ya, &xb);
+        result_layers[i] = compute::array::xor(&xa, &xb);
+        result_layers[CHUNK_DIM + i] = compute::array::xor(&ya, &yb);
+        result_layers[CHUNK_DIM + CHUNK_DIM + i] = compute::array::xor(&xa, &zb);
     }
-
+    result_layers[CHUNK_DIM - 1] = compute::array::xor(&xb, &TRANSPARENT_LAYER_BITS);
+    result_layers[CHUNK_DIM + (CHUNK_DIM - 1)] = compute::array::xor(&yb, &TRANSPARENT_LAYER_BITS);
+    zb = array::from_fn(|i| xb[i] >> 1);
+    result_layers[CHUNK_DIM + CHUNK_DIM + (CHUNK_DIM - 1)] = compute::array::xor(&xb, &zb);
     result
 }
 

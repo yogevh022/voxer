@@ -31,15 +31,12 @@ fn run_app() {
 }
 
 fn main() {
-    tracy_client::set_thread_name!("main");
+    // tracy_client::set_thread_name!("main");
     // run_app();
-    //
+
     use crate::world::generation::generate_chunk;
     use glam::IVec3;
     use std::time::Instant;
-
-    // let atlas = Arc::new(generate_texture_atlas());
-    // _ = atlas.image.save("src/texture/images/atlas.png");
 
     let noise = noise::OpenSimplex::new(0);
 
@@ -48,8 +45,7 @@ fn main() {
         noise_scale: 0.05,
     };
     let mut chunks = Vec::new();
-    for i in 0..1 {
-        // 200
+    for i in 0..200 {
         let c_pos = IVec3::new(i, 0, 0);
         let chunk = generate_chunk(worldgen_config, c_pos);
         // let chunk = Chunk {
@@ -74,7 +70,6 @@ fn main() {
     let mut total_verts = 0;
     for c in chunks.iter() {
         let size = compute::chunk::face_count(&c.blocks);
-        // let _ = compute::chunk::block_bits(c);
         total_verts += size;
     }
     println!("Time: {:?}", start.elapsed());

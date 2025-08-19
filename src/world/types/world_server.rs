@@ -108,9 +108,9 @@ impl WorldServer {
             self.chunks.extend(
                 vec![
                     (IVec3::new(0, 0, 0), checker.clone()),
-                    (IVec3::new(1, 0, 0), checker.clone()),
-                    (IVec3::new(2, 0, 0), full.clone()),
-                    (IVec3::new(3, 0, 0), checker.clone()),
+                    // (IVec3::new(1, 0, 0), checker.clone()),
+                    // (IVec3::new(2, 0, 0), full.clone()),
+                    // (IVec3::new(3, 0, 0), checker.clone()),
                 ]
                 .into_iter(),
             );
