@@ -11,12 +11,6 @@ const CHUNK_ENTRY_BYTES: u32 = CHUNK_HEADER_BYTES + CHUNK_BLOCKS_BYTES;
 
 const MAX_CHUNK_ENTRIES: u32 = (MAX_BUFFER - 16u) / CHUNK_ENTRY_BYTES;
 
-struct ChunkEntryBuffer {
-    count: u32,
-    // padded to 16
-    chunks: array<ChunkEntry, MAX_CHUNK_ENTRIES>,
-}
-
 struct ChunkEntryHeader {
     vertex_offset: u32,
     index_offset: u32,
@@ -33,3 +27,4 @@ struct ChunkEntry {
 }
 
 alias ChunkBlocks = array<array<array<u32, CHUNK_DIM_HALF>, CHUNK_DIM>, CHUNK_DIM>; // wgsl has no u16 :D
+alias ChunkEntryBuffer = array<ChunkEntry, MAX_CHUNK_ENTRIES>;

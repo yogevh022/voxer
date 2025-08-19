@@ -16,7 +16,7 @@ fn write_faces_x(
     let y_f32 = f32(y);
 
     // logic for both u16s packed into the u32
-    for (var n = 2u; n > 0u; n--) {
+    for (var n = 0u; n < 2u; n++) {
         let z_f32 = f32(z - n);
         let bit_index = (16u << n) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;
@@ -49,7 +49,7 @@ fn write_faces_y(
     let y_f32 = f32(y);
 
     // logic for both u16s packed into the u32
-    for (var n = 2u; n > 0u; n--) {
+    for (var n = 0u; n < 2u; n++) {
         let z_f32 = f32(z - n);
         let bit_index = (16u << n) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;
@@ -82,7 +82,7 @@ fn write_faces_z(
     let y_f32 = f32(y);
 
     // logic for both u16s packed into the u32
-    for (var n = 2u; n > 0u; n--) {
+    for (var n = 0u; n < 2u; n++) {
         let z_f32 = f32(z - n);
         let bit_index = (16u << n) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;

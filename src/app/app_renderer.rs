@@ -39,8 +39,7 @@ pub struct AppRenderer<'window> {
 
 impl AppRenderer<'_> {
     pub fn write_new_chunks(&mut self, chunks: Vec<(usize, IVec3, Chunk)>) {
-        let chunks_count = chunks.len();
-        let mut chunk_entries = GPUChunkEntryBuffer::new(chunks_count);
+        let mut chunk_entries = GPUChunkEntryBuffer::new(chunks.len());
         for (slab_index, chunk_pos, chunk) in chunks.into_iter() {
             let header = GPUChunkEntryHeader::from_chunk_data(
                 &mut self.chunk_malloc,
@@ -52,14 +51,9 @@ impl AppRenderer<'_> {
 
             chunk_entries.insert(header, chunk.blocks);
         }
-
-        self.renderer.write_buffer(
-            &self.chunk_buff,
-            0,
-            &bytemuck::bytes_of(&(chunks_count as u32)),
-        );
+        
         self.renderer
-            .write_buffer(&self.chunk_buff, 16, &bytemuck::cast_slice(&chunk_entries));
+            .write_buffer(&self.chunk_buff, 0, &bytemuck::cast_slice(&chunk_entries));
 
         // self.gpu_vertex_malloc.draw_cli();
     }
