@@ -47,6 +47,18 @@ impl WorldServer {
                 self.config.simulation_distance as f32,
             ));
         }
+        // active_chunk_positions.insert(IVec3::new(0, 0, 0));
+        // active_chunk_positions.insert(IVec3::new(1, 0, 0));
+        // active_chunk_positions.insert(IVec3::new(2, 0, 0));
+        // active_chunk_positions.insert(IVec3::new(3, 0, 0));
+        // active_chunk_positions.insert(IVec3::new(4, 0, 0));
+        // active_chunk_positions.insert(IVec3::new(5, 0, 0));
+        // active_chunk_positions.insert(IVec3::new(0, 0, 1));
+        // active_chunk_positions.insert(IVec3::new(1, 0, 1));
+        // active_chunk_positions.insert(IVec3::new(2, 0, 1));
+        // active_chunk_positions.insert(IVec3::new(3, 0, 1));
+        // active_chunk_positions.insert(IVec3::new(4, 0, 1));
+        // active_chunk_positions.insert(IVec3::new(5, 0, 1));
         self.try_receive_generation();
         let (generated, ungenerated): (HashSet<_>, HashSet<_>) =
             self.partition_chunks_by_existence(active_chunk_positions);
@@ -79,7 +91,6 @@ impl WorldServer {
 
     fn try_receive_generation(&mut self) {
         if let Ok(new_chunks) = self.generation_handle.try_recv() {
-            self.simulated_chunks.extend(new_chunks.iter().map(|c| c.0));
             self.chunks.extend(new_chunks.into_iter());
         }
     }

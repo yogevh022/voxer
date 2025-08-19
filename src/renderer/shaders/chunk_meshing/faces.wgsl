@@ -16,7 +16,7 @@ fn write_faces_x(
     let y_f32 = f32(y);
 
     // logic for both u16s packed into the u32
-    for (var n = 0u; n < 2u; n++) {
+    for (var n = 2u; n > 0u; n--) {
         let z_f32 = f32(z - n);
         let bit_index = (16u << n) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;
@@ -49,7 +49,7 @@ fn write_faces_y(
     let y_f32 = f32(y);
 
     // logic for both u16s packed into the u32
-    for (var n = 0u; n < 2u; n++) {
+    for (var n = 2u; n > 0u; n--) {
         let z_f32 = f32(z - n);
         let bit_index = (16u << n) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;
@@ -82,7 +82,7 @@ fn write_faces_z(
     let y_f32 = f32(y);
 
     // logic for both u16s packed into the u32
-    for (var n = 0u; n < 2u; n++) {
+    for (var n = 2u; n > 0u; n--) {
         let z_f32 = f32(z - n);
         let bit_index = (16u << n) - 1u;
         let draw_face = (packed_faces >> bit_index) & 1u;
@@ -103,10 +103,10 @@ fn mesh_chunk_position(blocks: ptr<function, ChunkBlocks>, x: u32, y: u32) {
     var index_array: array<Index, MAX_INDICES_PER_THREAD>;
     var local_vertex_count: u32 = 0u;
     var local_index_count: u32 = 0u;
-    for (var z: u32 = 0u; z < CHUNK_DIM_HALF; z++) {
-        let current = (*blocks)[x][y][z];
+    for (var z: u32 = 1u; z <= CHUNK_DIM_HALF; z++) {
+        let current = (*blocks)[x][y][z - 1u];
         if (x < (CHUNK_DIM - 1)) {
-            let next_x = (*blocks)[x+1u][y][z];
+            let next_x = (*blocks)[x+1u][y][z - 1u];
             let x_faces = current ^ next_x;
             let x_dirs = current & (~next_x);
             write_faces_x(
@@ -122,7 +122,7 @@ fn mesh_chunk_position(blocks: ptr<function, ChunkBlocks>, x: u32, y: u32) {
             );
         }
         if (y < (CHUNK_DIM - 1)) {
-            let next_y = (*blocks)[x][y+1u][z];
+            let next_y = (*blocks)[x][y+1u][z - 1u];
             let y_faces = current ^ next_y;
             let y_dirs = current & (~next_y);
             write_faces_y(
@@ -138,13 +138,13 @@ fn mesh_chunk_position(blocks: ptr<function, ChunkBlocks>, x: u32, y: u32) {
             );
         }
         let current_z_a = current & 0xFFFFu;
-        let current_z_b = (current >> 16u) & 0xFFFFu;
+        let current_z_b = current >> 16u;
 
         var z_faces = current_z_a ^ current_z_b;
         var z_dirs = current_z_a & (~current_z_b);
 
-        if (z < (CHUNK_DIM_HALF - 1)) {
-           let next_z = (*blocks)[x][y][z+1u];
+        if (z < CHUNK_DIM_HALF) {
+           let next_z = (*blocks)[x][y][z];
            let next_z_a = next_z & 0xFFFFu;
 
            z_faces |= (current_z_b ^ next_z_a) << 16u;

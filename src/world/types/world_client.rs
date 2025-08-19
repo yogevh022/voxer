@@ -1,10 +1,11 @@
-use crate::{avg};
 use crate::app::app_renderer;
 use crate::app::app_renderer::AppRenderer;
+use crate::avg;
 use crate::compute::ds::Slas;
 use crate::compute::geo;
 use crate::world::types::{CHUNK_DIM, Chunk};
 use glam::{IVec3, Vec3};
+use std::io::Write;
 use std::sync::Arc;
 use winit::window::Window;
 
@@ -49,9 +50,6 @@ impl<'window> WorldClient<'window> {
                 self.nearby_chunks_neg_delta.push(*chunk_position);
             }
         }
-
-        dbg!(avg!(self.nearby_chunks_delta.len() => "a"));
-        dbg!(avg!(self.nearby_chunks_neg_delta.len() => "b"));
     }
 
     pub fn set_player_position(&mut self, position: Vec3) {

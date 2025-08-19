@@ -19,18 +19,19 @@ pub struct AppRenderer<'window> {
     pub staging_vertex_buff: wgpu::Buffer,
     pub staging_index_buff: wgpu::Buffer,
     pub staging_mmat_buff: wgpu::Buffer,
+    pub staging_chunk_buff: wgpu::Buffer,
     pub mmat_buff: wgpu::Buffer,
     pub vertex_buff: wgpu::Buffer,
     pub index_buff: wgpu::Buffer,
-    pub chunk_buff: wgpu::Buffer,
 
     pub staged_chunks: HashMap<IVec3, GPUChunkEntryHeader>,
     pub loaded_chunks: Arc<RwLock<HashMap<IVec3, GPUChunkEntryHeader>>>,
+    pub remove_queue: HashSet<IVec3>,
 
     pub chunk_malloc: ChunkVMA,
 
     pub chunk_compute_bind_group: wgpu::BindGroup,
-    pub trans_mats_bind_group: wgpu::BindGroup,
+    pub transform_mats_bind_group: wgpu::BindGroup,
     pub texture_atlas: RendererAtlas,
 
     pub render_pipeline: wgpu::RenderPipeline,
@@ -48,28 +49,36 @@ impl AppRenderer<'_> {
                 slab_index as u32,
             );
             self.staged_chunks.insert(chunk_pos, header.clone());
-
             chunk_entries.insert(header, chunk.blocks);
         }
-        
-        self.renderer
-            .write_buffer(&self.chunk_buff, 0, &bytemuck::cast_slice(&chunk_entries));
+
+        self.renderer.write_buffer(
+            &self.staging_chunk_buff,
+            0,
+            &bytemuck::cast_slice(&chunk_entries),
+        );
 
         // self.gpu_vertex_malloc.draw_cli();
     }
 
     pub fn unload_chunks(&mut self, chunks: Vec<IVec3>) {
+        self.remove_queue.extend(chunks);
         let mut loaded_chunks = self.loaded_chunks.write().unwrap();
-        for c_pos in chunks {
-            // fixme what if unload called before chunk left staging?
-            let chunk_entry = loaded_chunks.remove(&c_pos).unwrap();
-            self.chunk_malloc
-                .vertex
-                .free(chunk_entry.vertex_offset as usize);
-            self.chunk_malloc
-                .index
-                .free(chunk_entry.index_offset as usize);
-        }
+        self.remove_queue.retain(|c_pos| {
+            loaded_chunks
+                .remove(c_pos)
+                .and_then(|chunk_entry| {
+                    self.chunk_malloc
+                        .vertex
+                        .free(chunk_entry.vertex_offset as usize);
+                    self.chunk_malloc
+                        .index
+                        .free(chunk_entry.index_offset as usize);
+                    Some(false)
+                })
+                .unwrap_or(true)
+        });
+
         // self.gpu_vertex_malloc.draw_cli();
     }
 
@@ -137,7 +146,7 @@ impl AppRenderer<'_> {
         );
         render_pass.set_vertex_buffer(0, self.vertex_buff.slice(..));
         render_pass.set_index_buffer(self.index_buff.slice(..), wgpu::IndexFormat::Uint32);
-        render_pass.set_bind_group(1, &self.trans_mats_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.transform_mats_bind_group, &[]);
 
         let loaded_chunks = self.loaded_chunks.read().unwrap();
         if !loaded_chunks.is_empty() {
@@ -200,7 +209,7 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
     );
     let vertex_buff = renderer_builder.make_vertex_buffer(temp_size);
     let index_buff = renderer_builder.make_index_buffer(temp_size);
-    let (chunk_buff, chunk_buff_layout) =
+    let (staging_chunk_buff, staging_chunk_buff_layout) =
         chunk_blocks_buffer(&renderer_builder, temp_size as usize);
     let mmat_buff = renderer_builder.make_buffer(
         "mmat_buffer",
@@ -208,14 +217,14 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
         wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
     );
 
-    let (transform_mats_bgl, transform_mats_bg) = transform_matrices_binds(
+    let (transform_mats_bgl, transform_mats_bind_group) = transform_matrices_binds(
         &renderer_builder,
         renderer_builder.view_projection_buffer.as_ref().unwrap(),
         &mmat_buff,
     );
 
     // pipelines
-    let cb_compute_pipeline = block_compute_pipeline(&renderer_builder, &[&chunk_buff_layout]);
+    let cb_compute_pipeline = block_compute_pipeline(&renderer_builder, &[&staging_chunk_buff_layout]);
     let render_pipeline = renderer_builder.make_render_pipeline(
         resources::shader::main_shader().into(),
         &[&atlas.texture_bind_group_layout, &transform_mats_bgl],
@@ -228,9 +237,9 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
             .unwrap()
             .create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("chunk_compute_bind_group"),
-                layout: &chunk_buff_layout,
+                layout: &staging_chunk_buff_layout,
                 entries: &resources::bind_group::index_based_entries([
-                    chunk_buff.as_entire_binding(),
+                    staging_chunk_buff.as_entire_binding(),
                     staging_vertex_buff.as_entire_binding(),
                     staging_index_buff.as_entire_binding(),
                     staging_mmat_buff.as_entire_binding(),
@@ -255,12 +264,13 @@ pub fn make_app_renderer<'a>(window: Arc<Window>, render_distance: f32) -> AppRe
         mmat_buff,
         vertex_buff,
         index_buff,
-        chunk_buff,
+        staging_chunk_buff,
         staged_chunks: HashMap::new(),
         loaded_chunks: Arc::new(RwLock::new(HashMap::new())),
+        remove_queue: HashSet::new(),
         chunk_malloc,
         chunk_compute_bind_group,
-        trans_mats_bind_group: transform_mats_bg,
+        transform_mats_bind_group,
         texture_atlas: atlas,
         render_pipeline,
         compute_pipeline: cb_compute_pipeline,
