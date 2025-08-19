@@ -99,7 +99,7 @@ pub fn world_generation_task(
     }
 }
 
-fn generate_chunk(gen_config: WorldGenConfig, chunk_position: IVec3) -> Chunk {
+pub(crate) fn generate_chunk(gen_config: WorldGenConfig, chunk_position: IVec3) -> Chunk {
     let blocks = generate_chunk_blocks(gen_config, chunk_position);
     Chunk {
         blocks,

@@ -22,9 +22,5 @@ strip = false
 debug = true
 
 [profile.release]
-strip = "none"
 debug = true
-opt-level = 2
-lto = false           # Disable link-time optimization
-codegen-units = 1     # Use single codegen unit
-panic = "unwind"      # Keep stack unwinding
+#opt-level = 3

@@ -1,7 +1,6 @@
-use crate::compute::geo;
 use crate::vtypes::Scene;
 use crate::world::generation::{WorldGenConfig, WorldGenHandle};
-use crate::world::types::{CHUNK_DIM, Chunk};
+use crate::world::types::{Block, CHUNK_DIM, Chunk, ChunkBlocks};
 use glam::{IVec3, Vec3};
 use std::collections::{HashMap, HashSet};
 
@@ -41,16 +40,16 @@ impl WorldServer {
 
     pub(crate) fn update(&mut self) {
         let mut active_chunk_positions = HashSet::new();
-        for (_, player_pos) in self.players.iter() {
-            active_chunk_positions.extend(geo::discrete_sphere_pts(
-                &(*player_pos / CHUNK_DIM as f32),
-                self.config.simulation_distance as f32,
-            ));
-        }
-        // active_chunk_positions.insert(IVec3::new(0, 0, 0));
-        // active_chunk_positions.insert(IVec3::new(1, 0, 0));
-        // active_chunk_positions.insert(IVec3::new(2, 0, 0));
-        // active_chunk_positions.insert(IVec3::new(3, 0, 0));
+        // for (_, player_pos) in self.players.iter() {
+        //     active_chunk_positions.extend(geo::discrete_sphere_pts(
+        //         &(*player_pos / CHUNK_DIM as f32),
+        //         self.config.simulation_distance as f32,
+        //     ));
+        // }
+        active_chunk_positions.insert(IVec3::new(0, 0, 0));
+        active_chunk_positions.insert(IVec3::new(1, 0, 0));
+        active_chunk_positions.insert(IVec3::new(2, 0, 0));
+        active_chunk_positions.insert(IVec3::new(3, 0, 0));
         // active_chunk_positions.insert(IVec3::new(4, 0, 0));
         // active_chunk_positions.insert(IVec3::new(5, 0, 0));
         // active_chunk_positions.insert(IVec3::new(0, 0, 1));
@@ -91,7 +90,31 @@ impl WorldServer {
 
     fn try_receive_generation(&mut self) {
         if let Ok(new_chunks) = self.generation_handle.try_recv() {
-            self.chunks.extend(new_chunks.into_iter());
+            let checker = Chunk {
+                last_visited: None,
+                blocks: ChunkBlocks::checkerboard(
+                    Block {
+                        value: 1u16 << 15u16,
+                    },
+                    Block { value: 0u16 },
+                ),
+            };
+            let full = Chunk {
+                last_visited: None,
+                blocks: ChunkBlocks::splat(Block {
+                    value: 1u16 << 15u16,
+                }),
+            };
+            self.chunks.extend(
+                vec![
+                    (IVec3::new(0, 0, 0), checker.clone()),
+                    (IVec3::new(1, 0, 0), checker.clone()),
+                    (IVec3::new(2, 0, 0), full.clone()),
+                    (IVec3::new(3, 0, 0), checker.clone()),
+                ]
+                .into_iter(),
+            );
+            // self.chunks.extend(new_chunks.into_iter());
         }
     }
 

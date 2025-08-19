@@ -13,10 +13,10 @@ var<workgroup> index_count: atomic<u32>;
 
 @compute @workgroup_size(CHUNK_DIM, CHUNK_DIM, 1)
 fn compute_main(
-    @builtin(global_invocation_id) gid: vec3<u32>,
+    @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
 ) {
-    let chunk_index = gid.x;
+    let chunk_index = wid.x;
     let chunk = chunk_entries[chunk_index];
     let chunk_header = chunk.header;
 
@@ -36,4 +36,6 @@ fn compute_main(
 
     let chunk_world_position = chunk_to_world_position(chunk_header.chunk_position);
     staging_mmat_buffer[chunk_header.slab_index] = translation_matrix(chunk_world_position);
+//    let q = vec3<f32>(f32(chunk_header.slab_index) * f32(CHUNK_DIM),0.0,0.0);
+//    staging_mmat_buffer[chunk_header.slab_index] = translation_matrix(q);
 }

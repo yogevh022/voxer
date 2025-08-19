@@ -8,6 +8,24 @@ use std::ops::{Deref, DerefMut};
 pub struct Array3D<T, const X: usize, const Y: usize, const Z: usize>(pub [[[T; Z]; Y]; X])
 where
     T: Copy + Default + Pod + Zeroable + NoUninit;
+
+impl<T, const X: usize, const Y: usize, const Z: usize> Array3D<T, X, Y, Z>
+where
+    T: Copy + Default + Pod + Zeroable + NoUninit,
+{
+    pub fn splat(value: T) -> Self {
+        Self([(); X].map(|_| [(); Y].map(|_| [(); Z].map(|_| value))))
+    }
+
+    pub fn checkerboard(a: T, b: T) -> Self {
+        Self(core::array::from_fn(|x| {
+            core::array::from_fn(|y| {
+                core::array::from_fn(|z| if (x + y + z) % 2 == 0 { a } else { b })
+            })
+        }))
+    }
+}
+
 impl<T, const X: usize, const Y: usize, const Z: usize> From<[[[T; Z]; Y]; X]>
     for Array3D<T, X, Y, Z>
 where

@@ -74,7 +74,13 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                         self.v.time.tick();
 
                         if self.v.time.temp_200th_frame() {
-                            window.set_title(&format!("Tech - {:.2} FPS", self.v.time.fps()));
+                            window.set_title(&format!(
+                                "FPS: {:.2} POS: x: {:.2}, y: {:.2}, z: {:.2}",
+                                self.v.time.fps(),
+                                self.v.camera.transform.position.x,
+                                self.v.camera.transform.position.y,
+                                self.v.camera.transform.position.z,
+                            ));
                         }
 
                         if let Err(e) = client.renderer.render(&self.v.camera) {
@@ -129,7 +135,12 @@ impl<'a> App<'a> {
     fn update(&mut self) {
         {
             let input = self.v.input.read();
-            const MOVE_SPEED: f32 = 30.0;
+            const MOVE_SPEED: f32 = 10.0;
+            let fast_mul: f32 = if input.keyboard.key_down(KeyCode::ShiftLeft) {
+                4.0
+            } else {
+                1.0
+            };
 
             let forward_input = input.keyboard.key_down(KeyCode::KeyW) as i8
                 - input.keyboard.key_down(KeyCode::KeyS) as i8;
@@ -137,7 +148,8 @@ impl<'a> App<'a> {
                 - input.keyboard.key_down(KeyCode::KeyA) as i8;
             let move_vec = forward_input as f32 * self.v.camera.transform.forward()
                 + right_input as f32 * self.v.camera.transform.right();
-            self.v.camera.transform.position += move_vec * MOVE_SPEED * self.v.time.delta();
+            self.v.camera.transform.position +=
+                move_vec * MOVE_SPEED * fast_mul * self.v.time.delta();
         }
 
         let player_pos = self.v.camera.transform.position;
