@@ -3,6 +3,7 @@ pub mod compute;
 mod renderer;
 mod vtypes;
 mod world;
+mod macros;
 
 use crate::world::types::{WorldServer, WorldServerConfig};
 use vtypes::{CameraController, VObject};

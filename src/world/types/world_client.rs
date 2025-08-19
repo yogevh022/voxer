@@ -1,11 +1,10 @@
-use crate::SIMULATION_AND_RENDER_DISTANCE;
+use crate::{avg};
 use crate::app::app_renderer;
 use crate::app::app_renderer::AppRenderer;
 use crate::compute::ds::Slas;
 use crate::compute::geo;
 use crate::world::types::{CHUNK_DIM, Chunk};
 use glam::{IVec3, Vec3};
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use winit::window::Window;
 
@@ -35,6 +34,7 @@ impl<'window> WorldClient<'window> {
     }
 
     pub fn update(&mut self) {
+        // fixme slow code
         let nearby_chunk_positions = geo::discrete_sphere_pts(
             &(self.player_position / CHUNK_DIM as f32),
             self.config.render_distance as f32,
@@ -49,6 +49,9 @@ impl<'window> WorldClient<'window> {
                 self.nearby_chunks_neg_delta.push(*chunk_position);
             }
         }
+
+        dbg!(avg!(self.nearby_chunks_delta.len() => "a"));
+        dbg!(avg!(self.nearby_chunks_neg_delta.len() => "b"));
     }
 
     pub fn set_player_position(&mut self, position: Vec3) {
