@@ -16,6 +16,7 @@ rayon = "1.10.0"
 crossbeam = "0.8.4"
 slab = "0.4.11"
 tracy-client = "0.18.2"
+rand = { version = "0.8.5"}
 
 [profile.dev]
 strip = false

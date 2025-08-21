@@ -15,7 +15,7 @@ pub struct WorldClientConfig {
 
 pub struct WorldClient<'window> {
     pub config: WorldClientConfig,
-    pub renderer: AppRenderer<'window>,
+    pub renderer: AppRenderer<'window, 4>,
     nearby_chunks_delta: Vec<IVec3>,
     nearby_chunks_neg_delta: Vec<IVec3>,
     player_position: Vec3,
