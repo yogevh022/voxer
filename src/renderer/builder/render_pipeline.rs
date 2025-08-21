@@ -3,16 +3,17 @@ use std::borrow::Cow;
 
 impl RendererBuilder<'_> {
     pub fn make_render_pipeline(
-        &self,
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
         shader_source: Cow<str>,
         bind_group_layouts: &[&wgpu::BindGroupLayout],
     ) -> wgpu::RenderPipeline {
-        let shader = resources::shader::create(self.device.as_ref().unwrap(), shader_source);
+        let shader = resources::shader::create(device, shader_source);
         resources::pipeline::create_render(
-            self.device.as_ref().unwrap(),
+            device,
             bind_group_layouts,
             &shader,
-            self.surface_format.unwrap(),
+            surface_format,
             "render_pipeline",
         )
     }

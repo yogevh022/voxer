@@ -3,7 +3,6 @@ pub mod chunk;
 pub mod chunk_model;
 pub mod index;
 pub mod mesh_buffer;
-mod mesh_buffer_manager;
 pub mod pipeline;
 pub mod render_pass;
 pub mod shader;

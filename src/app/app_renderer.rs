@@ -1,10 +1,10 @@
+use crate::app::buffer_managers::{ChunkComputeManager, ChunkRenderManager};
 use crate::renderer::builder::RendererAtlas;
 use crate::renderer::gpu::{
     GPUChunkEntryBuffer, GPUChunkEntryHeader, MeshVMallocMultiBuffer, MultiBufferAllocationRequest,
     MultiBufferMeshAllocation, VMallocFirstFit,
 };
 use crate::renderer::resources;
-use crate::renderer::resources::mesh_buffer::MeshBuffer;
 use crate::renderer::{Index, Renderer, RendererBuilder, Vertex};
 use crate::world::types::Chunk;
 use crate::{call_every, compute, vtypes};
@@ -12,23 +12,17 @@ use glam::IVec3;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 use std::{array, mem};
-use wgpu::wgt::DrawIndexedIndirectArgs;
 use winit::window::Window;
 
 const VOID_MESH_OFFSET: usize = 8;
 
+const STAGING_BUFF_N: usize = 2; // fixme temp number
+
 pub struct AppRenderer<'window, const BUFF_N: usize> {
     pub renderer: Renderer<'window>,
 
-    pub staging_vertex_buff: wgpu::Buffer,
-    pub staging_index_buff: wgpu::Buffer,
-    pub staging_mmat_buff: wgpu::Buffer,
-    pub staging_chunk_buff: wgpu::Buffer,
-    pub mmat_buff: wgpu::Buffer,
-    pub vertex_buff: wgpu::Buffer,
-    pub index_buff: wgpu::Buffer,
-
-    pub mesh_buffers: [MeshBuffer; BUFF_N],
+    pub chunk_render: ChunkRenderManager<BUFF_N>,
+    pub chunk_compute: ChunkComputeManager<STAGING_BUFF_N>,
 
     pub staged_chunks: HashMap<IVec3, GPUChunkEntryHeader>,
     pub loaded_chunks: Arc<RwLock<HashMap<IVec3, GPUChunkEntryHeader>>>,
@@ -39,12 +33,10 @@ pub struct AppRenderer<'window, const BUFF_N: usize> {
         [Vec<(usize, MultiBufferMeshAllocation<VMallocFirstFit>)>; BUFF_N],
     pub multi_buffer_remove_queue: Vec<MultiBufferMeshAllocation<VMallocFirstFit>>,
 
-    pub chunk_compute_bind_group: wgpu::BindGroup,
     pub transform_mats_bind_group: wgpu::BindGroup,
     pub texture_atlas: RendererAtlas,
 
     pub render_pipeline: wgpu::RenderPipeline,
-    pub compute_pipeline: wgpu::ComputePipeline,
 }
 
 impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
@@ -209,72 +201,97 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
     render_distance: f32,
 ) -> AppRenderer<'a, BUFF_N> {
     let renderer_builder = RendererBuilder::new(window);
-    let atlas = renderer_builder.make_atlas(get_atlas_image());
+    let texture_atlas = renderer_builder.make_atlas(get_atlas_image());
 
     // >upper bound of max chunks to be buffered at once
     let max_rendered_chunks = compute::geo::max_discrete_sphere_pts(render_distance);
     let temp_size = (compute::MIB * 128) as u64;
-    // buffers
-    let staging_vertex_buff = RendererBuilder::make_buffer(
-        &renderer_builder.device.as_ref().unwrap(),
-        "staging_vertex_buffer",
-        temp_size,
-        wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
-    );
-    let staging_index_buff = RendererBuilder::make_buffer(
-        &renderer_builder.device.as_ref().unwrap(),
-        "staging_index_buffer",
-        temp_size,
-        wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
-    );
-    let staging_mmat_buff = RendererBuilder::make_buffer(
-        &renderer_builder.device.as_ref().unwrap(),
-        "staging_mmat_buffer",
-        (max_rendered_chunks * size_of::<[[f32; 4]; 4]>()) as u64,
-        wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
-    );
-    let vertex_buff = renderer_builder.make_vertex_buffer(temp_size);
-    let index_buff = renderer_builder.make_index_buffer(temp_size);
+
     let (staging_chunk_buff, staging_chunk_buff_layout) =
         chunk_blocks_buffer(&renderer_builder, temp_size as usize);
-    let mmat_buff = RendererBuilder::make_buffer(
+    let mmat_buffer = RendererBuilder::make_buffer(
         &renderer_builder.device.as_ref().unwrap(),
         "mmat_buffer",
         (max_rendered_chunks * size_of::<[[f32; 4]; 4]>()) as u64,
         wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
     );
 
-    let (transform_mats_bgl, transform_mats_bind_group) = transform_matrices_binds(
-        &renderer_builder,
-        renderer_builder.view_projection_buffer.as_ref().unwrap(),
-        &mmat_buff,
-    );
-
-    // pipelines
-    let cb_compute_pipeline =
-        block_compute_pipeline(&renderer_builder, &[&staging_chunk_buff_layout]);
-    let render_pipeline = renderer_builder.make_render_pipeline(
-        resources::shader::main_shader().into(),
-        &[&atlas.texture_bind_group_layout, &transform_mats_bgl],
-    );
-
-    let chunk_compute_bind_group =
-        renderer_builder
-            .device
-            .as_ref()
-            .unwrap()
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("chunk_compute_bind_group"),
-                layout: &staging_chunk_buff_layout,
-                entries: &resources::bind_group::index_based_entries([
-                    staging_chunk_buff.as_entire_binding(),
-                    staging_vertex_buff.as_entire_binding(),
-                    staging_index_buff.as_entire_binding(),
-                    staging_mmat_buff.as_entire_binding(),
-                ]),
-            });
-
+    let surface_format = renderer_builder.surface_format.unwrap();
     let renderer = renderer_builder.build();
+
+    let (transform_mats_bind_group_layout, transform_mats_bind_group) = transform_matrices_binds(
+        &renderer.device,
+        &renderer.view_projection_buffer,
+        &mmat_buffer,
+    );
+
+    let chunk_compute_pipeline =
+        create_chunk_compute_pipeline(&renderer.device, &[&staging_chunk_buff_layout]);
+    let render_pipeline = RendererBuilder::make_render_pipeline(
+        &renderer.device,
+        surface_format,
+        resources::shader::main_shader().into(),
+        &[
+            &texture_atlas.texture_bind_group_layout,
+            &transform_mats_bind_group_layout,
+        ],
+    );
+
+    let chunk_render = ChunkRenderManager::<BUFF_N>::init(
+        |i| {
+            RendererBuilder::make_buffer(
+                &renderer.device,
+                &("vertex_buffer_".to_string() + &i.to_string()),
+                temp_size,
+                wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            )
+        },
+        |i| {
+            RendererBuilder::make_buffer(
+                &renderer.device,
+                &("index_buffer_".to_string() + &i.to_string()),
+                temp_size,
+                wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+            )
+        },
+    );
+
+    let chunk_compute = ChunkComputeManager::<STAGING_BUFF_N>::init(
+        &renderer.device,
+        chunk_compute_pipeline,
+        |i| {
+            RendererBuilder::make_buffer(
+                &renderer.device,
+                &("staging_chunk_buffer_".to_string() + &i.to_string()),
+                temp_size,
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            )
+        },
+        |i| {
+            RendererBuilder::make_buffer(
+                &renderer.device,
+                &("staging_vertex_buffer_".to_string() + &i.to_string()),
+                temp_size,
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            )
+        },
+        |i| {
+            RendererBuilder::make_buffer(
+                &renderer.device,
+                &("staging_index_buffer_".to_string() + &i.to_string()),
+                temp_size,
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            )
+        },
+        |i| {
+            RendererBuilder::make_buffer(
+                &renderer.device,
+                &("staging_mmat_buffer_".to_string() + &i.to_string()),
+                temp_size,
+                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            )
+        },
+    );
 
     let chunk_malloc = MeshVMallocMultiBuffer::<VMallocFirstFit, BUFF_N>::new(
         temp_size as usize / Vertex::size(),
@@ -282,36 +299,24 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
         VOID_MESH_OFFSET,
     );
 
-    let mesh_buffers: [MeshBuffer; BUFF_N] = array::from_fn(|_| {
-        MeshBuffer::new(&renderer.device, temp_size as usize, temp_size as usize)
-    });
-
     AppRenderer {
         renderer,
-        staging_vertex_buff,
-        staging_index_buff,
-        staging_mmat_buff,
-        mmat_buff,
-        vertex_buff,
-        index_buff,
-        staging_chunk_buff,
+        chunk_render,
+        chunk_compute,
         staged_chunks: HashMap::new(),
         loaded_chunks: Arc::new(RwLock::new(HashMap::new())),
         remove_queue: HashSet::new(),
         chunk_malloc,
         multi_buffer_allocations: array::from_fn(|_| vec![]),
         multi_buffer_remove_queue: vec![],
-        chunk_compute_bind_group,
         transform_mats_bind_group,
-        texture_atlas: atlas,
+        texture_atlas,
         render_pipeline,
-        compute_pipeline: cb_compute_pipeline,
-        mesh_buffers,
     }
 }
 
 pub fn transform_matrices_binds(
-    renderer_builder: &RendererBuilder,
+    device: &wgpu::Device,
     view_proj_buffer: &wgpu::Buffer,
     model_mat_buffer: &wgpu::Buffer,
 ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
@@ -321,7 +326,7 @@ pub fn transform_matrices_binds(
         size: std::num::NonZeroU64::new(view_proj_buffer.size()),
     });
     resources::transform_matrices::create_bind_group(
-        renderer_builder.device.as_ref().unwrap(),
+        device,
         &resources::bind_group::index_based_entries([
             view_projection_binding,              // 0
             model_mat_buffer.as_entire_binding(), // 1
@@ -341,16 +346,16 @@ pub fn chunk_blocks_buffer(
     )
 }
 
-pub fn block_compute_pipeline(
-    renderer_builder: &RendererBuilder,
+pub fn create_chunk_compute_pipeline(
+    device: &wgpu::Device,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
 ) -> wgpu::ComputePipeline {
     let shader = resources::shader::create(
-        renderer_builder.device.as_ref().unwrap(),
+        device,
         resources::shader::chunk_meshing().into(),
     );
     resources::pipeline::create_compute(
-        renderer_builder.device.as_ref().unwrap(),
+        device,
         bind_group_layouts,
         &shader,
         "block_buffer_compute_pipeline",
