@@ -1,9 +1,9 @@
+use crate::compute::geo;
 use crate::vtypes::Scene;
 use crate::world::generation::{WorldGenConfig, WorldGenHandle};
 use crate::world::types::{Block, CHUNK_DIM, Chunk, ChunkBlocks};
 use glam::{IVec3, Vec3};
 use std::collections::{HashMap, HashSet};
-use crate::compute::geo;
 
 pub struct WorldServerConfig {
     pub seed: u32,

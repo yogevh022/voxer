@@ -1,5 +1,3 @@
-use crate::compute;
-use crate::renderer::gpu::virtual_alloc::ChunkVMA;
 use crate::world::types::{CHUNK_DIM, Chunk, ChunkBlocks, PACKED_CHUNK_DIM};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
@@ -82,26 +80,26 @@ impl GPUChunkEntryHeader {
         }
     }
 
-    pub fn from_chunk_data(
-        malloc: &mut ChunkVMA,
-        chunk: &Chunk,
-        chunk_position: IVec3,
-        slab_index: u32,
-    ) -> Self {
-        let face_count = compute::chunk::face_count(&chunk.blocks);
-        let vertex_count = face_count * 4;
-        let index_count = face_count * 6;
-        let vertex_offset = malloc.vertex.alloc(vertex_count).unwrap();
-        let index_offset = malloc.index.alloc(index_count).unwrap();
-        Self::new(
-            vertex_offset as u32,
-            index_offset as u32,
-            vertex_count as u32,
-            index_count as u32,
-            slab_index,
-            chunk_position,
-        )
-    }
+    // pub fn from_chunk_data<A: VirtualMalloc, const N: usize>(
+    //     malloc: &mut MeshVMallocMultiBuffer<A, N>,
+    //     chunk: &Chunk,
+    //     chunk_position: IVec3,
+    //     slab_index: u32,
+    // ) -> Self {
+    //     let face_count = compute::chunk::face_count(&chunk.blocks);
+    //     let vertex_count = face_count * 4;
+    //     let index_count = face_count * 6;
+    //
+    //     let index_offset = malloc.index.alloc(index_count).unwrap();
+    //     Self::new(
+    //         vertex_offset as u32,
+    //         index_offset as u32,
+    //         vertex_count as u32,
+    //         index_count as u32,
+    //         slab_index,
+    //         chunk_position,
+    //     )
+    // }
 
     pub fn draw_indexed_indirect_args(&self) -> DrawIndexedIndirectArgs {
         DrawIndexedIndirectArgs {

@@ -11,19 +11,16 @@ impl RendererBuilder<'_> {
     }
 
     pub fn make_buffer(
-        &self,
+        device: &wgpu::Device,
         label: &str,
         size: wgpu::BufferAddress,
         buffer_usages: BufferUsages,
     ) -> wgpu::Buffer {
-        self.device
-            .as_ref()
-            .unwrap()
-            .create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size,
-                usage: buffer_usages,
-                mapped_at_creation: false,
-            })
+        device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(label),
+            size,
+            usage: buffer_usages,
+            mapped_at_creation: false,
+        })
     }
 }

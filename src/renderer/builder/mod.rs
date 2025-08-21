@@ -5,6 +5,7 @@ use winit::window::Window;
 mod atlas;
 mod buffer;
 mod render_pipeline;
+use crate::compute;
 pub use atlas::RendererAtlas;
 
 pub struct RendererBuilder<'window> {
@@ -12,6 +13,7 @@ pub struct RendererBuilder<'window> {
     pub(crate) surface: Option<wgpu::Surface<'window>>,
     pub(crate) surface_format: Option<wgpu::TextureFormat>,
     pub(crate) device: Option<wgpu::Device>,
+    pub(crate) indirect_buffer: Option<wgpu::Buffer>,
     pub(crate) queue: Option<wgpu::Queue>,
     pub(crate) view_projection_buffer: Option<wgpu::Buffer>,
     pub(crate) depth_texture_view: Option<wgpu::TextureView>,
@@ -56,6 +58,13 @@ impl<'window> RendererBuilder<'window> {
         };
         surface.configure(&device, &config);
 
+        let indirect_buffer = RendererBuilder::make_buffer(
+            &device,
+            "temp_indirect_buffer",
+            250 * compute::KIB as u64,
+            wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
+        );
+
         let uniform_buffer_size = device
             .limits()
             .min_uniform_buffer_offset_alignment
@@ -73,6 +82,7 @@ impl<'window> RendererBuilder<'window> {
             surface: Some(surface),
             surface_format: Some(surface_format),
             device: Some(device),
+            indirect_buffer: Some(indirect_buffer),
             queue: Some(queue),
             config: Some(config),
             view_projection_buffer: Some(view_projection_buffer),

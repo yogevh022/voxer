@@ -2490,6 +2490,7 @@ dependencies = [
  "noise",
  "parking_lot",
  "pollster",
+ "rand",
  "rayon",
  "slab",
  "tracy-client",

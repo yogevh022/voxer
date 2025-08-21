@@ -1,5 +1,5 @@
 mod chunk_entry;
-mod virtual_alloc;
+mod malloc;
 
 pub use chunk_entry::{GPUChunkEntry, GPUChunkEntryBuffer, GPUChunkEntryHeader};
-pub use virtual_alloc::{ChunkVMA, VirtualMemAlloc};
+pub use malloc::*;
