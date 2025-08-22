@@ -14,13 +14,13 @@ pub struct ChunkComputeManager<const S: usize> {
 impl<const S: usize> ChunkComputeManager<S> {
     pub fn init(
         device: &wgpu::Device,
-        pipeline: wgpu::ComputePipeline,
         staging_chunk_init_fn: impl Fn(usize) -> wgpu::Buffer,
         staging_vertex_init_fn: impl Fn(usize) -> wgpu::Buffer,
         staging_index_init_fn: impl Fn(usize) -> wgpu::Buffer,
         staging_mmat_init_fn: impl Fn(usize) -> wgpu::Buffer,
     ) -> Self {
         let layout = chunk_bind_group_layout(device);
+        let pipeline = create_chunk_compute_pipeline(device, &[&layout]);
         let staging_chunk_buffers = array::from_fn(|i| staging_chunk_init_fn(i));
         let staging_vertex_buffers = array::from_fn(|i| staging_vertex_init_fn(i));
         let staging_index_buffers = array::from_fn(|i| staging_index_init_fn(i));
@@ -50,10 +50,10 @@ impl<const S: usize> ChunkComputeManager<S> {
     pub fn dispatch_staging_workgroups<const N: usize>(
         &self,
         renderer: &Renderer<'_>,
-        chunk_buffers: &[&wgpu::Buffer; N],
-        mmat_buffers: &[&wgpu::Buffer; N],
-        vertex_buffers: &[&wgpu::Buffer; N],
-        index_buffers: &[&wgpu::Buffer; N],
+        chunk_buffers: &[wgpu::Buffer; N],
+        mmat_buffers: &[wgpu::Buffer; N],
+        vertex_buffers: &[wgpu::Buffer; N],
+        index_buffers: &[wgpu::Buffer; N],
         compute_commands: [Vec<ComputeInstruction>; N],
     ) {
         for (i, compute_instruction) in compute_commands.into_iter().enumerate() {
@@ -90,24 +90,20 @@ impl<const S: usize> ChunkComputeManager<S> {
                             inst.byte_length as u64,
                         );
                     }
-                    BufferType::MMat => {
-                        encoder.copy_buffer_to_buffer(
-                            &self.staging_mmat_buffers[inst.target_staging_buffer],
-                            inst.byte_offset as u64,
-                            &mmat_buffers[i],
-                            inst.byte_offset as u64,
-                            inst.byte_length as u64,
-                        )
-                    }
-                    BufferType::Chunk => {
-                        encoder.copy_buffer_to_buffer(
-                            &self.staging_chunk_buffers[inst.target_staging_buffer],
-                            inst.byte_offset as u64,
-                            &chunk_buffers[i],
-                            inst.byte_offset as u64,
-                            inst.byte_length as u64,
-                        )
-                    }
+                    BufferType::MMat => encoder.copy_buffer_to_buffer(
+                        &self.staging_mmat_buffers[inst.target_staging_buffer],
+                        inst.byte_offset as u64,
+                        &mmat_buffers[i],
+                        inst.byte_offset as u64,
+                        inst.byte_length as u64,
+                    ),
+                    BufferType::Chunk => encoder.copy_buffer_to_buffer(
+                        &self.staging_chunk_buffers[inst.target_staging_buffer],
+                        inst.byte_offset as u64,
+                        &chunk_buffers[i],
+                        inst.byte_offset as u64,
+                        inst.byte_length as u64,
+                    ),
                 }
             }
             renderer.queue.submit(Some(encoder.finish()));
@@ -171,4 +167,17 @@ pub fn chunk_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             },
         ],
     })
+}
+
+pub fn create_chunk_compute_pipeline(
+    device: &wgpu::Device,
+    bind_group_layouts: &[&wgpu::BindGroupLayout],
+) -> wgpu::ComputePipeline {
+    let shader = resources::shader::create(device, resources::shader::chunk_meshing().into());
+    resources::pipeline::create_compute(
+        device,
+        bind_group_layouts,
+        &shader,
+        "chunk_compute_pipeline",
+    )
 }

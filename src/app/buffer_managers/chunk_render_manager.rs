@@ -4,18 +4,24 @@ use std::{array, mem};
 use wgpu::wgt::DrawIndexedIndirectArgs;
 
 pub struct ChunkRenderManager<const N: usize> {
-    vertex_buffers: [wgpu::Buffer; N],
-    index_buffers: [wgpu::Buffer; N],
+    pub vertex_buffers: [wgpu::Buffer; N],
+    pub index_buffers: [wgpu::Buffer; N],
+    pub chunk_buffers: [wgpu::Buffer; N],
+    pub mmat_buffers: [wgpu::Buffer; N],
 }
 
 impl<const N: usize> ChunkRenderManager<N> {
     pub fn init(
         vertex_init_fn: impl Fn(usize) -> wgpu::Buffer,
         index_init_fn: impl Fn(usize) -> wgpu::Buffer,
+        chunk_init_fn: impl Fn(usize) -> wgpu::Buffer,
+        mmat_init_fn: impl Fn(usize) -> wgpu::Buffer,
     ) -> Self {
         Self {
             vertex_buffers: array::from_fn(|i| vertex_init_fn(i)),
             index_buffers: array::from_fn(|i| index_init_fn(i)),
+            chunk_buffers: array::from_fn(|i| chunk_init_fn(i)),
+            mmat_buffers: array::from_fn(|i| mmat_init_fn(i)),
         }
     }
 
