@@ -1,4 +1,4 @@
-use super::{BufferType, ComputeInstruction};
+use super::{BufferType, ComputeInstruction, WriteInstruction};
 use crate::renderer::{Renderer, resources};
 use std::array;
 
@@ -44,6 +44,16 @@ impl<const S: usize> ChunkComputeManager<S> {
             staging_vertex_buffers,
             staging_index_buffers,
             staging_mmat_buffers,
+        }
+    }
+
+    pub fn write_to_staging_chunks(&self, renderer: &Renderer<'_>, write_instructions: &[WriteInstruction<'_>; S]) {
+        for i in 0..S {
+            renderer.write_buffer(
+                &self.staging_chunk_buffers[i],
+                write_instructions[i].offset,
+                write_instructions[i].bytes,
+            );
         }
     }
 

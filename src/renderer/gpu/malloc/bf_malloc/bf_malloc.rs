@@ -1,6 +1,6 @@
 use crate::renderer::gpu::malloc::bf_malloc::types::{MemSlot, MemSlotKey};
 use crate::renderer::gpu::malloc::common::{DebugFmtMemSlot, VirtualMemSlot, malloc_fmt};
-use crate::renderer::gpu::malloc::virtual_malloc::{MallocError, VirtualMalloc, VirtualMallocType};
+use crate::renderer::gpu::malloc::virtual_malloc::MallocError;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::io::Write;
@@ -55,7 +55,8 @@ impl VMallocBestFit {
         };
         if leftover_key.size > 0 {
             self.free_blocks.insert(leftover_key, leftover_slot);
-            self.free_blocks_by_offset.insert(leftover_slot.offset, leftover_slot);
+            self.free_blocks_by_offset
+                .insert(leftover_slot.offset, leftover_slot);
         }
         let slot_key = MemSlotKey {
             size,

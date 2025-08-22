@@ -13,6 +13,13 @@ pub struct ComputeInstruction {
 }
 
 #[derive(Clone, Copy)]
+pub struct WriteInstruction<'a> {
+    pub buffer_index: usize,
+    pub bytes: &'a [u8],
+    pub offset: u64,
+}
+
+#[derive(Clone, Copy)]
 pub enum BufferType {
     Vertex,
     Index,

@@ -1,3 +1,4 @@
+use crate::compute;
 use crate::compute::array::Array3D;
 use crate::world::types::{Block, CHUNK_DIM, Chunk, ChunkBlocks};
 use crossbeam::channel;
@@ -7,6 +8,7 @@ use noise::{NoiseFn, OpenSimplex};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use std::collections::HashSet;
+use std::hash::{DefaultHasher, Hash};
 
 pub type WorldGenRequest = Vec<IVec3>;
 pub type WorldGenResponse = Vec<(IVec3, Chunk)>;
@@ -102,6 +104,7 @@ pub fn world_generation_task(
 pub(crate) fn generate_chunk(gen_config: WorldGenConfig, chunk_position: IVec3) -> Chunk {
     let blocks = generate_chunk_blocks(gen_config, chunk_position);
     Chunk {
+        id: compute::chunk::position_to_id(chunk_position),
         blocks,
         last_visited: None,
     }

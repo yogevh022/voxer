@@ -10,6 +10,7 @@ pub type ChunkBlocks = Array3D<Block, CHUNK_DIM, CHUNK_DIM, CHUNK_DIM>;
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
+    pub(crate) id: u128,
     pub(crate) last_visited: Option<Instant>,
     pub(crate) blocks: ChunkBlocks,
 }

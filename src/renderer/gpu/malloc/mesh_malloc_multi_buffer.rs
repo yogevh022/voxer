@@ -1,9 +1,10 @@
 use crate::renderer::gpu::VirtualMalloc;
 use crate::renderer::gpu::malloc::mesh_malloc::MeshVMalloc;
-use crate::renderer::gpu::malloc::virtual_malloc::{MallocError, VirtualMallocType};
+use crate::renderer::gpu::malloc::virtual_malloc::MallocError;
 use std::array;
 
 pub struct MultiBufferAllocationRequest {
+    pub id: u128,
     pub vertex_size: usize,
     pub index_size: usize,
 }
@@ -20,41 +21,37 @@ pub struct MeshVMallocMultiBuffer<A: VirtualMalloc, const N: usize> {
     virtual_buffers: [MeshVMalloc<A>; N],
 }
 
-impl<A: VirtualMalloc, const N: usize> MeshVMallocMultiBuffer<A, N> {
-    pub fn new(vertex_size: usize, index_size: usize, offset: usize) -> Self {
+impl<A: VirtualMalloc<AllocationRequest = usize>, const N: usize> VirtualMalloc
+    for MeshVMallocMultiBuffer<A, N>
+{
+    type Allocation = MultiBufferMeshAllocation<A>;
+    type AllocationRequest = MultiBufferAllocationRequest;
+    fn new(size: usize, offset: usize) -> Self {
         Self {
-            virtual_buffers: array::from_fn(|i| {
-                MeshVMalloc::new(vertex_size, offset, index_size, offset)
-            }),
+            virtual_buffers: array::from_fn(|_| MeshVMalloc::new(size, offset)),
         }
     }
-    pub fn alloc(
-        &mut self,
-        req: MultiBufferAllocationRequest,
-    ) -> Result<MultiBufferMeshAllocation<A>, MallocError> {
-        for (i, buffer_malloc) in self.virtual_buffers.iter_mut().enumerate() {
-            let Ok((vertex_offset, index_offset)) =
-                buffer_malloc.alloc(req.vertex_size, req.index_size)
-            else {
-                continue;
-            };
-            return Ok(MultiBufferMeshAllocation {
-                buffer_index: i,
-                vertex_offset,
-                vertex_size: req.vertex_size,
-                index_offset,
-                index_size: req.index_size,
-            });
-        }
-        Err(MallocError::OutOfMemory)
+    fn alloc(&mut self, req: Self::AllocationRequest) -> Result<Self::Allocation, MallocError> {
+        let buffer_index = (req.id % N as u128) as usize;
+        let allocation = self.virtual_buffers[buffer_index]
+            .alloc((req.vertex_size, req.index_size))
+            .ok()
+            .ok_or(MallocError::OutOfMemory)?;
+        Ok(MultiBufferMeshAllocation {
+            buffer_index,
+            vertex_offset: allocation.0,
+            vertex_size: req.vertex_size,
+            index_offset: allocation.1,
+            index_size: req.index_size,
+        })
     }
 
-    pub fn free(&mut self, allocation: MultiBufferMeshAllocation<A>) -> Result<(), MallocError> {
+    fn free(&mut self, allocation: Self::Allocation) -> Result<(), MallocError> {
         let buff = self
             .virtual_buffers
             .get_mut(allocation.buffer_index)
             .unwrap();
-        buff.free(allocation.vertex_offset, allocation.index_offset)?;
+        buff.free((allocation.vertex_offset, allocation.index_offset))?;
         Ok(())
     }
 }

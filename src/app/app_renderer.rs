@@ -2,7 +2,7 @@ use crate::app::buffer_managers::{ChunkComputeManager, ChunkRenderManager, Compu
 use crate::renderer::builder::RendererAtlas;
 use crate::renderer::gpu::{
     GPUChunkEntryBuffer, GPUChunkEntryHeader, MeshVMallocMultiBuffer, MultiBufferAllocationRequest,
-    MultiBufferMeshAllocation, VMallocFirstFit,
+    MultiBufferMeshAllocation, VMallocFirstFit, VirtualMalloc,
 };
 use crate::renderer::resources;
 use crate::renderer::{Index, Renderer, RendererBuilder, Vertex};
@@ -50,6 +50,7 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
             let vertex_count = face_count * 4;
             let index_count = face_count * 6;
             let alloc_request = MultiBufferAllocationRequest {
+                id: chunk.id,
                 vertex_size: vertex_count,
                 index_size: index_count,
             };
@@ -67,12 +68,6 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
             self.staged_chunks.insert(chunk_pos, header.clone());
             chunk_entries.insert(header, chunk.blocks);
         }
-
-        self.renderer.write_buffer(
-            &self.staging_chunk_buff,
-            0,
-            &bytemuck::cast_slice(&chunk_entries),
-        );
 
         // self.chunk_malloc.vertex.draw_cli();
     }
@@ -116,18 +111,15 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
             0u64,
             bytemuck::cast_slice(&[view_proj]),
         );
-        
-        let buffer_commands: [Vec<DrawIndexedIndirectArgs>; BUFF_N] = [const { Vec::new() }; BUFF_N];
-        let multi_draw_instructions = self.chunk_render.write_commands_to_indirect_buffer(
-            &self.renderer,
-            buffer_commands,
-        );
 
-        self.chunk_render.multi_draw(
-            &self.renderer,
-            &mut render_pass,
-            multi_draw_instructions,
-        );
+        let buffer_commands: [Vec<DrawIndexedIndirectArgs>; BUFF_N] =
+            [const { Vec::new() }; BUFF_N];
+        let multi_draw_instructions = self
+            .chunk_render
+            .write_commands_to_indirect_buffer(&self.renderer, buffer_commands);
+
+        self.chunk_render
+            .multi_draw(&self.renderer, &mut render_pass, multi_draw_instructions);
     }
 
     pub fn render(&mut self, camera: &vtypes::Camera) -> Result<(), wgpu::SurfaceError> {
@@ -214,7 +206,7 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
                 temp_size,
                 wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             )
-        }
+        },
     );
 
     let chunk_compute = ChunkComputeManager::<STAGING_BUFF_N>::init(
@@ -253,11 +245,7 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
         },
     );
 
-    let chunk_malloc = MeshVMallocMultiBuffer::<VMallocFirstFit, BUFF_N>::new(
-        temp_size as usize / Vertex::size(),
-        temp_size as usize / size_of::<Index>(),
-        VOID_MESH_OFFSET,
-    );
+    let chunk_malloc = MeshVMallocMultiBuffer::new(temp_size as usize, VOID_MESH_OFFSET);
 
     AppRenderer {
         renderer,

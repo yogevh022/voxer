@@ -1,5 +1,5 @@
 use crate::renderer::gpu::malloc::common::{DebugFmtMemSlot, VirtualMemSlot, malloc_fmt};
-use crate::renderer::gpu::malloc::virtual_malloc::{MallocError, VirtualMalloc, VirtualMallocType};
+use crate::renderer::gpu::malloc::virtual_malloc::{MallocError, VirtualMalloc};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::Write;
@@ -11,11 +11,9 @@ pub struct VMallocFirstFit {
     pub used_blocks: HashMap<usize, VirtualMemSlot>,
 }
 
-impl VirtualMallocType for VMallocFirstFit {
-    type Allocation = usize;
-}
-
 impl VirtualMalloc for VMallocFirstFit {
+    type Allocation = usize;
+    type AllocationRequest = usize;
     fn new(arena_size: usize, arena_offset: usize) -> Self {
         let initial_slot = VirtualMemSlot {
             size: arena_size,
@@ -28,7 +26,7 @@ impl VirtualMalloc for VMallocFirstFit {
             used_blocks: HashMap::new(),
         }
     }
-    fn alloc(&mut self, size: usize) -> Result<usize, MallocError> {
+    fn alloc(&mut self, size: Self::AllocationRequest) -> Result<Self::Allocation, MallocError> {
         let available_slot = self
             .free_blocks
             .iter()
@@ -56,7 +54,7 @@ impl VirtualMalloc for VMallocFirstFit {
         Ok(slot_offset)
     }
 
-    fn free(&mut self, alloc_index: usize) -> Result<(), MallocError> {
+    fn free(&mut self, alloc_index: Self::Allocation) -> Result<(), MallocError> {
         let slot_opt = self.used_blocks.remove(&alloc_index);
         let mut slot = slot_opt.ok_or(MallocError::InvalidAllocation)?;
         let next_index = alloc_index + slot.size;

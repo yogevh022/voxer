@@ -1,6 +1,7 @@
 use crate::compute;
 use crate::compute::array::Array3D;
 use crate::world::types::{Block, BlockBytewise, CHUNK_DIM, CHUNK_SLICE, ChunkBlocks};
+use glam::IVec3;
 use std::array;
 
 pub const TRANSPARENT_LAYER_BITS: [u16; CHUNK_DIM] = [0u16; CHUNK_DIM];
@@ -10,6 +11,10 @@ pub fn face_count(blocks: &ChunkBlocks) -> usize {
 
     let faces = faces(packed_blocks);
     faces.iter().map(|b| b.count_ones() as usize).sum::<usize>()
+}
+
+pub fn position_to_id(position: IVec3) -> u128 {
+    ((position.x as u128) << 64) | ((position.y as u128) << 32) | (position.z as u128)
 }
 
 fn faces(packed_blocks: [u16; CHUNK_SLICE]) -> [u16; CHUNK_SLICE * 3] {

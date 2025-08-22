@@ -4,13 +4,11 @@ pub enum MallocError {
     InvalidAllocation,
 }
 
-pub trait VirtualMallocType {
+pub trait VirtualMalloc {
     type Allocation;
-}
-
-pub trait VirtualMalloc: VirtualMallocType {
+    type AllocationRequest;
     fn new(size: usize, offset: usize) -> Self;
-    fn alloc(&mut self, size: usize) -> Result<Self::Allocation, MallocError>;
+    fn alloc(&mut self, size: Self::AllocationRequest) -> Result<Self::Allocation, MallocError>;
     fn free(&mut self, alloc_index: Self::Allocation) -> Result<(), MallocError>;
     fn total_free(&self) -> usize {
         unimplemented!()
