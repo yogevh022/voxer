@@ -24,7 +24,6 @@ pub enum BufferType {
     Vertex,
     Index,
     MMat,
-    Chunk,
 }
 
 #[derive(Default, Clone, Copy)]

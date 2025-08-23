@@ -1,38 +1,3 @@
-pub fn create_bind_group(
-    device: &wgpu::Device,
-    entries: &[wgpu::BindGroupEntry],
-) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-    let texture_bind_group_layout =
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("texture_bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("texture_bind_group"),
-        layout: &texture_bind_group_layout,
-        entries,
-    });
-    (texture_bind_group_layout, bind_group)
-}
-
 pub fn create_diffuse(
     device: &wgpu::Device,
     queue: &wgpu::Queue,

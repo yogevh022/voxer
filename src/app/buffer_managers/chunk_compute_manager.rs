@@ -29,7 +29,7 @@ impl<const S: usize> ChunkComputeManager<S> {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(("chunk_compute_bind_group_".to_owned() + &*i.to_string()).as_str()),
                 layout: &layout,
-                entries: &resources::bind_group::index_based_entries([
+                entries: &resources::utils::index_based_entries([
                     staging_chunk_buffers[i].as_entire_binding(),
                     staging_vertex_buffers[i].as_entire_binding(),
                     staging_index_buffers[i].as_entire_binding(),
@@ -47,7 +47,11 @@ impl<const S: usize> ChunkComputeManager<S> {
         }
     }
 
-    pub fn write_to_staging_chunks(&self, renderer: &Renderer<'_>, write_instructions: &[WriteInstruction<'_>; S]) {
+    pub fn write_to_staging_chunks(
+        &self,
+        renderer: &Renderer<'_>,
+        write_instructions: &[WriteInstruction<'_>; S],
+    ) {
         for i in 0..S {
             renderer.write_buffer(
                 &self.staging_chunk_buffers[i],
@@ -60,17 +64,18 @@ impl<const S: usize> ChunkComputeManager<S> {
     pub fn dispatch_staging_workgroups<const N: usize>(
         &self,
         renderer: &Renderer<'_>,
-        chunk_buffers: &[wgpu::Buffer; N],
         mmat_buffers: &[wgpu::Buffer; N],
         vertex_buffers: &[wgpu::Buffer; N],
         index_buffers: &[wgpu::Buffer; N],
         compute_commands: [Vec<ComputeInstruction>; N],
     ) {
         for (i, compute_instruction) in compute_commands.into_iter().enumerate() {
-            let mut encoder = create_encoder(
-                renderer,
-                ("dispatch_staging_".to_owned() + &*i.to_string()).as_str(),
-            );
+            let mut encoder =
+                renderer
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("render_encoder"),
+                    });
             {
                 let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                     label: Some(("compute_pass_".to_owned() + &*i.to_string()).as_str()),
@@ -107,13 +112,6 @@ impl<const S: usize> ChunkComputeManager<S> {
                         inst.byte_offset as u64,
                         inst.byte_length as u64,
                     ),
-                    BufferType::Chunk => encoder.copy_buffer_to_buffer(
-                        &self.staging_chunk_buffers[inst.target_staging_buffer],
-                        inst.byte_offset as u64,
-                        &chunk_buffers[i],
-                        inst.byte_offset as u64,
-                        inst.byte_length as u64,
-                    ),
                 }
             }
             renderer.queue.submit(Some(encoder.finish()));
@@ -122,13 +120,6 @@ impl<const S: usize> ChunkComputeManager<S> {
             });
         }
     }
-}
-
-fn create_encoder(renderer: &Renderer<'_>, label: &str) -> wgpu::CommandEncoder {
-    // fixme perhaps move this
-    renderer
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
 }
 
 pub fn chunk_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
@@ -184,10 +175,18 @@ pub fn create_chunk_compute_pipeline(
     bind_group_layouts: &[&wgpu::BindGroupLayout],
 ) -> wgpu::ComputePipeline {
     let shader = resources::shader::create(device, resources::shader::chunk_meshing().into());
-    resources::pipeline::create_compute(
-        device,
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("chunk_compute_pipeline_layout"),
         bind_group_layouts,
-        &shader,
-        "chunk_compute_pipeline",
-    )
+        push_constant_ranges: &[],
+    });
+    
+    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("chunk_compute_pipeline"),
+        layout: Some(&pipeline_layout),
+        module: &shader,
+        entry_point: Some("compute_main"),
+        compilation_options: Default::default(),
+        cache: None,
+    })
 }

@@ -36,9 +36,6 @@ pub struct AppRenderer<'window, const BUFF_N: usize> {
         [Vec<(usize, MultiBufferMeshAllocation<VMallocFirstFit>)>; BUFF_N],
     pub multi_buffer_remove_queue: Vec<MultiBufferMeshAllocation<VMallocFirstFit>>,
 
-    pub transform_mats_bind_group: wgpu::BindGroup,
-    pub texture_atlas: RendererAtlas,
-
     pub render_pipeline: wgpu::RenderPipeline,
 }
 
@@ -86,7 +83,6 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
         mem::swap(&mut compute_instructions, &mut self.compute_instructions);
         self.chunk_compute.dispatch_staging_workgroups(
             &self.renderer,
-            &self.chunk_render.chunk_buffers,
             &self.chunk_render.mmat_buffers,
             &self.chunk_render.vertex_buffers,
             &self.chunk_render.index_buffers,
@@ -103,7 +99,8 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
         let mut render_pass =
             resources::render_pass::begin(encoder, view, &self.renderer.depth_texture_view);
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &self.texture_atlas.bind_group, &[]);
+        render_pass.set_bind_group(0, &self.renderer.bind_groups.texture_atlas, &[]);
+        render_pass.set_bind_group(1, &self.renderer.bind_groups.view_projection, &[]);
 
         let view_proj = camera.get_view_projection().to_cols_array();
         self.renderer.write_buffer(
@@ -128,7 +125,13 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = create_encoder(&self.renderer.device);
+        let mut encoder =
+            self.renderer
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("render_encoder"),
+                });
+
         self.encode_render_pass(&mut encoder, &view, camera);
 
         self.renderer.queue.submit(Some(encoder.finish()));
@@ -143,38 +146,16 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
     render_distance: f32,
 ) -> AppRenderer<'a, BUFF_N> {
     let renderer_builder = RendererBuilder::new(window);
-    let texture_atlas = renderer_builder.make_atlas(get_atlas_image());
 
     // >upper bound of max chunks to be buffered at once
     let max_rendered_chunks = compute::geo::max_discrete_sphere_pts(render_distance);
     let temp_size = (compute::MIB * 128) as u64;
 
-    let mmat_buffer = RendererBuilder::make_buffer(
-        &renderer_builder.device.as_ref().unwrap(),
-        "mmat_buffer",
-        (max_rendered_chunks * size_of::<[[f32; 4]; 4]>()) as u64,
-        wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
-    );
-
     let surface_format = renderer_builder.surface_format.unwrap();
     let renderer = renderer_builder.build();
 
-    let (transform_mats_bind_group_layout, transform_mats_bind_group) = transform_matrices_binds(
-        &renderer.device,
-        &renderer.view_projection_buffer,
-        &mmat_buffer,
-    );
-    let render_pipeline = RendererBuilder::make_render_pipeline(
-        &renderer.device,
-        surface_format,
-        resources::shader::main_shader().into(),
-        &[
-            &texture_atlas.texture_bind_group_layout,
-            &transform_mats_bind_group_layout,
-        ],
-    );
-
     let chunk_render = ChunkRenderManager::<BUFF_N>::init(
+        &renderer,
         |i| {
             RendererBuilder::make_buffer(
                 &renderer.device,
@@ -195,18 +176,23 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
             RendererBuilder::make_buffer(
                 &renderer.device,
                 &("mmat_buffer_".to_string() + &i.to_string()),
-                temp_size,
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                (max_rendered_chunks * size_of::<[[f32; 4]; 4]>()) as u64,
+                wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::VERTEX
+                    | wgpu::BufferUsages::STORAGE,
             )
         },
-        |i| {
-            RendererBuilder::make_buffer(
-                &renderer.device,
-                &("chunk_buffer_".to_string() + &i.to_string()),
-                temp_size,
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            )
-        },
+    );
+
+    let render_pipeline = RendererBuilder::make_render_pipeline(
+        &renderer.device,
+        surface_format,
+        resources::shader::main_shader().into(),
+        &[
+            &renderer.layouts.texture_atlas,   // 0
+            &renderer.layouts.view_projection, // 1
+            &renderer.layouts.mmat,            // 2
+        ],
     );
 
     let chunk_compute = ChunkComputeManager::<STAGING_BUFF_N>::init(
@@ -239,7 +225,7 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
             RendererBuilder::make_buffer(
                 &renderer.device,
                 &("staging_mmat_buffer_".to_string() + &i.to_string()),
-                temp_size,
+                (max_rendered_chunks * size_of::<[[f32; 4]; 4]>()) as u64,
                 wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             )
         },
@@ -258,38 +244,8 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
         chunk_malloc,
         multi_buffer_allocations: array::from_fn(|_| vec![]),
         multi_buffer_remove_queue: vec![],
-        transform_mats_bind_group,
-        texture_atlas,
         render_pipeline,
     }
-}
-
-pub fn transform_matrices_binds(
-    device: &wgpu::Device,
-    view_proj_buffer: &wgpu::Buffer,
-    model_mat_buffer: &wgpu::Buffer,
-) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-    let view_projection_binding = wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-        buffer: view_proj_buffer,
-        offset: 0,
-        size: std::num::NonZeroU64::new(view_proj_buffer.size()),
-    });
-    resources::transform_matrices::create_bind_group(
-        device,
-        &resources::bind_group::index_based_entries([
-            view_projection_binding,              // 0
-            model_mat_buffer.as_entire_binding(), // 1
-        ]),
-    )
-}
-
-pub fn indirect_buffer(device: &wgpu::Device, size: u64) -> wgpu::Buffer {
-    device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("temp_indirect_buffer"),
-        size,
-        usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    })
 }
 
 pub fn get_atlas_image() -> image::RgbaImage {
@@ -305,10 +261,4 @@ pub fn get_atlas_image() -> image::RgbaImage {
     let atlas_image = image::open(project_root.join("src/renderer/texture/images/atlas.png"))
         .expect("failed to load atlas.png");
     atlas_image.to_rgba8()
-}
-
-pub fn create_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
-    device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("render_encoder"),
-    })
 }

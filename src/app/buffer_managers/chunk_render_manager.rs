@@ -1,27 +1,42 @@
 use super::MultiDrawInstruction;
-use crate::renderer::Renderer;
+use crate::renderer::{Renderer, resources};
 use std::{array, mem};
 use wgpu::wgt::DrawIndexedIndirectArgs;
 
 pub struct ChunkRenderManager<const N: usize> {
     pub vertex_buffers: [wgpu::Buffer; N],
     pub index_buffers: [wgpu::Buffer; N],
-    pub chunk_buffers: [wgpu::Buffer; N],
     pub mmat_buffers: [wgpu::Buffer; N],
+    mmat_bind_groups: [wgpu::BindGroup; N],
 }
 
 impl<const N: usize> ChunkRenderManager<N> {
     pub fn init(
+        renderer: &Renderer<'_>,
         vertex_init_fn: impl Fn(usize) -> wgpu::Buffer,
         index_init_fn: impl Fn(usize) -> wgpu::Buffer,
-        chunk_init_fn: impl Fn(usize) -> wgpu::Buffer,
         mmat_init_fn: impl Fn(usize) -> wgpu::Buffer,
     ) -> Self {
+        let vertex_buffers = array::from_fn(|i| vertex_init_fn(i));
+        let index_buffers = array::from_fn(|i| index_init_fn(i));
+        let mmat_buffers = array::from_fn(|i| mmat_init_fn(i));
+
+        let mmat_bind_groups = array::from_fn(|i| {
+            renderer
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("transform_matrices_bind_group"),
+                    layout: &renderer.layouts.mmat,
+                    entries: &resources::utils::index_based_entries([
+                        mmat_buffers[i].as_entire_binding(), // 0
+                    ]),
+                })
+        });
         Self {
-            vertex_buffers: array::from_fn(|i| vertex_init_fn(i)),
-            index_buffers: array::from_fn(|i| index_init_fn(i)),
-            chunk_buffers: array::from_fn(|i| chunk_init_fn(i)),
-            mmat_buffers: array::from_fn(|i| mmat_init_fn(i)),
+            vertex_buffers,
+            index_buffers,
+            mmat_buffers,
+            mmat_bind_groups,
         }
     }
 
@@ -57,6 +72,7 @@ impl<const N: usize> ChunkRenderManager<N> {
             render_pass.set_vertex_buffer(0, self.vertex_buffers[i].slice(..));
             render_pass
                 .set_index_buffer(self.index_buffers[i].slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.set_bind_group(2, &self.mmat_bind_groups[i], &[]);
 
             render_pass.multi_draw_indexed_indirect(
                 &renderer.indirect_buffer,
