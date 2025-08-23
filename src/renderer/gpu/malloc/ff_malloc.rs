@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::Write;
 
+#[derive(Clone)]
 pub struct VMallocFirstFit {
     pub arena_size: usize,
     pub arena_offset: usize,

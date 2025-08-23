@@ -6,15 +6,15 @@ pub use chunk_render_manager::ChunkRenderManager;
 
 #[derive(Clone, Copy)]
 pub struct ComputeInstruction {
-    pub target_staging_buffer: usize,
     pub buffer_type: BufferType,
+    pub target_buffer: usize,
     pub byte_offset: usize,
     pub byte_length: usize,
 }
 
 #[derive(Clone, Copy)]
 pub struct WriteInstruction<'a> {
-    pub buffer_index: usize,
+    pub staging_index: usize,
     pub bytes: &'a [u8],
     pub offset: u64,
 }
@@ -27,6 +27,7 @@ pub enum BufferType {
 }
 
 #[derive(Default, Clone, Copy)]
+#[derive(Debug)]
 pub struct MultiDrawInstruction {
     pub offset: usize,
     pub count: usize,

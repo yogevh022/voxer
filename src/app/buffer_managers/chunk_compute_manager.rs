@@ -1,6 +1,9 @@
 use super::{BufferType, ComputeInstruction, WriteInstruction};
 use crate::renderer::{Renderer, resources};
+use parking_lot::RwLock;
 use std::array;
+use std::sync::Arc;
+use wgpu::util::DrawIndexedIndirectArgs;
 
 pub struct ChunkComputeManager<const S: usize> {
     pipeline: wgpu::ComputePipeline,
@@ -50,11 +53,14 @@ impl<const S: usize> ChunkComputeManager<S> {
     pub fn write_to_staging_chunks(
         &self,
         renderer: &Renderer<'_>,
-        write_instructions: &[WriteInstruction<'_>; S],
+        write_instructions: [WriteInstruction<'_>; S],
     ) {
         for i in 0..S {
+            if write_instructions[i].bytes.is_empty() {
+                continue;
+            }
             renderer.write_buffer(
-                &self.staging_chunk_buffers[i],
+                &self.staging_chunk_buffers[write_instructions[i].staging_index],
                 write_instructions[i].offset,
                 write_instructions[i].bytes,
             );
@@ -67,9 +73,11 @@ impl<const S: usize> ChunkComputeManager<S> {
         mmat_buffers: &[wgpu::Buffer; N],
         vertex_buffers: &[wgpu::Buffer; N],
         index_buffers: &[wgpu::Buffer; N],
-        compute_commands: [Vec<ComputeInstruction>; N],
+        compute_commands: [Vec<ComputeInstruction>; S],
+        mut local_draw_delta: [[Vec<DrawIndexedIndirectArgs>; N]; S],
+        draw_delta: &Arc<RwLock<[Vec<DrawIndexedIndirectArgs>; N]>>,
     ) {
-        for (i, compute_instruction) in compute_commands.into_iter().enumerate() {
+        for (staging_i, compute_instruction) in compute_commands.into_iter().enumerate() {
             let mut encoder =
                 renderer
                     .device
@@ -78,45 +86,57 @@ impl<const S: usize> ChunkComputeManager<S> {
                     });
             {
                 let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some(("compute_pass_".to_owned() + &*i.to_string()).as_str()),
+                    label: Some(("compute_pass_".to_owned() + &*staging_i.to_string()).as_str()),
                     timestamp_writes: None,
                 });
                 compute_pass.set_pipeline(&self.pipeline);
-                compute_pass.set_bind_group(0, &self.bind_groups[i], &[]);
-                compute_pass.dispatch_workgroups(compute_instruction.len() as u32, i as u32, 1);
+                compute_pass.set_bind_group(0, &self.bind_groups[staging_i], &[]);
+                compute_pass.dispatch_workgroups(
+                    compute_instruction.len() as u32,
+                    staging_i as u32,
+                    1,
+                );
             }
             for inst in compute_instruction {
                 match inst.buffer_type {
                     BufferType::Vertex => {
                         encoder.copy_buffer_to_buffer(
-                            &self.staging_vertex_buffers[inst.target_staging_buffer],
+                            &self.staging_vertex_buffers[staging_i],
                             inst.byte_offset as u64,
-                            &vertex_buffers[i],
+                            &vertex_buffers[inst.target_buffer],
                             inst.byte_offset as u64,
                             inst.byte_length as u64,
                         );
                     }
                     BufferType::Index => {
                         encoder.copy_buffer_to_buffer(
-                            &self.staging_index_buffers[inst.target_staging_buffer],
+                            &self.staging_index_buffers[staging_i],
                             inst.byte_offset as u64,
-                            &index_buffers[i],
+                            &index_buffers[inst.target_buffer],
                             inst.byte_offset as u64,
                             inst.byte_length as u64,
                         );
                     }
-                    BufferType::MMat => encoder.copy_buffer_to_buffer(
-                        &self.staging_mmat_buffers[inst.target_staging_buffer],
-                        inst.byte_offset as u64,
-                        &mmat_buffers[i],
-                        inst.byte_offset as u64,
-                        inst.byte_length as u64,
-                    ),
+                    BufferType::MMat => {
+                        encoder.copy_buffer_to_buffer(
+                            &self.staging_mmat_buffers[staging_i],
+                            inst.byte_offset as u64,
+                            &mmat_buffers[inst.target_buffer],
+                            inst.byte_offset as u64,
+                            inst.byte_length as u64,
+                        );
+                    }
                 }
             }
             renderer.queue.submit(Some(encoder.finish()));
+            let mut staging_i_delta = [const { Vec::new() }; N];
+            std::mem::swap(&mut staging_i_delta, &mut local_draw_delta[staging_i]);
+            let target_draw_args_ref = draw_delta.clone();
             renderer.queue.on_submitted_work_done(move || {
-                // todo on submit
+                let mut draw_args_lock = target_draw_args_ref.write();
+                for (i, args) in staging_i_delta.into_iter().enumerate() {
+                    draw_args_lock[i].extend(args);
+                }
             });
         }
     }
@@ -130,7 +150,7 @@ pub fn chunk_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 binding: 0, // chunk block data
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
@@ -180,7 +200,7 @@ pub fn create_chunk_compute_pipeline(
         bind_group_layouts,
         push_constant_ranges: &[],
     });
-    
+
     device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: Some("chunk_compute_pipeline"),
         layout: Some(&pipeline_layout),

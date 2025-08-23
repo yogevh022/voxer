@@ -1,6 +1,6 @@
 
 @group(0) @binding(0)
-var<storage, read_write> chunk_entries: ChunkEntryBuffer;
+var<storage, read> chunk_entries: ChunkEntryBuffer;
 @group(0) @binding(1)
 var<storage, read_write> staging_vertex_buffer: VertexBuffer;
 @group(0) @binding(2)

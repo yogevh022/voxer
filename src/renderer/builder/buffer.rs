@@ -2,7 +2,6 @@ use super::{RendererBuilder, resources};
 use wgpu::BufferUsages;
 
 impl RendererBuilder<'_> {
-
     pub fn make_buffer(
         device: &wgpu::Device,
         label: &str,

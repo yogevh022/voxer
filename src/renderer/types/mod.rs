@@ -1,6 +1,5 @@
 mod index;
 mod mesh;
-mod uniforms;
 mod vertex;
 
 pub use index::Index;

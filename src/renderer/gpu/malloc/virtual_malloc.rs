@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 #[derive(Debug)]
 pub enum MallocError {
     OutOfMemory,
@@ -5,8 +7,8 @@ pub enum MallocError {
 }
 
 pub trait VirtualMalloc {
-    type Allocation;
-    type AllocationRequest;
+    type Allocation: Copy + Clone + Debug;
+    type AllocationRequest: Copy + Clone + Debug;
     fn new(size: usize, offset: usize) -> Self;
     fn alloc(&mut self, size: Self::AllocationRequest) -> Result<Self::Allocation, MallocError>;
     fn free(&mut self, alloc_index: Self::Allocation) -> Result<(), MallocError>;

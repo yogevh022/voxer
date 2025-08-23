@@ -1,4 +1,5 @@
 use super::MultiDrawInstruction;
+use crate::compute;
 use crate::renderer::{Renderer, resources};
 use std::{array, mem};
 use wgpu::wgt::DrawIndexedIndirectArgs;
@@ -43,21 +44,35 @@ impl<const N: usize> ChunkRenderManager<N> {
     pub fn write_commands_to_indirect_buffer(
         &self,
         renderer: &Renderer<'_>,
-        buffer_commands: [Vec<DrawIndexedIndirectArgs>; N],
+        buffer_commands: &[Vec<DrawIndexedIndirectArgs>; N],
     ) -> [MultiDrawInstruction; N] {
-        let mut indirect_commands: Vec<_> = Vec::new();
+        let mut command_count = 0;
         let mut indirect_offsets = [MultiDrawInstruction::default(); N];
-        for (i, command) in buffer_commands.into_iter().enumerate() {
+        for (i, command) in buffer_commands.iter().enumerate() {
             indirect_offsets[i] = MultiDrawInstruction {
-                offset: indirect_commands.len(),
+                offset: command_count + compute::num::mod_complement(command_count, 4),
                 count: command.len(),
             };
-            indirect_commands.extend(command.into_iter());
+            command_count += command.len();
         }
+
+        command_count = 0;
+        let padding_command = DrawIndexedIndirectArgs::default();
+        let flat_commands = buffer_commands
+            .iter()
+            .enumerate()
+            .flat_map(|(i, x)| {
+                let padding_iter = std::iter::repeat_with(|| &padding_command)
+                    .take(compute::num::mod_complement(command_count, 4));
+                command_count += x.len();
+                padding_iter.chain(x.iter()).copied()
+            })
+            .collect::<Vec<_>>();
+
         renderer.write_buffer(
             &renderer.indirect_buffer,
             0,
-            bytemuck::cast_slice(&indirect_commands),
+            bytemuck::cast_slice(&flat_commands),
         );
         indirect_offsets
     }

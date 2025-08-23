@@ -1,6 +1,6 @@
 use super::{RendererBuilder, resources};
-use std::borrow::Cow;
 use crate::renderer::Vertex;
+use std::borrow::Cow;
 
 impl RendererBuilder<'_> {
     pub fn make_render_pipeline(
@@ -10,11 +10,12 @@ impl RendererBuilder<'_> {
         bind_group_layouts: &[&wgpu::BindGroupLayout],
     ) -> wgpu::RenderPipeline {
         let shader = resources::shader::create(device, shader_source);
-        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("render_pipeline_layout"),
-            bind_group_layouts,
-            push_constant_ranges: &[],
-        });
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("render_pipeline_layout"),
+                bind_group_layouts,
+                push_constant_ranges: &[],
+            });
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("render_pipeline"),

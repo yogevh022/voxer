@@ -10,3 +10,5 @@ pub use mesh_malloc_multi_buffer::{
     MeshVMallocMultiBuffer, MultiBufferAllocationRequest, MultiBufferMeshAllocation,
 };
 pub use virtual_malloc::VirtualMalloc;
+
+pub type VoxerMultiBufferMeshAllocation = MultiBufferMeshAllocation;

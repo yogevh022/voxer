@@ -1,3 +1,4 @@
+use crate::renderer::gpu::VoxerMultiBufferMeshAllocation;
 use crate::world::types::{CHUNK_DIM, Chunk, ChunkBlocks, PACKED_CHUNK_DIM};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
@@ -49,30 +50,21 @@ impl GPUChunkEntry {
 #[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkEntryHeader {
-    pub vertex_offset: u32, // in position not bytes
-    pub index_offset: u32,  // in position not bytes
-    pub vertex_count: u32,
-    pub index_count: u32,
-    pub slab_index: u32,       // 20
-    _pad0: [u32; 3],           // pad to 32
-    pub chunk_position: IVec3, // 44
-    _pad3: u32,                // pad to 48
+    pub allocation: VoxerMultiBufferMeshAllocation, // 16
+    pub slab_index: u32,                            // 20
+    _pad0: [u32; 3],                                // pad to 32
+    pub chunk_position: IVec3,                      // 44
+    _pad3: u32,                                     // pad to 48
 }
 
 impl GPUChunkEntryHeader {
     pub fn new(
-        vertex_offset: u32,
-        index_offset: u32,
-        vertex_count: u32,
-        index_count: u32,
+        allocation: VoxerMultiBufferMeshAllocation,
         slab_index: u32,
         chunk_position: IVec3,
     ) -> Self {
         Self {
-            vertex_offset,
-            index_offset,
-            vertex_count,
-            index_count,
+            allocation,
             slab_index,
             _pad0: [0; 3],
             chunk_position,
@@ -80,32 +72,11 @@ impl GPUChunkEntryHeader {
         }
     }
 
-    // pub fn from_chunk_data<A: VirtualMalloc, const N: usize>(
-    //     malloc: &mut MeshVMallocMultiBuffer<A, N>,
-    //     chunk: &Chunk,
-    //     chunk_position: IVec3,
-    //     slab_index: u32,
-    // ) -> Self {
-    //     let face_count = compute::chunk::face_count(&chunk.blocks);
-    //     let vertex_count = face_count * 4;
-    //     let index_count = face_count * 6;
-    //
-    //     let index_offset = malloc.index.alloc(index_count).unwrap();
-    //     Self::new(
-    //         vertex_offset as u32,
-    //         index_offset as u32,
-    //         vertex_count as u32,
-    //         index_count as u32,
-    //         slab_index,
-    //         chunk_position,
-    //     )
-    // }
-
     pub fn draw_indexed_indirect_args(&self) -> DrawIndexedIndirectArgs {
         DrawIndexedIndirectArgs {
-            index_count: self.index_count,
+            index_count: self.allocation.index_size as u32,
             instance_count: 1,
-            first_index: self.index_offset,
+            first_index: self.allocation.index_offset as u32,
             base_vertex: 0, // vertices are indexed from 0, void and chunk offsets are baked into the indices
             first_instance: self.slab_index,
         }

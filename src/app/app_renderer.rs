@@ -1,47 +1,43 @@
-use crate::app::buffer_managers::{ChunkComputeManager, ChunkRenderManager, ComputeInstruction};
-use crate::renderer::builder::RendererAtlas;
+use crate::app::buffer_managers::{
+    BufferType, ChunkComputeManager, ChunkRenderManager, ComputeInstruction, WriteInstruction,
+};
 use crate::renderer::gpu::{
-    GPUChunkEntryBuffer, GPUChunkEntryHeader, MeshVMallocMultiBuffer, MultiBufferAllocationRequest,
-    MultiBufferMeshAllocation, VMallocFirstFit, VirtualMalloc,
+    GPUChunkEntryHeader, MeshVMallocMultiBuffer, MultiBufferAllocationRequest, VirtualMalloc,
 };
 use crate::renderer::resources;
 use crate::renderer::{Index, Renderer, RendererBuilder, Vertex};
 use crate::world::types::Chunk;
 use crate::{call_every, compute, vtypes};
-use glam::IVec3;
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, RwLock};
+use glam::{IVec3, Mat4};
+use parking_lot::RwLock;
+use std::sync::Arc;
 use std::{array, mem};
-use wgpu::wgt::DrawIndexedIndirectArgs;
+use wgpu::util::DrawIndexedIndirectArgs;
 use winit::window::Window;
 
 const VOID_MESH_OFFSET: usize = 8;
 
-const STAGING_BUFF_N: usize = 2; // fixme temp number
+const STAGING_BUFF_N: usize = 1; // fixme temp number
 
 pub struct AppRenderer<'window, const BUFF_N: usize> {
     pub renderer: Renderer<'window>,
 
     pub chunk_render: ChunkRenderManager<BUFF_N>,
     pub chunk_compute: ChunkComputeManager<STAGING_BUFF_N>,
+    pub chunk_malloc: MeshVMallocMultiBuffer<BUFF_N>,
 
-    pub compute_instructions: [Vec<ComputeInstruction>; BUFF_N],
-
-    pub staged_chunks: HashMap<IVec3, GPUChunkEntryHeader>,
-    pub loaded_chunks: Arc<RwLock<HashMap<IVec3, GPUChunkEntryHeader>>>,
-    pub remove_queue: HashSet<IVec3>,
-
-    pub chunk_malloc: MeshVMallocMultiBuffer<VMallocFirstFit, BUFF_N>,
-    pub multi_buffer_allocations:
-        [Vec<(usize, MultiBufferMeshAllocation<VMallocFirstFit>)>; BUFF_N],
-    pub multi_buffer_remove_queue: Vec<MultiBufferMeshAllocation<VMallocFirstFit>>,
+    pub current_draw: [Vec<DrawIndexedIndirectArgs>; BUFF_N],
+    pub draw_delta: Arc<RwLock<[Vec<DrawIndexedIndirectArgs>; BUFF_N]>>,
 
     pub render_pipeline: wgpu::RenderPipeline,
 }
 
 impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
     pub fn write_new_chunks(&mut self, chunks: Vec<(usize, IVec3, Chunk)>) {
-        let mut chunk_entries = GPUChunkEntryBuffer::new(chunks.len());
+        self.update_current_draw();
+        let mut chunk_buffer_entries = [const { Vec::new() }; BUFF_N];
+        let mut chunk_buffer_compute_instructions = [const { Vec::new() }; STAGING_BUFF_N];
+        let mut draw_args_delta = [const { [const { Vec::new() }; BUFF_N] }; STAGING_BUFF_N];
         for (slab_index, chunk_pos, chunk) in chunks.into_iter() {
             let face_count = compute::chunk::face_count(&chunk.blocks);
             let vertex_count = face_count * 4;
@@ -51,42 +47,68 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
                 vertex_size: vertex_count,
                 index_size: index_count,
             };
-            let mb_mesh_malloc = self.chunk_malloc.alloc(alloc_request).unwrap();
-            let header = GPUChunkEntryHeader::new(
-                mb_mesh_malloc.vertex_offset as u32,
-                mb_mesh_malloc.index_offset as u32,
-                vertex_count as u32,
-                index_count as u32,
-                slab_index as u32,
-                chunk_pos,
-            );
-            self.multi_buffer_allocations[mb_mesh_malloc.buffer_index]
-                .push((slab_index, mb_mesh_malloc));
-            self.staged_chunks.insert(chunk_pos, header.clone());
-            chunk_entries.insert(header, chunk.blocks);
+            let (alloc_buffer_index, alloc) = self.chunk_malloc.alloc(alloc_request).unwrap();
+            let header = GPUChunkEntryHeader::new(alloc, slab_index as u32, chunk_pos);
+            draw_args_delta[0][alloc_buffer_index].push(header.draw_indexed_indirect_args());
+            chunk_buffer_entries[alloc_buffer_index].push(header);
+            chunk_buffer_compute_instructions[0].push(ComputeInstruction {
+                buffer_type: BufferType::Vertex,
+                target_buffer: alloc_buffer_index,
+                byte_offset: alloc.vertex_offset * size_of::<Vertex>(),
+                byte_length: alloc.vertex_size * size_of::<Vertex>(),
+            });
+            chunk_buffer_compute_instructions[0].push(ComputeInstruction {
+                buffer_type: BufferType::Index,
+                target_buffer: alloc_buffer_index,
+                byte_offset: alloc.index_offset * size_of::<Index>(),
+                byte_length: alloc.index_size * size_of::<Index>(),
+            });
+            chunk_buffer_compute_instructions[0].push(ComputeInstruction {
+                buffer_type: BufferType::MMat,
+                target_buffer: alloc_buffer_index,
+                byte_offset: slab_index * size_of::<Mat4>(),
+                byte_length: size_of::<Mat4>(),
+            });
         }
 
-        // self.chunk_malloc.vertex.draw_cli();
+        let write_instructions: [WriteInstruction; STAGING_BUFF_N] = array::from_fn(|i| {
+            WriteInstruction {
+                staging_index: 0, // fixme always zero for now
+                bytes: bytemuck::cast_slice(&chunk_buffer_entries[i]),
+                offset: 0,
+            }
+        });
+
+        self.chunk_compute
+            .write_to_staging_chunks(&self.renderer, write_instructions);
+
+        self.compute_chunks(chunk_buffer_compute_instructions, draw_args_delta);
+    }
+
+    pub fn update_current_draw(&mut self) {
+        let mut delta_lock = self.draw_delta.write();
+        for i in 0..delta_lock.len() {
+            self.current_draw[i].extend(delta_lock[i].drain(..));
+        }
     }
 
     pub fn unload_chunks(&mut self, chunks: Vec<IVec3>) {
-        self.remove_queue.extend(chunks);
-        let mut loaded_chunks = self.loaded_chunks.write().unwrap();
-        for mesh_allocation in self.multi_buffer_remove_queue.drain(..) {
-            self.chunk_malloc.free(mesh_allocation).unwrap();
-        }
-        // self.gpu_vertex_malloc.draw_cli();
+
     }
 
-    pub fn compute_chunks(&mut self) {
-        let mut compute_instructions = [const { Vec::new() }; BUFF_N];
-        mem::swap(&mut compute_instructions, &mut self.compute_instructions);
+    fn compute_chunks(
+        &mut self,
+        compute_instructions: [Vec<ComputeInstruction>; STAGING_BUFF_N],
+        draw_args_delta: [[Vec<DrawIndexedIndirectArgs>; BUFF_N]; STAGING_BUFF_N],
+    ) {
         self.chunk_compute.dispatch_staging_workgroups(
             &self.renderer,
             &self.chunk_render.mmat_buffers,
             &self.chunk_render.vertex_buffers,
             &self.chunk_render.index_buffers,
             compute_instructions,
+            draw_args_delta,
+            &self.draw_delta,
         );
     }
 
@@ -109,12 +131,9 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
             bytemuck::cast_slice(&[view_proj]),
         );
 
-        let buffer_commands: [Vec<DrawIndexedIndirectArgs>; BUFF_N] =
-            [const { Vec::new() }; BUFF_N];
         let multi_draw_instructions = self
             .chunk_render
-            .write_commands_to_indirect_buffer(&self.renderer, buffer_commands);
-
+            .write_commands_to_indirect_buffer(&self.renderer, &self.current_draw);
         self.chunk_render
             .multi_draw(&self.renderer, &mut render_pass, multi_draw_instructions);
     }
@@ -176,7 +195,7 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
             RendererBuilder::make_buffer(
                 &renderer.device,
                 &("mmat_buffer_".to_string() + &i.to_string()),
-                (max_rendered_chunks * size_of::<[[f32; 4]; 4]>()) as u64,
+                (max_rendered_chunks * size_of::<Mat4>()) as u64,
                 wgpu::BufferUsages::COPY_DST
                     | wgpu::BufferUsages::VERTEX
                     | wgpu::BufferUsages::STORAGE,
@@ -202,7 +221,9 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
                 &renderer.device,
                 &("staging_chunk_buffer_".to_string() + &i.to_string()),
                 temp_size,
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST, // COPY_DST needed for some reason
             )
         },
         |i| {
@@ -225,7 +246,7 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
             RendererBuilder::make_buffer(
                 &renderer.device,
                 &("staging_mmat_buffer_".to_string() + &i.to_string()),
-                (max_rendered_chunks * size_of::<[[f32; 4]; 4]>()) as u64,
+                (max_rendered_chunks * size_of::<Mat4>()) as u64,
                 wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             )
         },
@@ -237,13 +258,9 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
         renderer,
         chunk_render,
         chunk_compute,
-        compute_instructions: array::from_fn(|_| vec![]),
-        staged_chunks: HashMap::new(),
-        loaded_chunks: Arc::new(RwLock::new(HashMap::new())),
-        remove_queue: HashSet::new(),
         chunk_malloc,
-        multi_buffer_allocations: array::from_fn(|_| vec![]),
-        multi_buffer_remove_queue: vec![],
+        current_draw: array::from_fn(|_| Vec::new()),
+        draw_delta: Arc::new(RwLock::new(array::from_fn(|_| Vec::new()))),
         render_pipeline,
     }
 }
