@@ -1,6 +1,8 @@
 use super::MultiDrawInstruction;
 use crate::compute;
 use crate::renderer::{Renderer, resources};
+use glam::IVec3;
+use std::collections::HashMap;
 use std::{array, mem};
 use wgpu::wgt::DrawIndexedIndirectArgs;
 
@@ -44,7 +46,7 @@ impl<const N: usize> ChunkRenderManager<N> {
     pub fn write_commands_to_indirect_buffer(
         &self,
         renderer: &Renderer<'_>,
-        buffer_commands: &[Vec<DrawIndexedIndirectArgs>; N],
+        buffer_commands: &[HashMap<u32, DrawIndexedIndirectArgs>; N],
     ) -> [MultiDrawInstruction; N] {
         let mut command_count = 0;
         let mut indirect_offsets = [MultiDrawInstruction::default(); N];
@@ -58,7 +60,7 @@ impl<const N: usize> ChunkRenderManager<N> {
 
         let flat_commands = buffer_commands
             .iter()
-            .flat_map(|x| x.iter().copied())
+            .flat_map(|x| x.values().copied())
             .collect::<Vec<_>>();
 
         renderer.write_buffer(

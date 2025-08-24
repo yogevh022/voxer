@@ -51,5 +51,5 @@ impl Hash for VirtualMemSlotKey {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct VirtualMemSlot {
     pub size: usize,
-    pub prev_free: usize, // available adjacent space previous to this slot
+    pub prev_free: usize,    // available adjacent space previous to this slot
 }

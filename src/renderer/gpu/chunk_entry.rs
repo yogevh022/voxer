@@ -1,4 +1,4 @@
-use crate::renderer::gpu::VoxerMultiBufferMeshAllocation;
+use crate::renderer::gpu::{MultiBufferMeshAllocation};
 use crate::world::types::{CHUNK_DIM, Chunk, ChunkBlocks, PACKED_CHUNK_DIM};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
@@ -50,7 +50,7 @@ impl GPUChunkEntry {
 #[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkEntryHeader {
-    pub allocation: VoxerMultiBufferMeshAllocation, // 16
+    pub allocation: MultiBufferMeshAllocation,      // 16
     pub slab_index: u32,                            // 20
     _pad0: [u32; 3],                                // pad to 32
     pub chunk_position: IVec3,                      // 44
@@ -59,7 +59,7 @@ pub struct GPUChunkEntryHeader {
 
 impl GPUChunkEntryHeader {
     pub fn new(
-        allocation: VoxerMultiBufferMeshAllocation,
+        allocation: MultiBufferMeshAllocation,
         slab_index: u32,
         chunk_position: IVec3,
     ) -> Self {

@@ -12,10 +12,8 @@ pub struct VMallocFirstFit {
     pub used_blocks: HashMap<usize, VirtualMemSlot>,
 }
 
-impl VirtualMalloc for VMallocFirstFit {
-    type Allocation = usize;
-    type AllocationRequest = usize;
-    fn new(arena_size: usize, arena_offset: usize) -> Self {
+impl VMallocFirstFit {
+    pub fn new(arena_size: usize, arena_offset: usize) -> Self {
         let initial_slot = VirtualMemSlot {
             size: arena_size,
             prev_free: 0,
@@ -27,41 +25,46 @@ impl VirtualMalloc for VMallocFirstFit {
             used_blocks: HashMap::new(),
         }
     }
-    fn alloc(&mut self, size: Self::AllocationRequest) -> Result<Self::Allocation, MallocError> {
+    
+    pub(crate) fn alloc(
+        &mut self,
+        requested_allocation: usize,
+    ) -> Result<usize, MallocError> {
         let available_slot = self
             .free_blocks
             .iter()
-            .find_map(|(key, slot)| (slot.size >= size).then(|| *key));
+            .find_map(|(key, slot)| (slot.size >= requested_allocation).then(|| *key));
         let slot_offset = available_slot.ok_or(MallocError::OutOfMemory)?;
 
         let mut slot = self.free_blocks.remove(&slot_offset).unwrap();
-        let leftover_size = slot.size - size;
+        let leftover_size = slot.size - requested_allocation;
 
         if leftover_size != 0 {
             let leftover_free = VirtualMemSlot {
                 size: leftover_size,
                 prev_free: 0,
             };
-            self.free_blocks.insert(slot_offset + size, leftover_free);
+            self.free_blocks
+                .insert(slot_offset + requested_allocation, leftover_free);
         }
 
         self.used_blocks
             .get_mut(&(slot_offset + slot.size))
             .map(|next_slot| next_slot.prev_free = leftover_size);
 
-        slot.size = size;
+        slot.size = requested_allocation;
         self.used_blocks.insert(slot_offset, slot);
 
         Ok(slot_offset)
     }
 
-    fn free(&mut self, alloc_index: Self::Allocation) -> Result<(), MallocError> {
-        let slot_opt = self.used_blocks.remove(&alloc_index);
+    pub(crate) fn free(&mut self, allocation: usize) -> Result<(), MallocError> {
+        let slot_opt = self.used_blocks.remove(&allocation);
         let mut slot = slot_opt.ok_or(MallocError::InvalidAllocation)?;
-        let next_index = alloc_index + slot.size;
+        let next_index = allocation + slot.size;
         slot.size += slot.prev_free;
 
-        let greedy_index = alloc_index - slot.prev_free;
+        let greedy_index = allocation - slot.prev_free;
         self.free_blocks.remove(&greedy_index);
         slot.prev_free = 0;
         self.free_blocks.insert(greedy_index, slot);

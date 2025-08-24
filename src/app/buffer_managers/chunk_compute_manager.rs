@@ -1,10 +1,12 @@
 use super::{ComputeInstruction, WriteInstruction};
+use crate::app::app_renderer::DrawDelta;
 use crate::renderer::{Renderer, resources};
+use glam::IVec3;
 use parking_lot::RwLock;
 use std::array;
+use std::collections::HashMap;
 use std::sync::Arc;
 use wgpu::util::DrawIndexedIndirectArgs;
-use crate::app::app_renderer::DrawDelta;
 
 pub struct ChunkComputeManager<const S: usize> {
     pipeline: wgpu::ComputePipeline,
@@ -75,7 +77,7 @@ impl<const S: usize> ChunkComputeManager<S> {
         vertex_buffers: &[wgpu::Buffer; N],
         index_buffers: &[wgpu::Buffer; N],
         compute_instructions: [Vec<ComputeInstruction>; S],
-        mut local_draw_delta: [[Vec<DrawIndexedIndirectArgs>; N]; S],
+        mut local_draw_delta: [[HashMap<u32, DrawIndexedIndirectArgs>; N]; S],
         draw_delta: &Arc<RwLock<DrawDelta<N>>>,
     ) {
         for (staging_i, compute_instruction) in compute_instructions.into_iter().enumerate() {
@@ -92,11 +94,7 @@ impl<const S: usize> ChunkComputeManager<S> {
                 });
                 compute_pass.set_pipeline(&self.pipeline);
                 compute_pass.set_bind_group(0, &self.bind_groups[staging_i], &[]);
-                compute_pass.dispatch_workgroups(
-                    compute_instruction.len() as u32,
-                    1,
-                    1,
-                );
+                compute_pass.dispatch_workgroups(compute_instruction.len() as u32, 1, 1);
             }
             for inst in compute_instruction {
                 encoder.copy_buffer_to_buffer(
@@ -122,7 +120,7 @@ impl<const S: usize> ChunkComputeManager<S> {
                 );
             }
             renderer.queue.submit(Some(encoder.finish()));
-            let mut staging_i_delta = [const { Vec::new() }; N];
+            let mut staging_i_delta: [HashMap<_, _>; N] = array::from_fn(|_| HashMap::new());
             std::mem::swap(&mut staging_i_delta, &mut local_draw_delta[staging_i]);
             let target_draw_args_ref = draw_delta.clone();
             renderer.queue.on_submitted_work_done(move || {

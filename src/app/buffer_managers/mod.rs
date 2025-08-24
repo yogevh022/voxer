@@ -15,16 +15,14 @@ pub struct ComputeInstruction {
     pub mmat_size_bytes: u64,
 }
 
-#[derive(Clone, Copy)]
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct WriteInstruction<'a> {
     pub staging_index: usize,
     pub bytes: &'a [u8],
     pub offset: u64,
 }
 
-#[derive(Default, Clone, Copy)]
-#[derive(Debug)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct MultiDrawInstruction {
     pub offset: usize,
     pub count: usize,
