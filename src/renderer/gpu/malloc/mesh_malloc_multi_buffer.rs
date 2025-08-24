@@ -12,13 +12,13 @@ pub struct MultiBufferAllocationRequest {
     pub index_size: usize,
 }
 
-#[repr(C)]
+#[repr(C, align(16))]
 #[derive(Copy, Debug, Clone, Pod, Zeroable)]
 pub struct MultiBufferMeshAllocation {
-    pub vertex_offset: <VMallocFirstFit as VirtualMalloc>::Allocation,
-    pub index_offset: <VMallocFirstFit as VirtualMalloc>::Allocation,
-    pub vertex_size: usize,
-    pub index_size: usize,
+    pub vertex_offset: u32,
+    pub index_offset: u32,
+    pub vertex_size: u32,
+    pub index_size: u32,
 }
 
 pub struct MeshVMallocMultiBuffer<const N: usize> {
@@ -43,17 +43,17 @@ impl<const N: usize> VirtualMalloc for MeshVMallocMultiBuffer<N> {
         Ok((
             buffer_index,
             MultiBufferMeshAllocation {
-                vertex_offset: allocation.0,
-                vertex_size: req.vertex_size,
-                index_offset: allocation.1,
-                index_size: req.index_size,
+                vertex_offset: allocation.0 as u32,
+                vertex_size: req.vertex_size as u32,
+                index_offset: allocation.1 as u32,
+                index_size: req.index_size as u32,
             },
         ))
     }
 
     fn free(&mut self, allocation: Self::Allocation) -> Result<(), MallocError> {
         let buff = self.virtual_buffers.get_mut(allocation.0).unwrap();
-        buff.free((allocation.1.vertex_offset, allocation.1.index_offset))?;
+        buff.free((allocation.1.vertex_offset as usize, allocation.1.index_offset as usize))?;
         Ok(())
     }
 }

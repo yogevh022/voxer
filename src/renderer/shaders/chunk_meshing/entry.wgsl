@@ -17,6 +17,7 @@ fn compute_main(
     @builtin(local_invocation_id) lid: vec3<u32>,
 ) {
     let chunk_index = wid.x;
+    // let staging_index = wid.y;
     let chunk = chunk_entries[chunk_index];
     let chunk_header = chunk.header;
 

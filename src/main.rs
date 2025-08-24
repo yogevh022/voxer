@@ -5,8 +5,7 @@ mod renderer;
 mod vtypes;
 mod world;
 
-use crate::world::generation::WorldGenConfig;
-use crate::world::types::{Block, Chunk, ChunkBlocks, WorldServer, WorldServerConfig};
+use crate::world::types::{WorldServer, WorldServerConfig};
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 

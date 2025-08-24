@@ -16,7 +16,7 @@ fn vs_main(
 ) -> VertexOutput {
     var out: VertexOutput;
     out.position = view_projection * chunk_mmats[instance_id] * vec4<f32>(position, 1.0);
-//    out.position = view_proj * vec4<f32>(position, 1.0);
+//    out.position = view_projection * vec4<f32>(position, 1.0);
     out.tex_coords = tex_coords;
     return out;
 }

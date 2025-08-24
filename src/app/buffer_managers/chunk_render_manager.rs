@@ -8,7 +8,7 @@ pub struct ChunkRenderManager<const N: usize> {
     pub vertex_buffers: [wgpu::Buffer; N],
     pub index_buffers: [wgpu::Buffer; N],
     pub mmat_buffers: [wgpu::Buffer; N],
-    mmat_bind_groups: [wgpu::BindGroup; N],
+    pub mmat_bind_groups: [wgpu::BindGroup; N], // fixme shouldnt be pub?
 }
 
 impl<const N: usize> ChunkRenderManager<N> {
@@ -50,23 +50,15 @@ impl<const N: usize> ChunkRenderManager<N> {
         let mut indirect_offsets = [MultiDrawInstruction::default(); N];
         for (i, command) in buffer_commands.iter().enumerate() {
             indirect_offsets[i] = MultiDrawInstruction {
-                offset: command_count + compute::num::mod_complement(command_count, 4),
+                offset: command_count * size_of::<DrawIndexedIndirectArgs>(),
                 count: command.len(),
             };
             command_count += command.len();
         }
 
-        command_count = 0;
-        let padding_command = DrawIndexedIndirectArgs::default();
         let flat_commands = buffer_commands
             .iter()
-            .enumerate()
-            .flat_map(|(i, x)| {
-                let padding_iter = std::iter::repeat_with(|| &padding_command)
-                    .take(compute::num::mod_complement(command_count, 4));
-                command_count += x.len();
-                padding_iter.chain(x.iter()).copied()
-            })
+            .flat_map(|x| x.iter().copied())
             .collect::<Vec<_>>();
 
         renderer.write_buffer(
