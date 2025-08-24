@@ -9,7 +9,7 @@ use crate::world::types::{WorldServer, WorldServerConfig};
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
-const SIMULATION_AND_RENDER_DISTANCE: usize = 2; // fixme temp location
+const SIMULATION_AND_RENDER_DISTANCE: usize = 4; // fixme temp location
 
 fn run_app() {
     let mut server = WorldServer::new(WorldServerConfig {
@@ -37,9 +37,9 @@ fn main() {
     // use glam::IVec3;
     // use std::time::Instant;
     // use crate::world::generation::WorldGenConfig;
-    // 
+    //
     // let noise = noise::OpenSimplex::new(0);
-    // 
+    //
     // let worldgen_config = WorldGenConfig {
     //     seed: 0,
     //     noise_scale: 0.05,
@@ -65,7 +65,7 @@ fn main() {
     //     // };
     //     chunks.push(chunk);
     // }
-    // 
+    //
     // let start = Instant::now();
     // let mut total_verts = 0;
     // for c in chunks.iter() {
@@ -73,7 +73,7 @@ fn main() {
     //     total_verts += size;
     // }
     // println!("Time: {:?}", start.elapsed());
-    // 
+    //
     // println!(
     //     "total {}, total size: {}kb",
     //     total_verts,

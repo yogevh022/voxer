@@ -102,15 +102,17 @@ pub fn world_generation_task(
 }
 
 pub(crate) fn generate_chunk(gen_config: WorldGenConfig, chunk_position: IVec3) -> Chunk {
-    let blocks = generate_chunk_blocks(gen_config, chunk_position);
+    let (solid_count, blocks) = generate_chunk_blocks(gen_config, chunk_position);
     Chunk {
         id: compute::chunk::position_to_id(chunk_position),
         blocks,
         last_visited: None,
+        solid_count,
     }
 }
 
-fn generate_chunk_blocks(gen_config: WorldGenConfig, chunk_position: IVec3) -> ChunkBlocks {
+fn generate_chunk_blocks(gen_config: WorldGenConfig, chunk_position: IVec3) -> (usize, ChunkBlocks) {
+    let mut solid_count = 0;
     let noise = OpenSimplex::new(gen_config.seed); // fixme creating this every time?
     let blocks: ChunkBlocks = Array3D(std::array::from_fn(|x| {
         std::array::from_fn(|y| {
@@ -124,6 +126,7 @@ fn generate_chunk_blocks(gen_config: WorldGenConfig, chunk_position: IVec3) -> C
                         * gen_config.noise_scale,
                 ]) > 0.1
                 {
+                    solid_count += 1;
                     // fixme this is horrible
                     Block { value: 1u16 << 15 }
                 } else {
@@ -132,5 +135,5 @@ fn generate_chunk_blocks(gen_config: WorldGenConfig, chunk_position: IVec3) -> C
             })
         })
     }));
-    blocks
+    (solid_count, blocks)
 }

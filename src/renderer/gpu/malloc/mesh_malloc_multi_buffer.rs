@@ -14,6 +14,7 @@ pub struct MultiBufferMeshAllocation {
     pub index_size: u32,
 }
 
+#[derive(Debug)]
 pub struct MultiBufferMeshAllocationRequest {
     pub id: u128,
     pub vertex_size: usize,

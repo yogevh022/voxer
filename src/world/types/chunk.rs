@@ -13,4 +13,5 @@ pub struct Chunk {
     pub(crate) id: u128,
     pub(crate) last_visited: Option<Instant>,
     pub(crate) blocks: ChunkBlocks,
+    pub(crate) solid_count: usize,
 }

@@ -56,9 +56,9 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
         let mut chunk_buffer_compute_instructions = [const { Vec::new() }; STAGING_BUFF_N];
         let mut draw_args_delta: [[HashMap<u32, DrawIndexedIndirectArgs>; BUFF_N]; STAGING_BUFF_N] =
             array::from_fn(|_| array::from_fn(|_| HashMap::new()));
+        
         for (slab_index, chunk_pos, chunk) in chunks.into_iter() {
             let face_count = compute::chunk::face_count(&chunk.blocks);
-            dbg!(face_count);
             let vertex_count = face_count * 4;
             let index_count = face_count * 6;
             let alloc_request = MultiBufferMeshAllocationRequest {
@@ -122,7 +122,9 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
                 .remove(&chunk_pos)
                 .unwrap();
             self.current_draw[chunk_alloc_offset.0].remove(&chunk_alloc_offset.1.vertex_offset);
-            self.chunk_malloc.free(chunk_alloc_offset).unwrap();
+            if let Err(e) = self.chunk_malloc.free(chunk_alloc_offset) {
+                println!("failed to free chunk: {:?}, {:?}", chunk_pos, chunk_alloc_offset);
+            }
         }
     }
 
