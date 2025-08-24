@@ -8,7 +8,7 @@ pub const TRANSPARENT_LAYER_BITS: [u16; CHUNK_DIM] = [0u16; CHUNK_DIM];
 
 pub fn face_count(blocks: &ChunkBlocks) -> usize {
     let packed_blocks = pack_solid_blocks(blocks);
-
+    
     let faces = faces(packed_blocks);
     faces.iter().map(|b| b.count_ones() as usize).sum::<usize>()
 }

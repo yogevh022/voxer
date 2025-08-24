@@ -17,8 +17,6 @@ use std::{array, mem};
 use wgpu::util::DrawIndexedIndirectArgs;
 use winit::window::Window;
 
-const VOID_MESH_OFFSET: usize = 8;
-
 const STAGING_BUFF_N: usize = 1; // fixme temp number
 
 #[derive(Debug, Clone)]
@@ -287,7 +285,7 @@ pub fn make_app_renderer<'a, const BUFF_N: usize>(
         },
     );
 
-    let chunk_malloc = MeshVMallocMultiBuffer::new(temp_size as usize, VOID_MESH_OFFSET);
+    let chunk_malloc = MeshVMallocMultiBuffer::new(temp_size as usize, 0);
 
     AppRenderer {
         renderer,

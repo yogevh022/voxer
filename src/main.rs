@@ -37,16 +37,16 @@ fn main() {
     // use glam::IVec3;
     // use std::time::Instant;
     // use crate::world::generation::WorldGenConfig;
-    //
+    // 
     // let noise = noise::OpenSimplex::new(0);
-    //
+    // 
     // let worldgen_config = WorldGenConfig {
     //     seed: 0,
     //     noise_scale: 0.05,
     // };
     // let mut chunks = Vec::new();
     // for i in 0..1 {
-    //     let c_pos = IVec3::new(i, 0, 0);
+    //     let c_pos = IVec3::new(2, 0, 0);
     //     let chunk = generate_chunk(worldgen_config, c_pos);
     //     // let chunk = Chunk {
     //     //     last_visited: None,
@@ -65,7 +65,7 @@ fn main() {
     //     // };
     //     chunks.push(chunk);
     // }
-    //
+    // 
     // let start = Instant::now();
     // let mut total_verts = 0;
     // for c in chunks.iter() {
@@ -73,7 +73,7 @@ fn main() {
     //     total_verts += size;
     // }
     // println!("Time: {:?}", start.elapsed());
-    //
+    // 
     // println!(
     //     "total {}, total size: {}kb",
     //     total_verts,
