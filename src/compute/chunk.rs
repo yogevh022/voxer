@@ -29,31 +29,61 @@ fn faces(packed_blocks: [u16; CHUNK_SLICE]) -> [u16; CHUNK_SLICE * 3] {
     let mut zb = [0u16; CHUNK_DIM];
 
     for i in 0..CHUNK_DIM - 1 {
-        // x faces
-        xa = packed_blocks[i * CHUNK_DIM..(i + 1) * CHUNK_DIM]
-            .try_into()
-            .unwrap();
-        xb = packed_blocks[(i + 1) * CHUNK_DIM..(i + 2) * CHUNK_DIM]
-            .try_into()
-            .unwrap();
-        // y faces
-        for j in 0..CHUNK_DIM {
-            ya[j] = packed_blocks[j + (i * CHUNK_DIM)];
-            yb[j] = packed_blocks[j + ((i + 1) * CHUNK_DIM)];
-        }
-        // x faces
-        zb = array::from_fn(|i| xa[i] >> 1);
+        adjacent_x(&packed_blocks, &mut xa, &mut xb, i);
+        adjacent_y(&packed_blocks, &mut ya, &mut yb, i);
+        adjacent_z(&xa, &mut zb);
 
         result_layers[i] = compute::array::xor(&xa, &xb);
         result_layers[CHUNK_DIM + i] = compute::array::xor(&ya, &yb);
         result_layers[CHUNK_DIM + CHUNK_DIM + i] = compute::array::xor(&xa, &zb);
     }
+    adjacent_y(&packed_blocks, &mut ya, &mut yb, CHUNK_DIM - 1);
+    adjacent_z(&xb, &mut zb);
     result_layers[CHUNK_DIM - 1] = compute::array::xor(&xb, &TRANSPARENT_LAYER_BITS);
-    result_layers[CHUNK_DIM + (CHUNK_DIM - 1)] = compute::array::xor(&yb, &TRANSPARENT_LAYER_BITS);
-    zb = array::from_fn(|i| xb[i] >> 1);
+    result_layers[CHUNK_DIM + (CHUNK_DIM - 1)] = compute::array::xor(&ya, &yb);
     result_layers[CHUNK_DIM + CHUNK_DIM + (CHUNK_DIM - 1)] = compute::array::xor(&xb, &zb);
     result
 }
+
+
+#[inline(always)]
+fn adjacent_x(
+    packed_blocks: &[u16; CHUNK_SLICE],
+    xa: &mut [u16; CHUNK_DIM],
+    xb: &mut [u16; CHUNK_DIM],
+    x: usize
+) {
+    *xa = packed_blocks[x * CHUNK_DIM..(x + 1) * CHUNK_DIM]
+        .try_into()
+        .unwrap();
+    *xb = packed_blocks[(x + 1) * CHUNK_DIM..(x + 2) * CHUNK_DIM]
+        .try_into()
+        .unwrap();
+}
+
+#[inline(always)]
+fn adjacent_y(
+    packed_blocks: &[u16; CHUNK_SLICE],
+    ya: &mut [u16; CHUNK_DIM],
+    yb: &mut [u16; CHUNK_DIM],
+    x: usize
+) {
+    for j in 0..CHUNK_DIM - 1 {
+        ya[j] = packed_blocks[(x * CHUNK_DIM) + j];
+        yb[j] = packed_blocks[(x * CHUNK_DIM) + j + 1];
+    }
+    ya[CHUNK_DIM - 1] = packed_blocks[(x * CHUNK_DIM) + (CHUNK_DIM - 1)];
+    yb[CHUNK_DIM - 1] = 0u16;
+}
+
+#[inline(always)]
+fn adjacent_z(
+    xa: &[u16; CHUNK_DIM],
+    zb: &mut [u16; CHUNK_DIM],
+) {
+    *zb = array::from_fn(|i| xa[i] >> 1);
+}
+
 
 fn pack_solid_blocks(
     blocks: &Array3D<Block, CHUNK_DIM, CHUNK_DIM, CHUNK_DIM>,

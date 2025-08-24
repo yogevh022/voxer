@@ -15,7 +15,7 @@ pub trait BlockBytewise {
 impl BlockBytewise for Block {
     #[inline(always)]
     fn is_transparent(&self) -> bool {
-        self.value & Self::TRANSPARENT_BIT != 0
+        self.value & Self::TRANSPARENT_BIT == 0
     }
 }
 

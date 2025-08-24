@@ -58,6 +58,7 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
             array::from_fn(|_| array::from_fn(|_| HashMap::new()));
         for (slab_index, chunk_pos, chunk) in chunks.into_iter() {
             let face_count = compute::chunk::face_count(&chunk.blocks);
+            dbg!(face_count);
             let vertex_count = face_count * 4;
             let index_count = face_count * 6;
             let alloc_request = MultiBufferMeshAllocationRequest {
@@ -100,8 +101,8 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
             .write_to_staging_chunks(&self.renderer, write_instructions);
 
         self.compute_chunks(chunk_buffer_compute_instructions, draw_args_delta);
-        
-        
+
+
     }
 
     pub fn update_current_draw(&mut self) {
