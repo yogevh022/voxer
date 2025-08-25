@@ -2,7 +2,7 @@ pub mod app_renderer;
 
 use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::types::{WorldClient, WorldClientConfig, WorldServer};
-use crate::{SIMULATION_AND_RENDER_DISTANCE, vtypes};
+use crate::{SIMULATION_AND_RENDER_DISTANCE, vtypes, compute};
 use glam::IVec3;
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -154,21 +154,18 @@ impl<'a> App<'a> {
 
         let player_pos = self.v.camera.transform.position;
         self.server.set_player(0, &player_pos);
-        self.client
-            .as_mut()
-            .unwrap()
-            .set_player_position(player_pos);
+        let player_c_pos = compute::geo::world_to_chunk_pos(player_pos);
 
-        if self.v.time.temp_200th_frame() {
-            self.server.update();
-            self.client.as_mut().unwrap().update();
-            let client_nearby_chunks = self.client.as_mut().unwrap().take_nearby_chunks_delta();
-            let nearby_chunks_data = self.server.get_chunks(client_nearby_chunks.into_iter());
-
-            self.client
-                .as_mut()
-                .unwrap()
-                .sync_with_renderer(nearby_chunks_data);
+        // fixme intense to run this every frame
+        self.server.update();
+        let m_client = self.client.as_mut().unwrap();
+        let (new_chunks_pos, outdated_chunks_pos) = m_client.nearby_chunks_delta(player_c_pos);
+        let new_chunks = self.server.get_chunks(new_chunks_pos);
+        m_client.send_chunks_to_renderer(new_chunks);
+        for p in outdated_chunks_pos {
+            m_client.renderer.unload_chunk(p);
         }
+
+        m_client.set_chunk_position(player_c_pos);
     }
 }

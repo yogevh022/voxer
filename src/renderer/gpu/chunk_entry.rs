@@ -74,9 +74,9 @@ impl GPUChunkEntryHeader {
 
     pub fn draw_indexed_indirect_args(&self) -> DrawIndexedIndirectArgs {
         DrawIndexedIndirectArgs {
-            index_count: self.allocation.index_size as u32,
+            index_count: self.allocation.index_size,
             instance_count: 1,
-            first_index: self.allocation.index_offset as u32,
+            first_index: self.allocation.index_offset,
             base_vertex: 0, // vertices are indexed from 0, void and chunk offsets are baked into the indices
             first_instance: self.slab_index,
         }

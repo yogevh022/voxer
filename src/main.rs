@@ -6,7 +6,6 @@ mod vtypes;
 mod world;
 
 use crate::world::types::{WorldServer, WorldServerConfig};
-use glam::Vec3;
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
@@ -32,40 +31,25 @@ fn run_app() {
 
 fn main() {
     // tracy_client::set_thread_name!("main");
-    // run_app();
+    run_app();
 
-    debug();
+    // debug()
+
+    // debug_chunk_gen();
 }
 
 fn debug() {
-    use compute::geo::Sphere;
-    use compute::geo::discrete_sphere_pts;
-    use glam::IVec3;
     use std::time::Instant;
+    use glam::{IVec3, Vec3};
 
-    let ipoint = IVec3::new(0, 0, 0);
-    let point = Vec3::new(ipoint.x as f32, ipoint.y as f32, ipoint.z as f32);
-    let radius = 50;
-
-    // let start = Instant::now();
-    // for _ in 0..2000 {
-    //     let _ = discrete_sphere_pts(&point, radius as f32);
-    // }
-    // println!("old time: {:?}", start.elapsed());
-
+    let ipoint = IVec3::ZERO;
+    let mut ps = Vec::new();
     let start = Instant::now();
-    let mut sum = 0;
-    for _ in 0..1 {
-        Sphere::discrete_points(ipoint, radius, |p| {
-            sum += p.element_sum() as isize;
-        })
-    }
-    println!("sum: {}, time: {:?}", sum, start.elapsed());
-
-    // let q = discrete_sphere_pts(&point, radius as f32);
-    // let q2 = Sphere::discrete_points(ipoint, radius);
-    // println!("old {:?}", q.len());
-    // println!("new {:?}", q2.len());
+    compute::geo::Sphere::discrete_points(ipoint, 2, |p| {
+        ps.push(p);
+    });
+    println!("{}; {:?}", ps.len(), start.elapsed());
+    println!("{:?}", ps);
 }
 
 fn debug_chunk_gen() {

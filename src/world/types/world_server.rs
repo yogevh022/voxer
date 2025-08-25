@@ -41,15 +41,27 @@ impl WorldServer {
 
     pub(crate) fn update(&mut self) {
         let mut active_chunk_positions = HashSet::new();
-        // for (_, player_pos) in self.players.iter() {
-        //     active_chunk_positions.extend(geo::discrete_sphere_pts(
-        //         &(*player_pos / CHUNK_DIM as f32),
-        //         self.config.simulation_distance as f32,
-        //     ));
-        // }
-        active_chunk_positions.insert(IVec3::new(0, 0, 0));
-        active_chunk_positions.insert(IVec3::new(1, 0, 0));
+        for (_, player_pos) in self.players.iter() {
+            geo::Sphere::discrete_points(
+                geo::world_to_chunk_pos(*player_pos),
+                self.config.simulation_distance as isize,
+                |point| {
+                    active_chunk_positions.insert(point);
+                },
+            );
+        }
+        // active_chunk_positions.insert(IVec3::new(0, 0, 0));
+        // active_chunk_positions.insert(IVec3::new(1, 0, 0));
         // active_chunk_positions.insert(IVec3::new(2, 0, 0));
+        // active_chunk_positions.insert(IVec3::new(3, 0, 0));
+        // active_chunk_positions.insert(IVec3::new(4, 0, 0));
+        // active_chunk_positions.insert(IVec3::new(5, 0, 0));
+        // active_chunk_positions.insert(IVec3::new(0, 0, 1));
+        // active_chunk_positions.insert(IVec3::new(1, 0, 1));
+        // active_chunk_positions.insert(IVec3::new(2, 0, 1));
+        // active_chunk_positions.insert(IVec3::new(3, 0, 1));
+        // active_chunk_positions.insert(IVec3::new(4, 0, 1));
+        // active_chunk_positions.insert(IVec3::new(5, 0, 1));
         self.try_receive_generation();
         let (generated, ungenerated): (HashSet<_>, HashSet<_>) =
             self.partition_chunks_by_existence(active_chunk_positions);
@@ -61,13 +73,11 @@ impl WorldServer {
         self.players.insert(player_id, *player_pos);
     }
 
-    pub fn get_chunks(
-        &self,
-        positions: impl Iterator<Item = IVec3>,
-    ) -> Vec<(IVec3, Option<Chunk>)> {
+    pub fn get_chunks(&self, positions: Vec<IVec3>) -> Vec<Option<Chunk>> {
         // cloning here because the server will have to send clones to clients anyway
         positions
-            .map(|c_pos| (c_pos, self.chunks.get(&c_pos).cloned()))
+            .into_iter()
+            .map(|c_pos| self.chunks.get(&c_pos).cloned())
             .collect()
     }
 

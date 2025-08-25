@@ -17,7 +17,7 @@ impl<const NumBuffers: usize> ChunkRender<NumBuffers> {
     const INDEX_LABELS: [&'static str; NumBuffers] =
         const_labels!("index", NumBuffers);
     const MMAT_LABEL: &'static str = "mmat_0";
-    
+
     pub fn init(
         renderer: &Renderer<'_>,
         vertex_buffer_size: wgpu::BufferAddress,
@@ -60,7 +60,7 @@ impl<const NumBuffers: usize> ChunkRender<NumBuffers> {
             command_count += instruction.count;
             instruction
         });
-
+        
         let flat_draw_args = buffer_draw_args
             .iter()
             .flat_map(|x| x.values().copied())

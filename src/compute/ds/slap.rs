@@ -27,10 +27,10 @@ where
         index
     }
 
-    pub fn remove(&mut self, key: &K) -> Option<V> {
+    pub fn remove(&mut self, key: &K) -> Option<(usize, V)> {
         self.map
             .remove(key)
-            .and_then(|index| Some(self.slab.remove(index)))
+            .and_then(|index| Some((index, self.slab.remove(index))))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {

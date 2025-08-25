@@ -100,7 +100,7 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         staging_targets: [Vec<usize>; NumStagingBuffers],
         delta_draw: &Arc<RwLock<Option<BufferDrawArgs<NumBuffers>>>>,
     ) {
-        for (staging_i, (target_buffer_idx, entries)) in staging_targets
+        for (staging_i, (target_buffer_indexes, entries)) in staging_targets
             .into_iter()
             .zip(staging_entries.into_iter())
             .enumerate()
@@ -118,16 +118,16 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
             for (i, entry) in entries.iter().enumerate() {
                 encoder.copy_buffer_to_buffer(
                     &self.staging_vertex_buffers[staging_i],
-                    entry.header.allocation.vertex_offset as u64,
-                    &chunk_render.vertex_buffers[target_buffer_idx[i]],
-                    entry.header.allocation.vertex_offset as u64,
+                    entry.header.allocation.vertex_offset as u64 * Vertex::size() as u64,
+                    &chunk_render.vertex_buffers[target_buffer_indexes[i]],
+                    entry.header.allocation.vertex_offset as u64 * Vertex::size() as u64,
                     entry.header.allocation.vertex_size as u64 * Vertex::size() as u64,
                 );
                 encoder.copy_buffer_to_buffer(
                     &self.staging_index_buffers[staging_i],
-                    entry.header.allocation.index_offset as u64,
-                    &chunk_render.index_buffers[target_buffer_idx[i]],
-                    entry.header.allocation.index_offset as u64,
+                    entry.header.allocation.index_offset as u64 * size_of::<Index>() as u64,
+                    &chunk_render.index_buffers[target_buffer_indexes[i]],
+                    entry.header.allocation.index_offset as u64 * size_of::<Index>() as u64,
                     entry.header.allocation.index_size as u64 * size_of::<Index>() as u64,
                 );
                 encoder.copy_buffer_to_buffer(
@@ -146,7 +146,7 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
                     *guard = Some(array::from_fn(|_| HashMap::new()));
                 }
                 let delta = guard.as_mut().unwrap();
-                for (buffer_idx, entry) in target_buffer_idx
+                for (buffer_idx, entry) in target_buffer_indexes
                     .into_iter()
                     .zip(entries.into_iter())
                 {

@@ -19,32 +19,12 @@ pub struct AppRenderer<'window, const ChunkBuffers: usize, const ChunkStagingBuf
 impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
     AppRenderer<'_, ChunkBuffers, ChunkStagingBuffers>
 {
-    pub fn write_new_chunks(&mut self, chunks: Vec<(usize, Chunk)>) {
+    pub fn write_new_chunks(&mut self, chunks: Vec<Chunk>) {
         self.chunk_manager.write_new(&self.renderer, chunks);
     }
 
-    pub fn update_current_draw(&mut self) {
-        // let mut delta_lock = self.draw_delta.write();
-        // if delta_lock.changed {
-        //     for i in 0..BUFF_N {
-        //         self.current_draw[i].extend(delta_lock.args[i].drain());
-        //     }
-        //     delta_lock.changed = false;
-        // }
-    }
-
-    pub fn unload_chunks(&mut self, chunks: Vec<IVec3>) {
-        // for chunk_pos in chunks {
-        //     let chunk_alloc = self
-        //         .chunk_position_to_allocation
-        //         .remove(&chunk_pos)
-        //         .unwrap();
-        //     self.current_draw[chunk_alloc.0].remove(&chunk_alloc.1.vertex_offset);
-        //     if let Err(e) = self.chunk_malloc.free(chunk_alloc) {
-        //         // todo no need to check here
-        //         println!("failed to free chunk: {:?}, {:?}", chunk_pos, chunk_alloc);
-        //     }
-        // }
+    pub fn unload_chunk(&mut self, position: IVec3) {
+        self.chunk_manager.drop(position);
     }
 
     fn render_chunks(
@@ -67,7 +47,7 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-
+        self.chunk_manager.poll_update_delta_draw();
         let mut encoder = self.renderer.create_encoder("render_encoder");
         {
             let mut render_pass = begin_render_pass(&mut encoder, &view, &self.renderer.depth_texture_view);
@@ -101,13 +81,12 @@ pub fn make_app_renderer<'a, const NumBuffers: usize, const NumStagingBuffers: u
         ],
     );
 
-    let max_rendered_chunks = compute::geo::Sphere::max_discrete_points(render_distance as isize);
     let max_buffer_size = compute::MIB * 128;
     let chunk_manager = ChunkManager::<NumBuffers, NumStagingBuffers>::new(
         &renderer,
         max_buffer_size,
-        max_rendered_chunks * size_of::<GPUChunkEntry>(), // fixme this is overkill
-        max_rendered_chunks * size_of::<Mat4>(),
+        12_288 * size_of::<GPUChunkEntry>(), // fixme this is overkill
+        12_288 * size_of::<Mat4>(),
     );
 
     AppRenderer {

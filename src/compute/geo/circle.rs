@@ -18,7 +18,7 @@ impl Circle {
         F: FnMut(isize, isize),
     {
         let r2 = radius * radius;
-        for y in (c.y as isize - radius)..(c.y as isize + radius) {
+        for y in (c.y as isize - radius)..=(c.y as isize + radius) {
             let (ix1, ix2) = Circle::line_intersect_hor_2p(y, c, r2);
             (ix1..=ix2).for_each(|x| point_fn(x, y,));
         }

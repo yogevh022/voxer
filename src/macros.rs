@@ -46,7 +46,26 @@ macro_rules! const_labels {
             let mut result: [&'static str; $count] = [""; $count];
             let mut i = 0usize;
             while i < $count {
-                result[i] = concat!($label, "_", stringify!(i$));
+                result[i] = match i {   // :)
+                    0 => concat!($label, "_0"),
+                    1 => concat!($label, "_1"),
+                    2 => concat!($label, "_2"),
+                    3 => concat!($label, "_3"),
+                    4 => concat!($label, "_4"),
+                    5 => concat!($label, "_5"),
+                    6 => concat!($label, "_6"),
+                    7 => concat!($label, "_7"),
+                    8 => concat!($label, "_8"),
+                    9 => concat!($label, "_9"),
+                    10 => concat!($label, "_10"),
+                    11 => concat!($label, "_11"),
+                    12 => concat!($label, "_12"),
+                    13 => concat!($label, "_13"),
+                    14 => concat!($label, "_14"),
+                    15 => concat!($label, "_15"),
+                    16 => concat!($label, "_16"),
+                    _ => concat!($label, "_N"),
+                };
                 i += 1;
             }
             result
