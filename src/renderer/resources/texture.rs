@@ -75,3 +75,18 @@ pub fn get_image_extent3d(image: &image::RgbaImage) -> wgpu::Extent3d {
         depth_or_array_layers: 1,
     }
 }
+
+pub fn get_atlas_image() -> image::RgbaImage {
+    let q = std::env::current_exe().unwrap();
+    let project_root = q
+        .parent() // target/debug
+        .unwrap()
+        .parent() // target
+        .unwrap()
+        .parent() // project root
+        .unwrap();
+
+    let atlas_image = image::open(project_root.join("src/renderer/texture/images/atlas.png"))
+        .expect("failed to load atlas.png");
+    atlas_image.to_rgba8()
+}

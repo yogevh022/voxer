@@ -1,4 +1,5 @@
 use super::RendererBuilder;
+use glam::Mat4;
 
 pub struct RendererBindGroupLayouts {
     pub mmat: wgpu::BindGroupLayout,
@@ -54,5 +55,13 @@ impl Renderer<'_> {
     pub fn create_encoder(&self, label: &str) -> wgpu::CommandEncoder {
         self.device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
+    }
+
+    pub fn write_view_projection(&self, view_proj: Mat4) {
+        self.write_buffer(
+            &self.view_projection_buffer,
+            0u64,
+            bytemuck::cast_slice(&[view_proj.to_cols_array()]),
+        );
     }
 }

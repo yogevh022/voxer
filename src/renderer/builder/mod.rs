@@ -7,12 +7,11 @@ mod buffer;
 mod layouts;
 mod render_pipeline;
 
-use crate::app::app_renderer::get_atlas_image;
 use crate::compute;
 use crate::renderer::builder::layouts::{
     create_mmat_layout, create_texture_layout, create_view_projection_layout,
 };
-pub use atlas::RendererAtlas;
+use crate::renderer::resources::texture::get_atlas_image;
 
 pub struct RendererBuilder<'window> {
     pub(crate) config: Option<wgpu::SurfaceConfiguration>,

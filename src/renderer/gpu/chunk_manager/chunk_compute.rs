@@ -100,7 +100,7 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
             .zip(staging_targets.iter())
             .enumerate()
         {
-            let mut encoder = renderer.create_encoder("render_encoder");
+            let mut encoder = renderer.create_encoder("chunk_mesh_compute_encoder");
             {
                 let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                     label: Some(Self::COMPUTE_PASS_LABELS[staging_i]),

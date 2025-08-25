@@ -1,33 +1,13 @@
+use crate::renderer::gpu::GPUChunkEntry;
 use crate::renderer::gpu::chunk_manager::ChunkManager;
-use crate::renderer::gpu::{
-    GPUChunkEntry, MeshVMallocMultiBuffer, MultiBufferMeshAllocation, VirtualMalloc,
-};
 use crate::renderer::resources;
-use crate::renderer::{Index, Renderer, RendererBuilder, Vertex};
+use crate::renderer::{Renderer, RendererBuilder};
 use crate::world::types::Chunk;
-use crate::{call_every, compute, vtypes};
+use crate::{compute};
 use glam::{IVec3, Mat4};
-use parking_lot::RwLock;
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::{array, mem};
-use wgpu::util::DrawIndexedIndirectArgs;
 use winit::window::Window;
-
-#[derive(Debug, Clone)]
-pub struct DrawDelta<const N: usize> {
-    pub changed: bool,
-    pub args: [HashMap<u32, DrawIndexedIndirectArgs>; N],
-}
-
-impl<const N: usize> Default for DrawDelta<N> {
-    fn default() -> Self {
-        Self {
-            changed: false,
-            args: array::from_fn(|_| HashMap::new()),
-        }
-    }
-}
+use crate::vtypes::Camera;
 
 pub struct AppRenderer<'window, const ChunkBuffers: usize, const ChunkStagingBuffers: usize> {
     pub renderer: Renderer<'window>,
@@ -69,47 +49,36 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
 
     pub fn encode_render_pass(
         &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-        camera: &vtypes::Camera,
+        render_pass: &mut wgpu::RenderPass,
+        camera: &Camera,
     ) {
-        let mut render_pass =
-            resources::render_pass::begin(encoder, view, &self.renderer.depth_texture_view);
+        
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.renderer.bind_groups.texture_atlas, &[]);
         render_pass.set_bind_group(1, &self.renderer.bind_groups.view_projection, &[]);
 
-        let view_proj = camera.get_view_projection().to_cols_array();
-        self.renderer.write_buffer(
-            &self.renderer.view_projection_buffer,
-            0u64,
-            bytemuck::cast_slice(&[view_proj]),
-        );
+        let view_proj = camera.get_view_projection();
+        self.renderer.write_view_projection(view_proj);
 
         // let multi_draw_instructions = self
         //     .chunk_render
         //     .write_commands_to_indirect_buffer(&self.renderer, &self.current_draw);
-        // 
+        //
         // self.chunk_render
         //     .multi_draw(&self.renderer, &mut render_pass, multi_draw_instructions);
     }
 
-    pub fn render(&mut self, camera: &vtypes::Camera) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, camera: &Camera) -> Result<(), wgpu::SurfaceError> {
         let frame = self.renderer.surface.get_current_texture()?;
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        self.update_current_draw(); // fixme not here..
-
-        let mut encoder =
-            self.renderer
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("render_encoder"),
-                });
-
-        self.encode_render_pass(&mut encoder, &view, camera);
+        let mut encoder = self.renderer.create_encoder("render_encoder");
+        {
+            let mut render_pass = begin_render_pass(&mut encoder, &view, &self.renderer.depth_texture_view);
+            self.encode_render_pass(&mut render_pass, camera);
+        }
 
         self.renderer.queue.submit(Some(encoder.finish()));
 
@@ -124,7 +93,6 @@ pub fn make_app_renderer<'a, const NumBuffers: usize, const NumStagingBuffers: u
 ) -> AppRenderer<'a, NumBuffers, NumStagingBuffers> {
     let renderer_builder = RendererBuilder::new(window);
 
-
     let surface_format = renderer_builder.surface_format.unwrap();
     let renderer = renderer_builder.build();
 
@@ -138,16 +106,15 @@ pub fn make_app_renderer<'a, const NumBuffers: usize, const NumStagingBuffers: u
             &renderer.layouts.mmat,            // 2
         ],
     );
-    
+
     let max_rendered_chunks = compute::geo::max_discrete_sphere_pts(render_distance);
-    let max_buffer_size = (compute::MIB * 128);
+    let max_buffer_size = compute::MIB * 128;
     let chunk_manager = ChunkManager::<NumBuffers, NumStagingBuffers>::new(
         &renderer,
         max_buffer_size,
         max_rendered_chunks * size_of::<GPUChunkEntry>(), // fixme this is overkill
         max_rendered_chunks * size_of::<Mat4>(),
     );
-
 
     AppRenderer {
         renderer,
@@ -156,17 +123,31 @@ pub fn make_app_renderer<'a, const NumBuffers: usize, const NumStagingBuffers: u
     }
 }
 
-pub fn get_atlas_image() -> image::RgbaImage {
-    let q = std::env::current_exe().unwrap();
-    let project_root = q
-        .parent() // target/debug
-        .unwrap()
-        .parent() // target
-        .unwrap()
-        .parent() // project root
-        .unwrap();
-
-    let atlas_image = image::open(project_root.join("src/renderer/texture/images/atlas.png"))
-        .expect("failed to load atlas.png");
-    atlas_image.to_rgba8()
+fn begin_render_pass<'a>(
+    encoder: &'a mut wgpu::CommandEncoder,
+    frame_view: &wgpu::TextureView,
+    depth_view: &wgpu::TextureView,
+) -> wgpu::RenderPass<'a> {
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("render_pass"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: frame_view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: depth_view,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: wgpu::StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }),
+        timestamp_writes: None,
+        occlusion_query_set: None,
+    })
 }
