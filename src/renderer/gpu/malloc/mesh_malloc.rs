@@ -8,10 +8,10 @@ pub struct MeshVMalloc {
 }
 
 impl MeshVMalloc {
-    pub(crate) fn new(size: usize, offset: usize) -> Self {
+    pub(crate) fn new(vertices_per_buffer: usize, indices_per_buffer: usize, offset: usize) -> Self {
         Self {
-            vertex_malloc: VMallocFirstFit::new(size / Vertex::size(), offset),
-            index_malloc: VMallocFirstFit::new(size / size_of::<Index>(), offset),
+            vertex_malloc: VMallocFirstFit::new(vertices_per_buffer, offset),
+            index_malloc: VMallocFirstFit::new(indices_per_buffer, offset),
         }
     }
 

@@ -74,23 +74,23 @@ impl VMallocFirstFit {
         Ok(())
     }
 
-    fn total_free(&self) -> usize {
+    pub fn total_free(&self) -> usize {
         self.free_blocks.iter().map(|(_, s)| s.size).sum()
     }
 
-    fn free_count(&self) -> usize {
+    pub fn free_count(&self) -> usize {
         self.free_blocks.len()
     }
 
-    fn total_used(&self) -> usize {
+    pub fn total_used(&self) -> usize {
         self.used_blocks.iter().map(|(_, s)| s.size).sum()
     }
 
-    fn used_count(&self) -> usize {
+    pub fn used_count(&self) -> usize {
         self.used_blocks.len()
     }
 
-    fn debug(&self) {
+    pub fn debug(&self) {
         print!("\x1B[2J\x1B[1;1H{:?}", self); // the blob clears cli
         std::io::stdout().flush().unwrap();
     }

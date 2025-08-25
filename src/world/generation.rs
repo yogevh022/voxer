@@ -104,9 +104,8 @@ pub fn world_generation_task(
 pub(crate) fn generate_chunk(gen_config: WorldGenConfig, chunk_position: IVec3) -> Chunk {
     let (solid_count, blocks) = generate_chunk_blocks(gen_config, chunk_position);
     Chunk {
-        id: compute::chunk::position_to_id(chunk_position),
+        position: chunk_position,
         blocks,
-        last_visited: None,
         solid_count,
     }
 }

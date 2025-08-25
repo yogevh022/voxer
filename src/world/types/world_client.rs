@@ -16,7 +16,7 @@ pub struct WorldClientConfig {
 
 pub struct WorldClient<'window> {
     pub config: WorldClientConfig,
-    pub renderer: AppRenderer<'window, 1>,
+    pub renderer: AppRenderer<'window, 2, 1>,
     nearby_chunks_delta: HashSet<IVec3>,
     nearby_chunks_neg_delta: HashSet<IVec3>,
     player_position: Vec3,
@@ -77,7 +77,7 @@ impl<'window> WorldClient<'window> {
                     if chunk.solid_count == 0 {
                         return None;
                     }
-                    Some((self.nearby_chunks.insert(c_pos), c_pos, chunk))
+                    Some((self.nearby_chunks.insert(c_pos), chunk))
                 }).unwrap_or(None)
             })
             .collect();

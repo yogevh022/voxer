@@ -38,3 +38,18 @@ macro_rules! call_every {
         });
     };
 }
+
+#[macro_export]
+macro_rules! const_labels {
+    ($label:literal, $count:expr) => {
+        {
+            let mut result: [&'static str; $count] = [""; $count];
+            let mut i = 0usize;
+            while i < $count {
+                result[i] = concat!($label, "_", stringify!(i$));
+                i += 1;
+            }
+            result
+        }
+    };
+}
