@@ -24,4 +24,5 @@ debug = true
 
 [profile.release]
 debug = true
+lto = "fat"
 #opt-level = 3

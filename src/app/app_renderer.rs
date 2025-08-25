@@ -47,12 +47,11 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
         // }
     }
 
-    pub fn encode_render_pass(
+    fn render_chunks(
         &mut self,
         render_pass: &mut wgpu::RenderPass,
         camera: &Camera,
     ) {
-        
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.renderer.bind_groups.texture_atlas, &[]);
         render_pass.set_bind_group(1, &self.renderer.bind_groups.view_projection, &[]);
@@ -60,12 +59,7 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
         let view_proj = camera.get_view_projection();
         self.renderer.write_view_projection(view_proj);
 
-        // let multi_draw_instructions = self
-        //     .chunk_render
-        //     .write_commands_to_indirect_buffer(&self.renderer, &self.current_draw);
-        //
-        // self.chunk_render
-        //     .multi_draw(&self.renderer, &mut render_pass, multi_draw_instructions);
+        self.chunk_manager.draw(&self.renderer, render_pass);
     }
 
     pub fn render(&mut self, camera: &Camera) -> Result<(), wgpu::SurfaceError> {
@@ -77,7 +71,7 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
         let mut encoder = self.renderer.create_encoder("render_encoder");
         {
             let mut render_pass = begin_render_pass(&mut encoder, &view, &self.renderer.depth_texture_view);
-            self.encode_render_pass(&mut render_pass, camera);
+            self.render_chunks(&mut render_pass, camera);
         }
 
         self.renderer.queue.submit(Some(encoder.finish()));
@@ -107,7 +101,7 @@ pub fn make_app_renderer<'a, const NumBuffers: usize, const NumStagingBuffers: u
         ],
     );
 
-    let max_rendered_chunks = compute::geo::max_discrete_sphere_pts(render_distance);
+    let max_rendered_chunks = compute::geo::Sphere::max_discrete_points(render_distance as isize);
     let max_buffer_size = compute::MIB * 128;
     let chunk_manager = ChunkManager::<NumBuffers, NumStagingBuffers>::new(
         &renderer,

@@ -1,7 +1,7 @@
 use crate::world::types::CHUNK_DIM;
 use glam::{IVec3, Vec3};
-use std::collections::HashSet;
 use std::f32::consts::PI;
+use crate::compute::geo::Sphere;
 
 #[inline]
 pub fn xyz_distance_squared(x: f32, y: f32, z: f32, cx: f32, cy: f32, cz: f32) -> f32 {
@@ -12,7 +12,7 @@ pub fn xyz_distance_squared(x: f32, y: f32, z: f32, cx: f32, cy: f32, cz: f32) -
 }
 
 pub fn discrete_sphere_pts(pos: &Vec3, radius: f32) -> Vec<IVec3> {
-    let points_upper_bound = max_discrete_sphere_pts(radius); // make sure no vec reallocations are needed
+    let points_upper_bound = Sphere::max_discrete_points(radius as isize); // make sure no vec reallocations are needed
     let mut points = Vec::with_capacity(points_upper_bound);
 
     let radius_squared = radius * radius;
@@ -35,14 +35,6 @@ pub fn discrete_sphere_pts(pos: &Vec3, radius: f32) -> Vec<IVec3> {
         }
     }
     points
-}
-
-#[inline(always)]
-pub fn max_discrete_sphere_pts(radius: f32) -> usize {
-    let sphere_volume = 4.0 * PI / 3.0 * radius.powi(3);
-    let surface_correction = 3.0 * PI * radius.powi(2);
-    let constant = 2.0 * radius;
-    (sphere_volume + surface_correction + constant).ceil() as usize
 }
 
 pub fn world_to_chunk_pos(vec: &Vec3) -> IVec3 {

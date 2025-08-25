@@ -6,6 +6,7 @@ mod vtypes;
 mod world;
 
 use crate::world::types::{WorldServer, WorldServerConfig};
+use glam::Vec3;
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
@@ -30,53 +31,88 @@ fn run_app() {
 }
 
 fn main() {
-    tracy_client::set_thread_name!("main");
-    run_app();
+    // tracy_client::set_thread_name!("main");
+    // run_app();
 
-    // use crate::world::generation::generate_chunk;
-    // use glam::IVec3;
-    // use std::time::Instant;
-    // use crate::world::generation::WorldGenConfig;
-    // 
-    // let noise = noise::OpenSimplex::new(0);
-    // 
-    // let worldgen_config = WorldGenConfig {
-    //     seed: 0,
-    //     noise_scale: 0.05,
-    // };
-    // let mut chunks = Vec::new();
-    // for i in 0..1 {
-    //     let c_pos = IVec3::new(2, 0, 0);
-    //     let chunk = generate_chunk(worldgen_config, c_pos);
-    //     // let chunk = Chunk {
-    //     //     last_visited: None,
-    //     //     blocks: ChunkBlocks::checkerboard(
-    //     //         Block {
-    //     //             value: 1u16 << 15u16,
-    //     //         },
-    //     //         Block { value: 0u16 },
-    //     //     ),
-    //     // };
-    //     // let chunk = Chunk {
-    //     //     last_visited: None,
-    //     //     blocks: ChunkBlocks::splat(Block {
-    //     //         value: 1u16 << 15u16,
-    //     //     }),
-    //     // };
-    //     chunks.push(chunk);
-    // }
-    // 
+    debug();
+}
+
+fn debug() {
+    use compute::geo::Sphere;
+    use compute::geo::discrete_sphere_pts;
+    use glam::IVec3;
+    use std::time::Instant;
+
+    let ipoint = IVec3::new(0, 0, 0);
+    let point = Vec3::new(ipoint.x as f32, ipoint.y as f32, ipoint.z as f32);
+    let radius = 50;
+
     // let start = Instant::now();
-    // let mut total_verts = 0;
-    // for c in chunks.iter() {
-    //     let size = compute::chunk::face_count(&c.blocks);
-    //     total_verts += size;
+    // for _ in 0..2000 {
+    //     let _ = discrete_sphere_pts(&point, radius as f32);
     // }
-    // println!("Time: {:?}", start.elapsed());
-    // 
-    // println!(
-    //     "total {}, total size: {}kb",
-    //     total_verts,
-    //     ((total_verts * 4 * 4 * 3) + (total_verts * 4 * 6)) / 1024
-    // );
+    // println!("old time: {:?}", start.elapsed());
+
+    let start = Instant::now();
+    let mut sum = 0;
+    for _ in 0..1 {
+        Sphere::discrete_points(ipoint, radius, |p| {
+            sum += p.element_sum() as isize;
+        })
+    }
+    println!("sum: {}, time: {:?}", sum, start.elapsed());
+
+    // let q = discrete_sphere_pts(&point, radius as f32);
+    // let q2 = Sphere::discrete_points(ipoint, radius);
+    // println!("old {:?}", q.len());
+    // println!("new {:?}", q2.len());
+}
+
+fn debug_chunk_gen() {
+    use crate::world::generation::WorldGenConfig;
+    use crate::world::generation::generate_chunk;
+    use glam::IVec3;
+    use std::time::Instant;
+
+    let noise = noise::OpenSimplex::new(0);
+
+    let worldgen_config = WorldGenConfig {
+        seed: 0,
+        noise_scale: 0.05,
+    };
+    let mut chunks = Vec::new();
+    for i in 0..1 {
+        let c_pos = IVec3::new(2, 0, 0);
+        let chunk = generate_chunk(worldgen_config, c_pos);
+        // let chunk = Chunk {
+        //     last_visited: None,
+        //     blocks: ChunkBlocks::checkerboard(
+        //         Block {
+        //             value: 1u16 << 15u16,
+        //         },
+        //         Block { value: 0u16 },
+        //     ),
+        // };
+        // let chunk = Chunk {
+        //     last_visited: None,
+        //     blocks: ChunkBlocks::splat(Block {
+        //         value: 1u16 << 15u16,
+        //     }),
+        // };
+        chunks.push(chunk);
+    }
+
+    let start = Instant::now();
+    let mut total_verts = 0;
+    for c in chunks.iter() {
+        let size = compute::chunk::face_count(&c.blocks);
+        total_verts += size;
+    }
+    println!("Time: {:?}", start.elapsed());
+
+    println!(
+        "total {}, total size: {}kb",
+        total_verts,
+        ((total_verts * 4 * 4 * 3) + (total_verts * 4 * 6)) / 1024
+    );
 }

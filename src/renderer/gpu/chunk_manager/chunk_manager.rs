@@ -1,13 +1,21 @@
-use glam::IVec3;
-use crate::compute;
 use super::chunk_compute::ChunkCompute;
 use super::chunk_render::ChunkRender;
-use crate::renderer::gpu::{GPUChunkEntry, GPUChunkEntryHeader, MeshVMallocMultiBuffer, MultiBufferMeshAllocationRequest};
+use crate::compute;
+use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
+use crate::renderer::gpu::{
+    GPUChunkEntry, GPUChunkEntryHeader, MeshVMallocMultiBuffer, MultiBufferMeshAllocationRequest,
+};
 use crate::renderer::{Index, Renderer, Vertex};
 use crate::world::types::Chunk;
+use parking_lot::RwLock;
+use std::array;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 pub struct ChunkManager<const NumBuffers: usize, const NumStagingBuffers: usize> {
     mesh_allocator: MeshVMallocMultiBuffer<NumBuffers>,
+    current_draw: BufferDrawArgs<NumBuffers>,
+    delta_draw: Arc<RwLock<Option<BufferDrawArgs<NumBuffers>>>>,
     compute: ChunkCompute<NumStagingBuffers>,
     render: ChunkRender<NumBuffers>,
 }
@@ -41,14 +49,16 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
         );
         Self {
             mesh_allocator: MeshVMallocMultiBuffer::new(vertices_per_buffer, indices_per_buffer, 0),
+            current_draw: array::from_fn(|_| HashMap::new()),
+            delta_draw: Arc::new(RwLock::new(None)),
             compute,
             render,
         }
     }
-    
+
     pub fn write_new(&mut self, renderer: &Renderer<'_>, chunks: Vec<(usize, Chunk)>) {
-        let mut staging_write = [const { Vec::<GPUChunkEntry>::new() } ; NumStagingBuffers];
-        let mut staging_targets = [const { Vec::<usize>::new() } ; NumStagingBuffers];
+        let mut staging_write = [const { Vec::<GPUChunkEntry>::new() }; NumStagingBuffers];
+        let mut staging_targets = [const { Vec::<usize>::new() }; NumStagingBuffers];
         for (slab_index, chunk) in chunks.into_iter() {
             let face_count = compute::chunk::face_count(&chunk.blocks);
             let vertex_count = face_count * 4;
@@ -65,12 +75,33 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
             staging_write[target_staging_buffer].push(GPUChunkEntry::new(header, chunk.blocks));
             staging_targets[target_staging_buffer].push(target_buffer);
         }
-        self.compute.write_to_staging_chunks(renderer, &staging_write);
+        self.compute
+            .write_to_staging_chunks(renderer, &staging_write);
         self.compute.dispatch_staging_workgroups(
             renderer,
             &self.render,
-            &staging_write,
-            &staging_targets,
+            staging_write,
+            staging_targets,
+            &self.delta_draw,
         );
+    }
+
+    pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut wgpu::RenderPass) {
+        let draw_instructions = self
+            .render
+            .write_args_to_indirect_buffer(renderer, &self.current_draw);
+        self.render.multi_draw(renderer, render_pass, draw_instructions);
+    }
+
+    pub fn poll_update_delta_draw(&mut self) {
+        let delta = {
+            let mut guard = self.delta_draw.write();
+            guard.take()
+        };
+        delta.map(|buffer_draw_args| {
+            buffer_draw_args.into_iter().enumerate().map(|(i, args)| {
+                self.current_draw[i].extend(args);
+            })
+        });
     }
 }

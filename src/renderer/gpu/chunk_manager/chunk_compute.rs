@@ -1,9 +1,13 @@
+use super::chunk_render::ChunkRender;
 use crate::const_labels;
 use crate::renderer::gpu::GPUChunkEntry;
-use crate::renderer::{Renderer, RendererBuilder, resources, Vertex, Index};
-use std::array;
+use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
+use crate::renderer::{Index, Renderer, RendererBuilder, Vertex, resources};
 use glam::Mat4;
-use super::chunk_render::ChunkRender;
+use parking_lot::RwLock;
+use std::array;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 pub struct ChunkCompute<const NumStagingBuffers: usize> {
     pipeline: wgpu::ComputePipeline,
@@ -92,12 +96,13 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         &self,
         renderer: &Renderer<'_>,
         chunk_render: &ChunkRender<NumBuffers>,
-        staging_entries: &[Vec<GPUChunkEntry>; NumStagingBuffers],
-        staging_targets: &[Vec<usize>; NumStagingBuffers],
+        staging_entries: [Vec<GPUChunkEntry>; NumStagingBuffers],
+        staging_targets: [Vec<usize>; NumStagingBuffers],
+        delta_draw: &Arc<RwLock<Option<BufferDrawArgs<NumBuffers>>>>,
     ) {
-        for (staging_i, (entries, target_buffer_idx)) in staging_entries
-            .iter()
-            .zip(staging_targets.iter())
+        for (staging_i, (target_buffer_idx, entries)) in staging_targets
+            .into_iter()
+            .zip(staging_entries.into_iter())
             .enumerate()
         {
             let mut encoder = renderer.create_encoder("chunk_mesh_compute_encoder");
@@ -133,9 +138,23 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
                     size_of::<Mat4>() as u64,
                 );
             }
+            let delta_ref = delta_draw.clone();
             renderer.queue.submit(Some(encoder.finish()));
             renderer.queue.on_submitted_work_done(move || {
-                // todo
+                let mut guard = delta_ref.write();
+                if guard.is_none() {
+                    *guard = Some(array::from_fn(|_| HashMap::new()));
+                }
+                let delta = guard.as_mut().unwrap();
+                for (buffer_idx, entry) in target_buffer_idx
+                    .into_iter()
+                    .zip(entries.into_iter())
+                {
+                    delta[buffer_idx].insert(
+                        entry.header.slab_index as usize,
+                        entry.header.draw_indexed_indirect_args(),
+                    );
+                }
             });
         }
     }
