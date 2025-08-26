@@ -49,7 +49,7 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
             min_mmat,
         );
         let pipeline = create_chunk_compute_pipeline(device, &[&layout]);
-        
+
         let staging_chunk_buffers = array::from_fn(|i| {
             staging_chunk_init(device, Self::STAGING_CHUNK_LABELS[i], chunk_buffer_size)
         });

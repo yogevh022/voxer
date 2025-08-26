@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-wgpu = { version = "26.0.1", features = ["dx12", "vulkan", "metal"] }
+#wgpu = { version = "26.0.1", features = ["dx12", "vulkan", "metal"] }
+wgpu = { path="C:/Users/Yogev/RustroverProjects/wgpu/wgpu", features = ["dx12", "vulkan", "metal"] }
 winit = "0.30.12"
 pollster = "0.4.0"
 bytemuck = "1.23.1"

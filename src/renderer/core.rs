@@ -14,6 +14,7 @@ pub struct RendererBindGroups {
 
 pub(crate) struct Renderer<'window> {
     pub(crate) surface: wgpu::Surface<'window>,
+    pub(crate) adapter: wgpu::Adapter,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) indirect_buffer: wgpu::Buffer,
@@ -36,6 +37,7 @@ impl<'window> From<RendererBuilder<'window>> for Renderer<'window> {
         };
         Self {
             surface: value.surface.unwrap(),
+            adapter: value.adapter.unwrap(),
             device: value.device.unwrap(),
             queue: value.queue.unwrap(),
             indirect_buffer: value.indirect_buffer.unwrap(),
