@@ -11,7 +11,6 @@ use crate::vtypes::Camera;
 
 pub struct AppRenderer<'window, const ChunkBuffers: usize, const ChunkStagingBuffers: usize> {
     pub renderer: Renderer<'window>,
-
     pub chunk_manager: ChunkManager<ChunkBuffers, ChunkStagingBuffers>,
     pub render_pipeline: wgpu::RenderPipeline,
 }
@@ -20,11 +19,11 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
     AppRenderer<'_, ChunkBuffers, ChunkStagingBuffers>
 {
     pub fn write_new_chunks(&mut self, chunks: Vec<Chunk>) {
-        // self.chunk_manager.write_new(&self.renderer, chunks);
+        self.chunk_manager.write_new(&self.renderer, chunks);
     }
 
     pub fn unload_chunk(&mut self, position: IVec3) {
-        // self.chunk_manager.drop(position);
+        self.chunk_manager.drop(position);
     }
 
     fn render_chunks(
@@ -39,7 +38,7 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
         let view_proj = camera.get_view_projection();
         self.renderer.write_view_projection(view_proj);
 
-        // self.chunk_manager.draw(&self.renderer, render_pass);
+        self.chunk_manager.draw(&self.renderer, render_pass);
     }
 
     pub fn render(&mut self, camera: &Camera) -> Result<(), wgpu::SurfaceError> {
@@ -47,11 +46,11 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        // self.chunk_manager.poll_update_delta_draw();
+        self.chunk_manager.poll_update_delta_draw();
         let mut encoder = self.renderer.create_encoder("render_encoder");
         {
             let mut render_pass = begin_render_pass(&mut encoder, &view, &self.renderer.depth_texture_view);
-            // self.render_chunks(&mut render_pass, camera);
+            self.render_chunks(&mut render_pass, camera);
         }
 
         self.renderer.queue.submit(Some(encoder.finish()));

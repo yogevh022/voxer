@@ -13,7 +13,7 @@ use crate::renderer::builder::layouts::{
 };
 use crate::renderer::resources::texture::get_atlas_image;
 
-const DXC_DLL_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/renderer/resources/dxc/bin/x86/dxcompiler.dll");
+const DXC_DLL_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/renderer/resources/dxc/bin/x64/dxcompiler.dll");
 
 pub struct RendererBuilder<'window> {
     pub(crate) config: Option<wgpu::SurfaceConfiguration>,
@@ -33,7 +33,6 @@ pub struct RendererBuilder<'window> {
 
 impl<'window> RendererBuilder<'window> {
     pub(crate) fn new(window: Arc<Window>) -> Self {
-        dbg!(DXC_DLL_PATH);
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::DX12,
             flags: Default::default(),
@@ -49,7 +48,6 @@ impl<'window> RendererBuilder<'window> {
                 noop: Default::default(),
             },
         });
-        // let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -88,8 +86,8 @@ impl<'window> RendererBuilder<'window> {
 
         let indirect_buffer = RendererBuilder::make_buffer(
             &device,
-            "temp_indirect_buffer",
-            250 * compute::KIB as u64,
+            "indirect_buffer",
+            256 * compute::KIB as u64,
             wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
         );
 
