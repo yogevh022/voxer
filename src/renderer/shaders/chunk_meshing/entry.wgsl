@@ -12,7 +12,7 @@ var<workgroup> vertex_count: atomic<u32>;
 var<workgroup> index_count: atomic<u32>;
 
 @compute @workgroup_size(CHUNK_DIM, CHUNK_DIM, 1)
-fn compute_main(
+fn mesh_chunks_entry(
     @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
 ) {
@@ -28,9 +28,8 @@ fn compute_main(
     }
     workgroupBarrier();
 
-    var blocks = chunk.blocks;
     mesh_chunk_position(
-        &blocks,
+        chunk_index,
         lid.x,
         lid.y,
     );

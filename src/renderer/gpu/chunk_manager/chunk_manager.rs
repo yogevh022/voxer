@@ -80,7 +80,7 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
             let slab_index = self
                 .chunks_slap
                 .insert(chunk.position, (target_buffer, mesh_alloc));
-            println!("wiring {:?} into {}", chunk.position, slab_index);
+            // println!("wiring {:?} into {}", chunk.position, slab_index);
             let header = GPUChunkEntryHeader::new(mesh_alloc, slab_index as u32, chunk.position);
             staging_write[target_staging_buffer].push(GPUChunkEntry::new(header, chunk.blocks));
             staging_targets[target_staging_buffer].push(target_buffer);
@@ -111,14 +111,14 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
     }
 
     pub fn drop(&mut self, position: IVec3) {
-        println!("ChunkManager::drop: {}", position);
+        // println!("ChunkManager::drop: {}", position);
         let slap_entry_opt = self.chunks_slap.remove(&position);
         if let Some((slab_index, full_alloc)) = slap_entry_opt {
             let buffer_index = self.target_buffer_for(position);
             self.current_draw[buffer_index].remove(&slab_index);
             self.mesh_allocator.free(full_alloc).unwrap();
         } else {
-            println!("ChunkManager::drop: Chunk not found! {}", position);
+            // println!("ChunkManager::drop: Chunk not found! {}", position);
         }
     }
 

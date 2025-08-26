@@ -1,7 +1,6 @@
 use crate::renderer::gpu::malloc::mesh_malloc::MeshVMalloc;
 use crate::renderer::gpu::malloc::virtual_malloc::MallocError;
-use crate::renderer::gpu::{VMallocFirstFit, VirtualMalloc};
-use bytemuck::{NoUninit, Pod, Zeroable};
+use bytemuck::{Pod, Zeroable};
 use std::array;
 use std::fmt::Debug;
 use std::io::Write;

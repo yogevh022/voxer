@@ -13,6 +13,8 @@ use crate::renderer::builder::layouts::{
 };
 use crate::renderer::resources::texture::get_atlas_image;
 
+const DXC_DLL_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/renderer/resources/dxc/bin/x86/dxcompiler.dll");
+
 pub struct RendererBuilder<'window> {
     pub(crate) config: Option<wgpu::SurfaceConfiguration>,
     pub(crate) surface: Option<wgpu::Surface<'window>>,
@@ -31,7 +33,23 @@ pub struct RendererBuilder<'window> {
 
 impl<'window> RendererBuilder<'window> {
     pub(crate) fn new(window: Arc<Window>) -> Self {
-        let instance = wgpu::Instance::default();
+        dbg!(DXC_DLL_PATH);
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::DX12,
+            flags: Default::default(),
+            memory_budget_thresholds: Default::default(),
+            backend_options: wgpu::BackendOptions {
+                gl: Default::default(),
+                dx12: wgpu::Dx12BackendOptions {
+                    shader_compiler: wgpu::Dx12Compiler::DynamicDxc {
+                        dxc_path: DXC_DLL_PATH.to_string(),
+                        max_shader_model: wgpu::DxcShaderModel::V6_0,
+                    },
+                },
+                noop: Default::default(),
+            },
+        });
+        // let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -51,7 +69,7 @@ impl<'window> RendererBuilder<'window> {
             trace: Default::default(),
         }))
         .unwrap();
-
+        
         let size = window.inner_size();
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps.formats[0];
