@@ -2,6 +2,7 @@ use crate::const_labels;
 use crate::renderer::gpu::chunk_manager::{BufferDrawArgs, MultiDrawInstruction};
 use crate::renderer::{DrawIndexedIndirectArgsA32, Renderer, RendererBuilder, resources};
 use std::array;
+use glam::IVec3;
 
 pub struct ChunkRender<const N: usize> {
     pub vertex_buffers: [wgpu::Buffer; N],

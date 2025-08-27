@@ -50,18 +50,6 @@ impl WorldServer {
                 },
             );
         }
-        // active_chunk_positions.insert(IVec3::new(0, 0, 0));
-        // active_chunk_positions.insert(IVec3::new(1, 0, 0));
-        // active_chunk_positions.insert(IVec3::new(2, 0, 0));
-        // active_chunk_positions.insert(IVec3::new(3, 0, 0));
-        // active_chunk_positions.insert(IVec3::new(4, 0, 0));
-        // active_chunk_positions.insert(IVec3::new(5, 0, 0));
-        // active_chunk_positions.insert(IVec3::new(0, 0, 1));
-        // active_chunk_positions.insert(IVec3::new(1, 0, 1));
-        // active_chunk_positions.insert(IVec3::new(2, 0, 1));
-        // active_chunk_positions.insert(IVec3::new(3, 0, 1));
-        // active_chunk_positions.insert(IVec3::new(4, 0, 1));
-        // active_chunk_positions.insert(IVec3::new(5, 0, 1));
         self.try_receive_generation();
         let (generated, ungenerated): (HashSet<_>, HashSet<_>) =
             self.partition_chunks_by_existence(active_chunk_positions);
@@ -69,15 +57,16 @@ impl WorldServer {
         self.simulated_chunks = generated;
     }
 
-    pub fn set_player(&mut self, player_id: usize, player_pos: &Vec3) {
-        self.players.insert(player_id, *player_pos);
+    pub fn set_player(&mut self, player_id: usize, player_pos: Vec3) {
+        self.players.insert(player_id, player_pos);
     }
 
-    pub fn get_chunks(&self, positions: Vec<IVec3>) -> Vec<Option<Chunk>> {
+    pub fn get_chunks(&self, positions: Vec<IVec3>) -> Vec<Chunk> {
         // cloning here because the server will have to send clones to clients anyway
+        // only returns chunks that are generated
         positions
             .into_iter()
-            .map(|c_pos| self.chunks.get(&c_pos).cloned())
+            .filter_map(|c_pos| self.chunks.get(&c_pos).cloned())
             .collect()
     }
 

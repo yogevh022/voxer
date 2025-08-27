@@ -11,19 +11,33 @@ use crate::vtypes::Camera;
 
 pub struct AppRenderer<'window, const ChunkBuffers: usize, const ChunkStagingBuffers: usize> {
     pub renderer: Renderer<'window>,
-    pub chunk_manager: ChunkManager<ChunkBuffers, ChunkStagingBuffers>,
+    chunk_manager: ChunkManager<ChunkBuffers, ChunkStagingBuffers>,
     pub render_pipeline: wgpu::RenderPipeline,
 }
 
 impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
     AppRenderer<'_, ChunkBuffers, ChunkStagingBuffers>
 {
-    pub fn write_new_chunks(&mut self, chunks: Vec<Chunk>) {
+    pub fn load_chunks(&mut self, chunks: Vec<Chunk>) {
         self.chunk_manager.write_new(&self.renderer, chunks);
+        self.chunk_manager.malloc_debug();
     }
 
-    pub fn unload_chunk(&mut self, position: IVec3) {
-        self.chunk_manager.drop(position);
+    pub fn unload_chunks(&mut self, positions: Vec<IVec3>) {
+        for position in positions {
+            self.chunk_manager.drop(position);
+        }
+    }
+
+    pub fn is_chunk_rendered(&self, position: IVec3) -> bool {
+        self.chunk_manager.is_rendered(position)
+    }
+
+    pub fn map_rendered_chunk_positions<F>(&self, func: F) -> Vec<IVec3>
+    where
+        F: FnMut(IVec3) -> bool,
+    {
+        self.chunk_manager.map_rendered_chunk_positions(func)
     }
 
     fn render_chunks(
@@ -46,6 +60,7 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        // fixme not every frame..
         self.chunk_manager.poll_update_delta_draw();
         let mut encoder = self.renderer.create_encoder("render_encoder");
         {

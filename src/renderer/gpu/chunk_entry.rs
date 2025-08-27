@@ -1,34 +1,11 @@
 use crate::renderer::DrawIndexedIndirectArgsA32;
 use crate::renderer::gpu::MultiBufferMeshAllocation;
-use crate::world::types::{CHUNK_DIM, Chunk, ChunkBlocks, PACKED_CHUNK_DIM};
+use crate::world::types::{CHUNK_DIM, ChunkBlocks, PACKED_CHUNK_DIM};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
-use std::ops::Deref;
 
 type GPUPackedBlockPair = u32;
 type GPUChunkBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM];
-
-#[derive(Debug)]
-pub struct GPUChunkEntryBuffer(Vec<GPUChunkEntry>);
-
-impl GPUChunkEntryBuffer {
-    pub fn new(size: usize) -> Self {
-        Self(Vec::with_capacity(size))
-    }
-
-    pub fn insert(&mut self, header: GPUChunkEntryHeader, blocks: ChunkBlocks) {
-        let entry = GPUChunkEntry::new(header, blocks);
-        self.0.push(entry);
-    }
-}
-
-impl Deref for GPUChunkEntryBuffer {
-    type Target = Vec<GPUChunkEntry>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 #[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -38,7 +15,13 @@ pub struct GPUChunkEntry {
 }
 
 impl GPUChunkEntry {
-    pub fn new(header: GPUChunkEntryHeader, blocks: ChunkBlocks) -> Self {
+    pub fn new(
+        allocation: MultiBufferMeshAllocation,
+        slab_index: u32,
+        chunk_position: IVec3,
+        blocks: ChunkBlocks,
+    ) -> Self {
+        let header = GPUChunkEntryHeader::new(allocation, slab_index, chunk_position);
         let gpu_blocks: GPUChunkBlocks = unsafe { std::mem::transmute(blocks) };
         Self {
             header,

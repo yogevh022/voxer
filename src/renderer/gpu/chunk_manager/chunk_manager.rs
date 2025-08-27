@@ -4,22 +4,22 @@ use crate::compute;
 use crate::compute::ds::Slap;
 use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
 use crate::renderer::gpu::{
-    GPUChunkEntry, GPUChunkEntryHeader, MeshVMallocMultiBuffer, MultiBufferMeshAllocation,
+    GPUChunkEntry, MeshVMallocMultiBuffer, MultiBufferMeshAllocation,
     MultiBufferMeshAllocationRequest,
 };
 use crate::renderer::{Index, Renderer, Vertex};
 use crate::world::types::Chunk;
 use glam::IVec3;
-use parking_lot::RwLock;
+use parking_lot::Mutex;
 use std::array;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 pub struct ChunkManager<const NumBuffers: usize, const NumStagingBuffers: usize> {
     mesh_allocator: MeshVMallocMultiBuffer<NumBuffers>,
     chunks_slap: Slap<IVec3, (usize, MultiBufferMeshAllocation)>,
     current_draw: BufferDrawArgs<NumBuffers>,
-    delta_draw: Arc<RwLock<Option<BufferDrawArgs<NumBuffers>>>>,
+    delta_draw: Arc<Mutex<Option<BufferDrawArgs<NumBuffers>>>>,
     compute: ChunkCompute<NumStagingBuffers>,
     render: ChunkRender<NumBuffers>,
 }
@@ -55,34 +55,51 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
             mesh_allocator: MeshVMallocMultiBuffer::new(vertices_per_buffer, indices_per_buffer, 0),
             chunks_slap: Slap::new(),
             current_draw: array::from_fn(|_| HashMap::new()),
-            delta_draw: Arc::new(RwLock::new(None)),
+            delta_draw: Arc::new(Mutex::new(None)),
             compute,
             render,
         }
+    }
+
+    pub fn is_rendered(&self, position: IVec3) -> bool {
+        self.chunks_slap.get(&position).is_some()
+    }
+
+    pub fn map_rendered_chunk_positions<F>(&self, mut func: F) -> Vec<IVec3>
+    where
+        F: FnMut(IVec3) -> bool,
+    {
+        self.chunks_slap
+            .iter()
+            .filter_map(|(&chunk_position, _)| func(chunk_position).then_some(chunk_position))
+            .collect()
     }
 
     pub fn write_new(&mut self, renderer: &Renderer<'_>, chunks: Vec<Chunk>) {
         let mut staging_write = [const { Vec::<GPUChunkEntry>::new() }; NumStagingBuffers];
         let mut staging_targets = [const { Vec::<usize>::new() }; NumStagingBuffers];
         for chunk in chunks.into_iter() {
-            // fixme self.chunks_slap.get(&chunk.position).is_some()
-            let face_count = compute::chunk::face_count(&chunk.blocks);
-            let vertex_count = face_count * 4;
-            let index_count = face_count * 6;
+            debug_assert_eq!(self.chunks_slap.get(&chunk.position).is_some(), false);
             let target_buffer = self.target_buffer_for(chunk.position);
-            let target_staging_buffer = 0usize;
+            let target_staging_buffer = self.target_staging_buffer_for(chunk.position);
+
+            let face_count = compute::chunk::face_count(&chunk.blocks);
             let alloc_request = MultiBufferMeshAllocationRequest {
                 buffer_index: target_buffer,
-                vertex_size: vertex_count,
-                index_size: index_count,
+                vertex_count: face_count * 4,
+                index_count: face_count * 6,
             };
             let mesh_alloc = self.mesh_allocator.alloc(alloc_request).unwrap();
             let slab_index = self
                 .chunks_slap
                 .insert(chunk.position, (target_buffer, mesh_alloc));
-            // println!("wiring {:?} into {}", chunk.position, slab_index);
-            let header = GPUChunkEntryHeader::new(mesh_alloc, slab_index as u32, chunk.position);
-            staging_write[target_staging_buffer].push(GPUChunkEntry::new(header, chunk.blocks));
+
+            staging_write[target_staging_buffer].push(GPUChunkEntry::new(
+                mesh_alloc,
+                slab_index as u32,
+                chunk.position,
+                chunk.blocks,
+            ));
             staging_targets[target_staging_buffer].push(target_buffer);
         }
         self.compute
@@ -94,12 +111,14 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
             staging_targets,
             &self.delta_draw,
         );
-        
-        self.mesh_allocator.debug();
     }
 
     fn target_buffer_for(&self, position: IVec3) -> usize {
         position.element_sum() as usize % NumBuffers
+    }
+
+    fn target_staging_buffer_for(&self, _position: IVec3) -> usize {
+        0usize
     }
 
     pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut wgpu::RenderPass) {
@@ -111,20 +130,19 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
     }
 
     pub fn drop(&mut self, position: IVec3) {
-        // println!("ChunkManager::drop: {}", position);
         let slap_entry_opt = self.chunks_slap.remove(&position);
-        if let Some((slab_index, full_alloc)) = slap_entry_opt {
-            let buffer_index = self.target_buffer_for(position);
-            self.current_draw[buffer_index].remove(&slab_index);
-            self.mesh_allocator.free(full_alloc).unwrap();
-        } else {
-            // println!("ChunkManager::drop: Chunk not found! {}", position);
+        let (slab_index, full_alloc) = slap_entry_opt.unwrap();
+        let buffer_index = self.target_buffer_for(position);
+        self.current_draw[buffer_index].remove(&slab_index);
+        if let Err(e) = self.mesh_allocator.free(full_alloc) {
+            // fixme this should never happen
+            // println!("malloc::free failed for {:?}, {:?}", position, e);
         }
     }
 
     pub fn poll_update_delta_draw(&mut self) {
         let delta = {
-            let mut guard = self.delta_draw.write();
+            let mut guard = self.delta_draw.lock();
             guard.take()
         };
         if let Some(delta) = delta {
@@ -132,5 +150,9 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
                 self.current_draw[i].extend(args);
             }
         }
+    }
+
+    pub fn malloc_debug(&self) {
+        self.mesh_allocator.debug();
     }
 }

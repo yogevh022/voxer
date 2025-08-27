@@ -17,8 +17,8 @@ pub struct MultiBufferMeshAllocation {
 #[derive(Debug)]
 pub struct MultiBufferMeshAllocationRequest {
     pub buffer_index: usize,
-    pub vertex_size: usize,
-    pub index_size: usize,
+    pub vertex_count: usize,
+    pub index_count: usize,
 }
 
 pub struct MeshVMallocMultiBuffer<const N: usize> {
@@ -44,16 +44,16 @@ impl<const N: usize> MeshVMallocMultiBuffer<N> {
     ) -> Result<MultiBufferMeshAllocation, MallocError> {
         let allocation = self.virtual_buffers[allocation_request.buffer_index]
             .alloc((
-                allocation_request.vertex_size,
-                allocation_request.index_size,
+                allocation_request.vertex_count,
+                allocation_request.index_count,
             ))
             .ok()
             .ok_or(MallocError::OutOfMemory)?;
         Ok(MultiBufferMeshAllocation {
             vertex_offset: allocation.0 as u32,
-            vertex_size: allocation_request.vertex_size as u32,
+            vertex_size: allocation_request.vertex_count as u32,
             index_offset: allocation.1 as u32,
-            index_size: allocation_request.index_size as u32,
+            index_size: allocation_request.index_count as u32,
         })
     }
 

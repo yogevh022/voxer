@@ -2,7 +2,7 @@ pub mod app_renderer;
 
 use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::types::{WorldClient, WorldClientConfig, WorldServer};
-use crate::{SIMULATION_AND_RENDER_DISTANCE, vtypes, compute};
+use crate::{SIMULATION_AND_RENDER_DISTANCE, compute, vtypes};
 use glam::IVec3;
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -153,19 +153,31 @@ impl<'a> App<'a> {
         }
 
         let player_pos = self.v.camera.transform.position;
-        self.server.set_player(0, &player_pos);
-        let player_c_pos = compute::geo::world_to_chunk_pos(player_pos);
+        self.server.set_player(0, player_pos);
+        self.client
+            .as_mut()
+            .unwrap()
+            .set_player_position(player_pos);
 
-        // fixme intense to run this every frame
-        self.server.update();
-        let m_client = self.client.as_mut().unwrap();
-        let (new_chunks_pos, outdated_chunks_pos) = m_client.nearby_chunks_delta(player_c_pos);
-        let new_chunks = self.server.get_chunks(new_chunks_pos);
-        m_client.send_chunks_to_renderer(new_chunks);
-        for p in outdated_chunks_pos {
-            m_client.renderer.unload_chunk(p);
+        if self.v.time.temp_200th_frame() {
+            self.server.update();
+            let m_client = self.client.as_mut().unwrap();
+            
+            let player_cp = compute::geo::world_to_chunk_pos(player_pos);
+            let render_r2 = m_client.config.render_distance.pow(2) as i32;
+            let unload_chunks = m_client.renderer.map_rendered_chunk_positions(|c_pos| {
+                compute::geo::distance_squared_i(player_cp, c_pos) > render_r2
+            });
+            if unload_chunks.len() > 0 {
+                m_client.renderer.unload_chunks(unload_chunks);
+            }
+            
+            let load_chunk_positions = m_client
+                .map_visible_chunk_positions(|c_pos| !m_client.renderer.is_chunk_rendered(c_pos));
+            if load_chunk_positions.len() > 0 {
+                let load_chunks = self.server.get_chunks(load_chunk_positions);
+                m_client.renderer.load_chunks(load_chunks);
+            }
         }
-
-        m_client.set_chunk_position(player_c_pos);
     }
 }

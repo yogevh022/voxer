@@ -23,7 +23,9 @@ where
 
     pub fn insert(&mut self, key: K, value: V) -> usize {
         let index = self.slab.insert(value);
-        self.map.insert(key, index);
+        self.map
+            .insert(key, index)
+            .map(|old_index| self.slab.remove(old_index));
         index
     }
 

@@ -4,7 +4,7 @@ use crate::renderer::gpu::GPUChunkEntry;
 use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
 use crate::renderer::{Index, Renderer, RendererBuilder, Vertex, resources};
 use glam::Mat4;
-use parking_lot::RwLock;
+use parking_lot::{Mutex};
 use std::array;
 use std::collections::HashMap;
 use std::num::NonZeroU64;
@@ -109,7 +109,7 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         chunk_render: &ChunkRender<NumBuffers>,
         staging_entries: [Vec<GPUChunkEntry>; NumStagingBuffers],
         staging_targets: [Vec<usize>; NumStagingBuffers],
-        delta_draw: &Arc<RwLock<Option<BufferDrawArgs<NumBuffers>>>>,
+        delta_draw: &Arc<Mutex<Option<BufferDrawArgs<NumBuffers>>>>,
     ) {
             for (staging_i, (target_buffer_indexes, entries)) in staging_targets
                 .into_iter()
@@ -152,7 +152,7 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
                 let delta_ref = delta_draw.clone();
                 renderer.queue.submit(Some(encoder.finish()));
                 renderer.queue.on_submitted_work_done(move || {
-                    let mut guard = delta_ref.write();
+                    let mut guard = delta_ref.lock();
                     if guard.is_none() {
                         *guard = Some(array::from_fn(|_| HashMap::new()));
                     }
