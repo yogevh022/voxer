@@ -6,6 +6,6 @@ mod virtual_malloc;
 
 pub use ff_malloc::VMallocFirstFit;
 pub use mesh_malloc_multi_buffer::{
-    MeshVMallocMultiBuffer, MultiBufferMeshAllocation, MultiBufferMeshAllocationRequest
+    MeshVMallocMultiBuffer, MeshAllocation, MultiBufferMeshAllocationRequest
 };
 pub use virtual_malloc::VirtualMalloc;

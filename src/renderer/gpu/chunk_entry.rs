@@ -1,5 +1,5 @@
 use crate::renderer::DrawIndexedIndirectArgsA32;
-use crate::renderer::gpu::MultiBufferMeshAllocation;
+use crate::renderer::gpu::MeshAllocation;
 use crate::world::types::{CHUNK_DIM, ChunkBlocks, PACKED_CHUNK_DIM};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
@@ -16,7 +16,7 @@ pub struct GPUChunkEntry {
 
 impl GPUChunkEntry {
     pub fn new(
-        allocation: MultiBufferMeshAllocation,
+        allocation: MeshAllocation,
         slab_index: u32,
         chunk_position: IVec3,
         blocks: ChunkBlocks,
@@ -33,7 +33,7 @@ impl GPUChunkEntry {
 #[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkEntryHeader {
-    pub allocation: MultiBufferMeshAllocation, // 16
+    pub allocation: MeshAllocation, // 16
     pub slab_index: u32,                       // 20
     _pad0: [u32; 3],                           // pad to 32
     pub chunk_position: IVec3,                 // 44
@@ -42,7 +42,7 @@ pub struct GPUChunkEntryHeader {
 
 impl GPUChunkEntryHeader {
     pub fn new(
-        allocation: MultiBufferMeshAllocation,
+        allocation: MeshAllocation,
         slab_index: u32,
         chunk_position: IVec3,
     ) -> Self {
@@ -57,7 +57,7 @@ impl GPUChunkEntryHeader {
 
     pub fn draw_indexed_indirect_args(&self) -> DrawIndexedIndirectArgsA32 {
         DrawIndexedIndirectArgsA32::new(
-            self.allocation.index_size,
+            self.allocation.index_count,
             1,
             self.allocation.index_offset,
             0, // vertices are indexed from 0, void and chunk offsets are baked into the indices

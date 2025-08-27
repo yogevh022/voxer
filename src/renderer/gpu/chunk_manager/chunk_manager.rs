@@ -2,10 +2,9 @@ use super::chunk_compute::ChunkCompute;
 use super::chunk_render::ChunkRender;
 use crate::compute;
 use crate::compute::ds::Slap;
-use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
+use crate::renderer::gpu::chunk_manager::{BufferCopyMapping, BufferDrawArgs};
 use crate::renderer::gpu::{
-    GPUChunkEntry, MeshVMallocMultiBuffer, MultiBufferMeshAllocation,
-    MultiBufferMeshAllocationRequest,
+    GPUChunkEntry, MeshAllocation, MeshVMallocMultiBuffer, MultiBufferMeshAllocationRequest,
 };
 use crate::renderer::{Index, Renderer, Vertex};
 use crate::world::types::Chunk;
@@ -17,7 +16,7 @@ use std::sync::Arc;
 
 pub struct ChunkManager<const NumBuffers: usize, const NumStagingBuffers: usize> {
     mesh_allocator: MeshVMallocMultiBuffer<NumBuffers>,
-    chunks_slap: Slap<IVec3, (usize, MultiBufferMeshAllocation)>,
+    chunks_slap: Slap<IVec3, (usize, MeshAllocation)>,
     current_draw: BufferDrawArgs<NumBuffers>,
     delta_draw: Arc<Mutex<Option<BufferDrawArgs<NumBuffers>>>>,
     compute: ChunkCompute<NumStagingBuffers>,
@@ -76,39 +75,45 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
     }
 
     pub fn write_new(&mut self, renderer: &Renderer<'_>, chunks: Vec<Chunk>) {
-        let mut staging_write = [const { Vec::<GPUChunkEntry>::new() }; NumStagingBuffers];
-        let mut staging_targets = [const { Vec::<usize>::new() }; NumStagingBuffers];
+        let mut staging_entries = [const { Vec::<GPUChunkEntry>::new() }; NumStagingBuffers];
+        let mut staging_mapping = [const { BufferCopyMapping::new() }; NumStagingBuffers];
         for chunk in chunks.into_iter() {
             debug_assert_eq!(self.chunks_slap.get(&chunk.position).is_some(), false);
             let target_buffer = self.target_buffer_for(chunk.position);
             let target_staging_buffer = self.target_staging_buffer_for(chunk.position);
-
             let face_count = compute::chunk::face_count(&chunk.blocks);
+
             let alloc_request = MultiBufferMeshAllocationRequest {
                 buffer_index: target_buffer,
                 vertex_count: face_count * 4,
                 index_count: face_count * 6,
             };
             let mesh_alloc = self.mesh_allocator.alloc(alloc_request).unwrap();
+            
+            let staging_mesh_allocation =
+                staging_mapping[target_staging_buffer].push_to(target_buffer, face_count, mesh_alloc);
+
+            dbg!(staging_mesh_allocation);
+            
             let slab_index = self
                 .chunks_slap
-                .insert(chunk.position, (target_buffer, mesh_alloc));
+                .insert(chunk.position, (target_buffer, staging_mesh_allocation));
 
-            staging_write[target_staging_buffer].push(GPUChunkEntry::new(
-                mesh_alloc,
+            staging_entries[target_staging_buffer].push(GPUChunkEntry::new(
+                staging_mesh_allocation,
                 slab_index as u32,
                 chunk.position,
                 chunk.blocks,
             ));
-            staging_targets[target_staging_buffer].push(target_buffer);
         }
+        
         self.compute
-            .write_to_staging_chunks(renderer, &staging_write);
+            .write_to_staging_chunks(renderer, &staging_entries);
         self.compute.dispatch_staging_workgroups(
             renderer,
             &self.render,
-            staging_write,
-            staging_targets,
+            staging_entries,
+            staging_mapping,
             &self.delta_draw,
         );
     }

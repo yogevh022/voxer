@@ -7,14 +7,14 @@ use std::io::Write;
 
 #[repr(C, align(16))]
 #[derive(Copy, Debug, Clone, Pod, Zeroable)]
-pub struct MultiBufferMeshAllocation {
+pub struct MeshAllocation {
     pub vertex_offset: u32,
     pub index_offset: u32,
-    pub vertex_size: u32,
-    pub index_size: u32,
+    pub vertex_count: u32,
+    pub index_count: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct MultiBufferMeshAllocationRequest {
     pub buffer_index: usize,
     pub vertex_count: usize,
@@ -41,7 +41,7 @@ impl<const N: usize> MeshVMallocMultiBuffer<N> {
     pub(crate) fn alloc(
         &mut self,
         allocation_request: MultiBufferMeshAllocationRequest,
-    ) -> Result<MultiBufferMeshAllocation, MallocError> {
+    ) -> Result<MeshAllocation, MallocError> {
         let allocation = self.virtual_buffers[allocation_request.buffer_index]
             .alloc((
                 allocation_request.vertex_count,
@@ -49,17 +49,17 @@ impl<const N: usize> MeshVMallocMultiBuffer<N> {
             ))
             .ok()
             .ok_or(MallocError::OutOfMemory)?;
-        Ok(MultiBufferMeshAllocation {
+        Ok(MeshAllocation {
             vertex_offset: allocation.0 as u32,
-            vertex_size: allocation_request.vertex_count as u32,
+            vertex_count: allocation_request.vertex_count as u32,
             index_offset: allocation.1 as u32,
-            index_size: allocation_request.index_count as u32,
+            index_count: allocation_request.index_count as u32,
         })
     }
 
     pub(crate) fn free(
         &mut self,
-        allocation: (usize, MultiBufferMeshAllocation),
+        allocation: (usize, MeshAllocation),
     ) -> Result<(), MallocError> {
         let buff = self.virtual_buffers.get_mut(allocation.0).unwrap();
         buff.free((
@@ -67,6 +67,12 @@ impl<const N: usize> MeshVMallocMultiBuffer<N> {
             allocation.1.index_offset as usize,
         ))?;
         Ok(())
+    }
+    
+    pub(crate) fn clear(&mut self) {
+        for mesh_malloc in self.virtual_buffers.iter_mut() {
+            mesh_malloc.clear();
+        }
     }
 
     pub(crate) fn debug(&self) {

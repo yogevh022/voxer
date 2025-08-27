@@ -31,4 +31,9 @@ impl MeshVMalloc {
         self.index_malloc.free(allocation.1)?;
         Ok(())
     }
+    
+    pub(crate) fn clear(&mut self) {
+        self.vertex_malloc.clear();
+        self.index_malloc.clear();
+    }
 }

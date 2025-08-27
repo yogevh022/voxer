@@ -73,6 +73,11 @@ impl VMallocFirstFit {
             .map(|s| s.prev_free = slot.size);
         Ok(())
     }
+    
+    pub(crate) fn clear(&mut self) {
+        self.free_blocks.clear();
+        self.used_blocks.clear();
+    }
 
     pub fn total_free(&self) -> usize {
         self.free_blocks.iter().map(|(_, s)| s.size).sum()
