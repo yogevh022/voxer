@@ -1,15 +1,13 @@
 use crate::const_labels;
 use crate::renderer::gpu::chunk_manager::{BufferDrawArgs, MultiDrawInstruction};
-use crate::renderer::{DrawIndexedIndirectArgsDX12, Renderer, RendererBuilder, resources};
+use crate::renderer::{DrawIndexedIndirectArgsA32, Renderer, RendererBuilder, resources};
 use std::array;
-use wgpu::wgt::DrawIndexedIndirectArgs;
 
 pub struct ChunkRender<const N: usize> {
     pub vertex_buffers: [wgpu::Buffer; N],
     pub index_buffers: [wgpu::Buffer; N],
     pub mmat_buffer: wgpu::Buffer,
     mmat_bind_group: wgpu::BindGroup,
-    backend: wgpu::Backend,
 }
 
 impl<const NumBuffers: usize> ChunkRender<NumBuffers> {
@@ -45,7 +43,6 @@ impl<const NumBuffers: usize> ChunkRender<NumBuffers> {
             index_buffers,
             mmat_buffer,
             mmat_bind_group,
-            backend: renderer.adapter.get_info().backend,
         }
     }
 
@@ -54,49 +51,26 @@ impl<const NumBuffers: usize> ChunkRender<NumBuffers> {
         renderer: &Renderer<'_>,
         buffer_draw_args: &BufferDrawArgs<NumBuffers>,
     ) -> [MultiDrawInstruction; NumBuffers] {
-        let draw_args_size = if self.backend == wgpu::Backend::Dx12 {
-            size_of::<DrawIndexedIndirectArgsDX12>()
-        } else {
-            size_of::<DrawIndexedIndirectArgs>()
-        };
         let mut command_count = 0;
         let indirect_offsets = array::from_fn(|i| {
             let instruction = MultiDrawInstruction {
-                offset: command_count * draw_args_size,
+                offset: command_count * size_of::<DrawIndexedIndirectArgsA32>(),
                 count: buffer_draw_args[i].len(),
             };
             command_count += instruction.count;
             instruction
         });
 
-        if self.backend == wgpu::Backend::Dx12 {
-            let flat_draw_args_dx12 = buffer_draw_args
-                .iter()
-                .flat_map(|x| {
-                    x.values().map(|&args| DrawIndexedIndirectArgsDX12 {
-                        args,
-                        ..Default::default()
-                    })
-                })
-                .collect::<Vec<_>>();
+        let flat_draw_args = buffer_draw_args
+            .iter()
+            .flat_map(|x| x.values().copied())
+            .collect::<Vec<_>>();
 
-            renderer.write_buffer(
-                &renderer.indirect_buffer,
-                0,
-                bytemuck::cast_slice(&flat_draw_args_dx12),
-            );
-        } else {
-            let flat_draw_args = buffer_draw_args
-                .iter()
-                .flat_map(|x| x.values().copied())
-                .collect::<Vec<_>>();
-
-            renderer.write_buffer(
-                &renderer.indirect_buffer,
-                0,
-                bytemuck::cast_slice(&flat_draw_args),
-            );
-        }
+        renderer.write_buffer(
+            &renderer.indirect_buffer,
+            0,
+            bytemuck::cast_slice(&flat_draw_args),
+        );
         indirect_offsets
     }
 
@@ -113,7 +87,6 @@ impl<const NumBuffers: usize> ChunkRender<NumBuffers> {
                 .set_index_buffer(self.index_buffers[i].slice(..), wgpu::IndexFormat::Uint32);
 
             if multi_draw_instructions[i].count != 0 {
-                // count 0 still draws on dx12?
                 render_pass.multi_draw_indexed_indirect(
                     &renderer.indirect_buffer,
                     multi_draw_instructions[i].offset as u64,

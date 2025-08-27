@@ -1,9 +1,9 @@
-use crate::renderer::gpu::{MultiBufferMeshAllocation};
+use crate::renderer::DrawIndexedIndirectArgsA32;
+use crate::renderer::gpu::MultiBufferMeshAllocation;
 use crate::world::types::{CHUNK_DIM, Chunk, ChunkBlocks, PACKED_CHUNK_DIM};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
 use std::ops::Deref;
-use wgpu::util::DrawIndexedIndirectArgs;
 
 type GPUPackedBlockPair = u32;
 type GPUChunkBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM];
@@ -23,7 +23,7 @@ impl GPUChunkEntryBuffer {
 }
 
 impl Deref for GPUChunkEntryBuffer {
-    type Target = [GPUChunkEntry];
+    type Target = Vec<GPUChunkEntry>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -50,11 +50,11 @@ impl GPUChunkEntry {
 #[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkEntryHeader {
-    pub allocation: MultiBufferMeshAllocation,      // 16
-    pub slab_index: u32,                            // 20
-    _pad0: [u32; 3],                                // pad to 32
-    pub chunk_position: IVec3,                      // 44
-    _pad3: u32,                                     // pad to 48
+    pub allocation: MultiBufferMeshAllocation, // 16
+    pub slab_index: u32,                       // 20
+    _pad0: [u32; 3],                           // pad to 32
+    pub chunk_position: IVec3,                 // 44
+    _pad3: u32,                                // pad to 48
 }
 
 impl GPUChunkEntryHeader {
@@ -72,13 +72,13 @@ impl GPUChunkEntryHeader {
         }
     }
 
-    pub fn draw_indexed_indirect_args(&self) -> DrawIndexedIndirectArgs {
-        DrawIndexedIndirectArgs {
-            index_count: self.allocation.index_size,
-            instance_count: 1,
-            first_index: self.allocation.index_offset,
-            base_vertex: 0, // vertices are indexed from 0, void and chunk offsets are baked into the indices
-            first_instance: self.slab_index,
-        }
+    pub fn draw_indexed_indirect_args(&self) -> DrawIndexedIndirectArgsA32 {
+        DrawIndexedIndirectArgsA32::new(
+            self.allocation.index_size,
+            1,
+            self.allocation.index_offset,
+            0, // vertices are indexed from 0, void and chunk offsets are baked into the indices
+            self.slab_index,
+        )
     }
 }

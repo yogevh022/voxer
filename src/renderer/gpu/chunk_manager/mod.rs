@@ -3,10 +3,10 @@ mod chunk_render;
 mod chunk_manager;
 
 use std::collections::HashMap;
-use wgpu::util::DrawIndexedIndirectArgs;
 pub use chunk_manager::ChunkManager;
+use crate::renderer::DrawIndexedIndirectArgsA32;
 
-type BufferDrawArgs<const N: usize> = [HashMap<usize, DrawIndexedIndirectArgs>; N];
+type BufferDrawArgs<const N: usize> = [HashMap<usize, DrawIndexedIndirectArgsA32>; N];
 
 #[derive(Debug)]
 struct MultiDrawInstruction {
