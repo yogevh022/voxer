@@ -1,8 +1,6 @@
 use crate::app::app_renderer;
 use crate::app::app_renderer::AppRenderer;
-use crate::compute;
 use crate::compute::geo;
-use crate::world::types::Chunk;
 use glam::{IVec3, Vec3};
 use std::sync::Arc;
 use winit::window::Window;

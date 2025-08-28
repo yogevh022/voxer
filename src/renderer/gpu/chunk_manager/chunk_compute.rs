@@ -1,7 +1,7 @@
 use super::chunk_render::ChunkRender;
 use crate::const_labels;
 use crate::renderer::gpu::GPUChunkEntry;
-use crate::renderer::gpu::chunk_manager::{BufferCopyMapping, BufferDrawArgs};
+use crate::renderer::gpu::chunk_manager::{BufferDrawArgs, StagingBufferMapping};
 use crate::renderer::{
     DrawIndexedIndirectArgsA32, Index, Renderer, RendererBuilder, Vertex, resources,
 };
@@ -87,6 +87,7 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
     ) {
         let mut offset = 0usize;
         for i in 0..NumStagingBuffers {
+            //fixme handle multiple staging buffers
             if staging_entries[i].is_empty() {
                 continue;
             }
@@ -104,7 +105,7 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         renderer: &Renderer<'_>,
         chunk_render: &ChunkRender<NumBuffers>,
         staging_entries: [Vec<GPUChunkEntry>; NumStagingBuffers],
-        staging_mapping: [BufferCopyMapping<NumBuffers>; NumStagingBuffers],
+        staging_mapping: [StagingBufferMapping<NumBuffers>; NumStagingBuffers],
         delta_draw: &Arc<Mutex<Option<BufferDrawArgs<NumBuffers>>>>,
     ) {
         for (staging_i, (copy_mapping, entries)) in staging_mapping
@@ -123,22 +124,24 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
                 compute_pass.dispatch_workgroups(entries.len() as u32, 1, 1);
             }
             for (i, entry) in entries.iter().enumerate() {
-                let target_buffer_index = copy_mapping.target_indexes[i];
-                let target_global_offset = copy_mapping.target_buffers[target_buffer_index] as u64;
-                let target_local_offset = copy_mapping.item_offsets[i] as u64;
+                let target_index = copy_mapping.targets[i].allocation.buffer_index;
+                let target_offset = copy_mapping.targets[i].allocation.offset as u64;
+
+                println!("{:?} > {:?}", entry.header.buffer_data.staging_offset, target_offset);
+                
                 encoder.copy_buffer_to_buffer(
                     &self.staging_vertex_buffers[staging_i],
-                    (target_global_offset + target_local_offset) * 4 * Vertex::size() as u64,
-                    &chunk_render.vertex_buffers[target_buffer_index],
-                    copy_mapping.item_allocations[i].vertex_offset as u64 * Vertex::size() as u64,
-                    entry.header.allocation.vertex_count as u64 * Vertex::size() as u64,
+                    entry.header.buffer_data.staging_offset as u64 * 4 * Vertex::size() as u64,
+                    &chunk_render.vertex_buffers[target_index],
+                    target_offset * 4 * Vertex::size() as u64,
+                    entry.header.buffer_data.face_count as u64 * 4 * Vertex::size() as u64,
                 );
                 encoder.copy_buffer_to_buffer(
                     &self.staging_index_buffers[staging_i],
-                    (target_global_offset + target_local_offset) * 6 * size_of::<Index>() as u64,
-                    &chunk_render.index_buffers[target_buffer_index],
-                    copy_mapping.item_allocations[i].index_offset as u64 * size_of::<Index>() as u64,
-                    entry.header.allocation.index_count as u64 * size_of::<Index>() as u64,
+                    entry.header.buffer_data.staging_offset as u64 * 6 * size_of::<Index>() as u64,
+                    &chunk_render.index_buffers[target_index],
+                    target_offset * 6 * size_of::<Index>() as u64,
+                    entry.header.buffer_data.face_count as u64 * 6 * size_of::<Index>() as u64,
                 );
                 encoder.copy_buffer_to_buffer(
                     &self.staging_mmat_buffers[staging_i],
@@ -156,14 +159,13 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
                     *guard = Some(array::from_fn(|_| HashMap::new()));
                 }
                 let delta = guard.as_mut().unwrap();
-                for (i, buffer_idx) in copy_mapping.target_indexes.into_iter().enumerate() {
-                    let alloc = copy_mapping.item_allocations[i];
-                    delta[buffer_idx].insert(
+                for (i, buffer_target) in copy_mapping.targets.into_iter().enumerate() {
+                    delta[buffer_target.allocation.buffer_index].insert(
                         entries[i].header.slab_index as usize,
                         DrawIndexedIndirectArgsA32::new(
-                            alloc.index_count,
+                            buffer_target.size as u32 * 6,
                             1,
-                            alloc.index_offset,
+                            buffer_target.allocation.offset as u32 * 6,
                             0,
                             entries[i].header.slab_index,
                         ),

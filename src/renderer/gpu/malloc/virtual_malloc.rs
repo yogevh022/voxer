@@ -6,27 +6,43 @@ pub enum MallocError {
     InvalidAllocation,
 }
 
-pub trait VirtualMalloc<T, const L: usize>
-where
-    T: Copy + Clone + Debug,
-{
-    fn new(size: usize, offset: usize) -> Self;
-    fn alloc(&mut self, request: [T; L]) -> Result<[T; L], MallocError>;
-    fn free(&mut self, allocation: [T; L]) -> Result<(), MallocError>;
-    fn total_free(&self) -> usize {
+#[derive(Debug, Copy, Clone)]
+pub struct SimpleAllocationRequest {
+    pub size: usize,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct SimpleAllocation {
+    pub offset: usize,
+}
+
+pub trait VirtualMalloc {
+    type AllocationRequest: Copy + Clone + Debug;
+    type Allocation: Copy + Clone + Debug;
+    fn new(arena_size: usize, arena_offset: usize) -> Self;
+    fn alloc(
+        &mut self,
+        alloc_request: Self::AllocationRequest,
+    ) -> Result<Self::Allocation, MallocError>;
+    fn free(
+        &mut self,
+        allocation: Self::Allocation,
+    ) -> Result<(), MallocError>;
+    fn clear(&mut self);
+    fn available_size(&self) -> usize {
         unimplemented!()
     }
-    fn free_count(&self) -> usize {
+    fn available_count(&self) -> usize {
         unimplemented!()
     }
-    fn total_used(&self) -> usize {
+    fn used_size(&self) -> usize {
         unimplemented!()
     }
     fn used_count(&self) -> usize {
         unimplemented!()
     }
 
-    fn debug(&self) {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         unimplemented!()
     }
 }
@@ -36,7 +52,7 @@ where
 //     use crate::compute;
 //     use crate::renderer::gpu::malloc::VMallocFirstFit;
 //     use rand::Rng;
-// 
+//
 //     let mut rng = rand::thread_rng();
 //     let mut malloc = VMallocFirstFit::new(compute::GIB, 8);
 //     let mut allocations: Vec<usize> = Vec::new();
@@ -52,6 +68,6 @@ where
 //             malloc.free(allocation).unwrap();
 //         }
 //     }
-// 
+//
 //     println!("{:?}", malloc);
 // }

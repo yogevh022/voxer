@@ -2,12 +2,16 @@ mod chunk_compute;
 mod chunk_manager;
 mod chunk_render;
 
-use crate::renderer::{DrawIndexedIndirectArgsA32, Index, Vertex};
+use crate::renderer::DrawIndexedIndirectArgsA32;
+use crate::renderer::gpu::{VMallocFirstFit, VMallocMultiBuffer, VirtualMalloc};
 pub use chunk_manager::ChunkManager;
 use std::collections::HashMap;
-use crate::renderer::gpu::MeshAllocation;
 
 type BufferDrawArgs<const N: usize> = [HashMap<usize, DrawIndexedIndirectArgsA32>; N];
+type MeshAllocator<const N: usize> = VMallocMultiBuffer<VMallocFirstFit, N>;
+type MeshAllocationRequest =
+    <VMallocMultiBuffer<VMallocFirstFit, 0> as VirtualMalloc>::AllocationRequest;
+type MeshAllocation = <VMallocMultiBuffer<VMallocFirstFit, 0> as VirtualMalloc>::Allocation;
 
 #[derive(Debug)]
 struct MultiDrawInstruction {
@@ -15,42 +19,44 @@ struct MultiDrawInstruction {
     count: usize,
 }
 
-
 #[derive(Debug, Clone)]
-struct BufferCopyMapping<const NUM_BUFFERS: usize> {
-    pub target_buffers: [usize; NUM_BUFFERS],
-    pub item_offsets: Vec<usize>,
-    pub item_allocations: Vec<MeshAllocation>,
-    pub target_indexes: Vec<usize>,
-    last_inserted: usize,
+struct BufferCopyTarget {
+    pub entry_offset: u64,
+    pub size: u64,
+    pub allocation: MeshAllocation,
 }
 
-impl<const NUM_BUFFERS: usize> BufferCopyMapping<NUM_BUFFERS> {
+#[derive(Debug, Clone)]
+struct StagingBufferMapping<const NUM_BUFFERS: usize> {
+    pub buffer_offsets: [u64; NUM_BUFFERS],
+    pub targets: Vec<BufferCopyTarget>,
+}
+
+impl<const NUM_BUFFERS: usize> StagingBufferMapping<NUM_BUFFERS> {
     pub const fn new() -> Self {
         Self {
-            target_buffers: [0; NUM_BUFFERS],
-            item_offsets: Vec::new(),
-            item_allocations: Vec::new(),
-            target_indexes: Vec::new(),
-            last_inserted: 0,
+            buffer_offsets: [0; NUM_BUFFERS],
+            targets: Vec::new(),
         }
     }
-    
-    pub fn push_to(&mut self, target_buffer: usize, offset: usize, allocation: MeshAllocation) -> MeshAllocation {
-        self.target_buffers[(target_buffer+1)..].iter_mut().for_each(|b| *b += offset);
-        self.item_offsets.push(self.last_inserted);
-        self.target_indexes.push(target_buffer);
-        self.last_inserted = offset;
-        self.item_allocations.push(allocation);
-        self.get_mesh_alloc(self.item_offsets.len() - 1)
+
+    pub fn push_to(&mut self, size: usize, allocation: MeshAllocation) {
+        self.buffer_offsets[allocation.buffer_index] += size as u64;
+        let target = BufferCopyTarget {
+            entry_offset: self
+                .targets
+                .last()
+                .map(|t| t.entry_offset + t.size)
+                .unwrap_or(0),
+            size: size as u64,
+            allocation,
+        };
+        self.targets.push(target);
     }
-    
-    fn get_mesh_alloc(&self, index: usize) -> MeshAllocation {
-        MeshAllocation {
-            vertex_offset: self.item_offsets[index] as u32 * 4 * Vertex::size() as u32,
-            index_offset: self.item_offsets[index] as u32 * 6 * size_of::<Index>() as u32,
-            vertex_count: self.item_offsets[index] as u32 * 4,
-            index_count: self.item_offsets[index] as u32 * 6,
+
+    pub fn update_buffer_offsets(&mut self) {
+        for i in (0..self.buffer_offsets.len()).rev() {
+            self.buffer_offsets[i] = self.buffer_offsets[..i].iter().sum();
         }
     }
 }

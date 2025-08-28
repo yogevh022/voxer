@@ -168,15 +168,17 @@ impl<'a> App<'a> {
             let unload_chunks = m_client.renderer.map_rendered_chunk_positions(|c_pos| {
                 compute::geo::distance_squared_i(player_cp, c_pos) > render_r2
             });
-            if unload_chunks.len() > 0 {
+            if !unload_chunks.is_empty() {
                 m_client.renderer.unload_chunks(unload_chunks);
             }
             
             let load_chunk_positions = m_client
                 .map_visible_chunk_positions(|c_pos| !m_client.renderer.is_chunk_rendered(c_pos));
-            if load_chunk_positions.len() > 0 {
+            if !load_chunk_positions.is_empty() {
                 let load_chunks = self.server.get_chunks(load_chunk_positions);
-                m_client.renderer.load_chunks(load_chunks);
+                if !load_chunks.is_empty() { //fixme temp
+                    m_client.renderer.load_chunks(load_chunks);
+                }
             }
         }
     }
