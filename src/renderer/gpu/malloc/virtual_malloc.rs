@@ -29,6 +29,9 @@ pub trait VirtualMalloc {
         allocation: Self::Allocation,
     ) -> Result<(), MallocError>;
     fn clear(&mut self);
+    fn total_size(&self) -> usize {
+        unimplemented!()
+    }
     fn available_size(&self) -> usize {
         unimplemented!()
     }
@@ -39,10 +42,6 @@ pub trait VirtualMalloc {
         unimplemented!()
     }
     fn used_count(&self) -> usize {
-        unimplemented!()
-    }
-
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         unimplemented!()
     }
 }

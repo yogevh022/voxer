@@ -1,6 +1,6 @@
 use glam::{Vec2, Vec3, Vec3A};
 
-#[repr(C)]
+#[repr(C, align(32))]
 #[derive(Copy, Debug, Clone, bytemuck::Zeroable)]
 pub struct Vertex {
     pub position: Vec3A,
@@ -25,10 +25,5 @@ impl Vertex {
                 },
             ],
         }
-    }
-
-    #[inline(always)]
-    pub(crate) const fn size() -> usize {
-        32
     }
 }

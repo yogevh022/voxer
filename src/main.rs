@@ -9,7 +9,7 @@ use crate::world::types::{WorldServer, WorldServerConfig};
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
-const SIMULATION_AND_RENDER_DISTANCE: usize = 4; // fixme temp location
+const SIMULATION_AND_RENDER_DISTANCE: usize = 8; // fixme temp location
 
 fn run_app() {
     let mut server = WorldServer::new(WorldServerConfig {

@@ -4,7 +4,7 @@ mod virtual_malloc;
 
 pub use firstfit_malloc::VMallocFirstFit;
 pub use multibuffer_malloc::{
-    VMallocMultiBuffer, MultiBufferAllocationRequest
+    VMallocMultiBuffer, MultiBufferAllocationRequest, MultiBufferAllocation
 };
 pub use virtual_malloc::VirtualMalloc;
 

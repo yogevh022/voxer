@@ -85,6 +85,10 @@ impl VirtualMalloc for VMallocFirstFit {
         self.used_blocks.clear();
     }
 
+    fn total_size(&self) -> usize {
+        self.arena_size
+    }
+    
     fn available_size(&self) -> usize {
         self.free_blocks.iter().map(|(_, s)| s.size).sum()
     }

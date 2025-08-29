@@ -1,7 +1,7 @@
 use super::virtual_malloc::{MallocError, SimpleAllocation, SimpleAllocationRequest};
 use super::{VirtualMalloc};
 use std::array;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Copy, Clone)]
 pub struct MultiBufferAllocationRequest {
@@ -59,25 +59,27 @@ where
             mesh_malloc.clear();
         }
     }
+}
 
-    // fn debug(&self) {
-    //     const BAR_SIZE: usize = 30;
-    //     let mut debug_display = String::new();
-    //     for (i, b) in self.virtual_buffers.iter().enumerate() {
-    //         let width_ratio = b.vertex_malloc.arena_size / BAR_SIZE;
-    //         debug_display.push_str(format!("vertex {:2}: [", i).as_str());
-    //         debug_display.push_str(&*"#".repeat(b.vertex_malloc.total_used() / width_ratio));
-    //         debug_display
-    //             .push_str(&*" ".repeat(BAR_SIZE - b.vertex_malloc.total_used() / width_ratio));
-    //         debug_display.push_str("]\n");
-    //         let width_ratio = b.index_malloc.arena_size / BAR_SIZE;
-    //         debug_display.push_str(format!("index  {:2}: [", i).as_str());
-    //         debug_display.push_str(&*"#".repeat(b.index_malloc.total_used() / width_ratio));
-    //         debug_display
-    //             .push_str(&*" ".repeat(BAR_SIZE - b.index_malloc.total_used() / width_ratio));
-    //         debug_display.push_str("]\n\n");
-    //     }
-    //     print!("\x1B[2J\x1B[1;1H{}", debug_display); // the blob clears cli
-    //     std::io::stdout().flush().unwrap();
-    // }
+
+impl<M: VirtualMalloc, const N: usize> VMallocMultiBuffer<M, N> {
+    pub fn buffer_size(&self) -> usize {
+        self.virtual_buffers.first().unwrap().total_size()
+    }
+}
+
+impl<M: VirtualMalloc, const N: usize> Display for VMallocMultiBuffer<M, N> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        const BAR_SIZE: usize = 30;
+        let mut debug_display = String::new();
+        for (i, b) in self.virtual_buffers.iter().enumerate() {
+            let width_ratio = b.total_size() / BAR_SIZE;
+            debug_display.push_str(format!("buffer {:2}: [", i).as_str());
+            debug_display.push_str(&*"#".repeat(b.used_size() / width_ratio));
+            debug_display
+                .push_str(&*" ".repeat(BAR_SIZE - b.used_size() / width_ratio));
+            debug_display.push_str("]\n\n");
+        }
+        write!(f, "{}", debug_display)
+    }
 }
