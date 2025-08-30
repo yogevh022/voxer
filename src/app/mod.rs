@@ -1,7 +1,7 @@
 pub mod app_renderer;
 
 use crate::vtypes::{Scene, Voxer, VoxerObject};
-use crate::world::types::{WorldClient, WorldClientConfig, WorldServer};
+use crate::world::types::{CHUNK_DIM, WorldClient, WorldClientConfig, WorldServer};
 use crate::{SIMULATION_AND_RENDER_DISTANCE, compute, vtypes};
 use glam::IVec3;
 use std::sync::Arc;
@@ -159,21 +159,34 @@ impl<'a> App<'a> {
             .unwrap()
             .set_player_position(player_pos);
 
+        let frustum_planes = compute::geo::Frustum::planes(self.v.camera.get_view_projection());
         if self.v.time.temp_200th_frame() {
             self.server.update();
             let m_client = self.client.as_mut().unwrap();
-            
-            let player_cp = compute::geo::world_to_chunk_pos(player_pos);
-            let render_r2 = m_client.config.render_distance.pow(2) as i32;
             let unload_chunks = m_client.renderer.map_rendered_chunk_positions(|c_pos| {
-                compute::geo::distance_squared_i(player_cp, c_pos) > render_r2
+                let chunk_world_pos = compute::geo::chunk_to_world_pos(c_pos);
+                !compute::geo::Frustum::is_aabb_within_frustum(
+                    chunk_world_pos,
+                    chunk_world_pos + CHUNK_DIM as f32,
+                    &frustum_planes,
+                )
             });
             if !unload_chunks.is_empty() {
                 m_client.renderer.unload_chunks(unload_chunks);
             }
+        }
+        {
+            let m_client = self.client.as_mut().unwrap();
+            let load_chunk_positions = m_client.map_visible_chunk_positions(|c_pos| {
+                let chunk_world_pos = compute::geo::chunk_to_world_pos(c_pos);
+                !m_client.renderer.is_chunk_rendered(c_pos)
+                    && compute::geo::Frustum::is_aabb_within_frustum(
+                        chunk_world_pos,
+                        chunk_world_pos + CHUNK_DIM as f32,
+                        &frustum_planes,
+                    )
+            });
             
-            let load_chunk_positions = m_client
-                .map_visible_chunk_positions(|c_pos| !m_client.renderer.is_chunk_rendered(c_pos));
             if !load_chunk_positions.is_empty() {
                 let load_chunks = self.server.get_chunks(load_chunk_positions);
                 if !load_chunks.is_empty() { //fixme temp

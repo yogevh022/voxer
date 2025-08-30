@@ -2,7 +2,6 @@ use super::chunk_compute::ChunkCompute;
 use super::chunk_render::ChunkRender;
 use crate::compute;
 use crate::compute::ds::Slap;
-use crate::renderer::gpu::chunk_entry::GPUChunkEntryHeader;
 use crate::renderer::gpu::chunk_manager::{
     BufferDrawArgs, MeshAllocationRequest, MeshAllocator, StagingBufferMapping,
 };
@@ -10,16 +9,13 @@ use crate::renderer::gpu::{GPUChunkEntry, VMallocMultiBuffer, VirtualMalloc};
 use crate::renderer::{Index, Renderer, Vertex};
 use crate::world::types::Chunk;
 use glam::IVec3;
-use parking_lot::Mutex;
 use std::array;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 pub struct ChunkManager<const NumBuffers: usize, const NumStagingBuffers: usize> {
     mesh_allocator: MeshAllocator<NumBuffers>,
     chunk_allocations: Slap<IVec3, <MeshAllocator<NumBuffers> as VirtualMalloc>::Allocation>,
     active_draw: BufferDrawArgs<NumBuffers>,
-    delta_draw: Arc<Mutex<Option<BufferDrawArgs<NumBuffers>>>>,
     compute: ChunkCompute<NumStagingBuffers>,
     render: ChunkRender<NumBuffers>,
 }
@@ -52,7 +48,6 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
             mesh_allocator: VMallocMultiBuffer::new(max_mesh_face_count, 0),
             chunk_allocations: Slap::new(),
             active_draw: array::from_fn(|_| HashMap::new()),
-            delta_draw: Arc::new(Mutex::new(None)),
             compute,
             render,
         }
@@ -73,70 +68,54 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
     }
 
     pub fn write_new(&mut self, renderer: &Renderer<'_>, chunks: Vec<Chunk>) {
-        let mut chunk_i = 0;
-        let mut face_count_acc = 0;
-        let mut target_staging_buffer = 0;
-        let max_faces_per_buffer = 0;
-        let mut staging_entries = init_staging_entries::<NumStagingBuffers>();
-        let mut staging_mapping = init_staging_mapping::<NumBuffers, NumStagingBuffers>();
-        loop {
-            let chunk = &chunks[chunk_i];
-            let face_count = compute::chunk::face_count(&chunk.blocks);
-            if face_count_acc + face_count > max_faces_per_buffer || chunk_i == chunks.len() - 1 {
-                staging_mapping
-                    .iter_mut()
-                    .for_each(|mapping| mapping.update_buffer_offsets());
-                staging_mapping[target_staging_buffer].push_to_staging(
-                    &chunks,
-                    &mut staging_entries[target_staging_buffer],
-                    |chunk_position, mesh_allocation| {
-                        self.chunk_allocations
-                            .insert(chunk_position, mesh_allocation)
-                    },
-                );
+        let max_faces_per_buffer = self.mesh_allocator.buffer_size();
+        let staging_chunks_slices =
+            chunks_slices_by_max_face_count(&chunks, max_faces_per_buffer, NumStagingBuffers);
+        for (staging_index, staging_slice) in staging_chunks_slices.into_iter().enumerate() {
+            let mut staging_entries = init_staging_entries::<NumStagingBuffers>();
+            let mut staging_mapping = init_staging_mapping::<NumBuffers, NumStagingBuffers>();
+            for (chunk, &face_count) in staging_slice.0.iter().zip(staging_slice.1.iter()) {
+                debug_assert_eq!(self.chunk_allocations.get(&chunk.position).is_some(), false);
+                let target_buffer = self.buffer_index_for(chunk.position);
 
-                self.compute
-                    .write_to_staging_chunks(renderer, &staging_entries);
-                let mut s_entries = init_staging_entries::<NumStagingBuffers>();
-                let mut s_mapping = init_staging_mapping::<NumBuffers, NumStagingBuffers>();
-                std::mem::swap(&mut s_entries, &mut staging_entries);
-                std::mem::swap(&mut s_mapping, &mut staging_mapping);
-                self.compute.dispatch_staging_workgroups(
-                    renderer,
-                    &self.render,
-                    s_entries,
-                    s_mapping,
-                    &self.delta_draw,
-                );
-
-                if target_staging_buffer == NumStagingBuffers - 1 {
-                    return;
-                }
-                target_staging_buffer += 1;
+                let mesh_alloc = self
+                    .mesh_allocator
+                    .alloc(MeshAllocationRequest {
+                        buffer_index: target_buffer,
+                        size: face_count,
+                    })
+                    .unwrap();
+                staging_mapping[staging_index].push_to(face_count as u64, mesh_alloc);
             }
-            debug_assert_eq!(self.chunk_allocations.get(&chunk.position).is_some(), false);
-            let target_buffer = self.buffer_index_for(chunk.position);
-
-            let mesh_alloc = self
-                .mesh_allocator
-                .alloc(MeshAllocationRequest {
-                    buffer_index: target_buffer,
-                    size: face_count,
-                })
-                .unwrap();
-
-            staging_mapping[target_staging_buffer].push_to(face_count as u64, mesh_alloc);
-            face_count_acc += face_count;
-            chunk_i += 1;
+            staging_mapping
+                .iter_mut()
+                .for_each(|mapping| mapping.update_buffer_offsets());
+            staging_mapping[staging_index].push_to_staging(
+                &chunks,
+                &mut staging_entries[staging_index],
+                |chunk_position, mesh_allocation| {
+                    self.chunk_allocations
+                        .insert(chunk_position, mesh_allocation)
+                },
+            );
+            self.compute
+                .write_to_staging_chunks(renderer, &staging_entries);
+            let mut s_entries = init_staging_entries::<NumStagingBuffers>();
+            let mut s_mapping = init_staging_mapping::<NumBuffers, NumStagingBuffers>();
+            std::mem::swap(&mut s_entries, &mut staging_entries);
+            std::mem::swap(&mut s_mapping, &mut staging_mapping);
+            self.compute.dispatch_staging_workgroups(
+                renderer,
+                &self.render,
+                s_entries,
+                s_mapping,
+                &mut self.active_draw,
+            );
         }
     }
 
     fn buffer_index_for(&self, position: IVec3) -> usize {
         position.element_sum() as usize % NumBuffers
-    }
-
-    fn staging_index_for(&self, chunk_slice_i: usize) -> usize {
-        chunk_slice_i % NumStagingBuffers
     }
 
     pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut wgpu::RenderPass) {
@@ -158,18 +137,6 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
         }
     }
 
-    pub fn poll_update_delta_draw(&mut self) {
-        let delta = {
-            let mut guard = self.delta_draw.lock();
-            guard.take()
-        };
-        if let Some(delta) = delta {
-            for (i, args) in delta.into_iter().enumerate() {
-                self.active_draw[i].extend(args);
-            }
-        }
-    }
-
     pub fn malloc_debug(&self) {
         println!("\x1B[2J\x1B[1;1H{}", self.mesh_allocator); // the blob clears cli
     }
@@ -187,7 +154,8 @@ const fn init_staging_mapping<const NUM_BUFFERS: usize, const NUM_STAGING_BUFFER
 
 fn chunks_slices_by_max_face_count(
     chunks: &Vec<Chunk>,
-    max_faces_per_chunk: usize,
+    max_faces_per_buffer: usize,
+    max_slices: usize,
 ) -> Vec<(&[Chunk], Vec<usize>)> {
     let mut slices = Vec::new();
     let mut face_counts = Vec::new();
@@ -196,16 +164,21 @@ fn chunks_slices_by_max_face_count(
     let mut j = 0usize;
     while j < chunks.len() {
         let face_count = compute::chunk::face_count(&chunks[j].blocks);
-        if acc + face_count < max_faces_per_chunk {
+        if acc + face_count < max_faces_per_buffer {
             acc += face_count;
             j += 1;
             face_counts.push(face_count);
         } else {
             slices.push((&chunks[i..j], std::mem::take(&mut face_counts)));
+            face_counts.push(face_count);
             acc = face_count;
             i = j;
             j += 1;
+            if slices.len() == max_slices {
+                return slices;
+            }
         }
     }
+    slices.push((&chunks[i..j], face_counts));
     slices
 }

@@ -20,7 +20,7 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
 {
     pub fn load_chunks(&mut self, chunks: Vec<Chunk>) {
         self.chunk_manager.write_new(&self.renderer, chunks);
-        self.chunk_manager.malloc_debug();
+        // self.chunk_manager.malloc_debug();
     }
 
     pub fn unload_chunks(&mut self, positions: Vec<IVec3>) {
@@ -60,8 +60,6 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        // fixme not every frame..
-        self.chunk_manager.poll_update_delta_draw();
         let mut encoder = self.renderer.create_encoder("render_encoder");
         {
             let mut render_pass = begin_render_pass(&mut encoder, &view, &self.renderer.depth_texture_view);

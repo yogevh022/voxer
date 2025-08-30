@@ -2,6 +2,7 @@ mod chunk_compute;
 mod chunk_manager;
 mod chunk_render;
 
+use std::array;
 use crate::renderer::DrawIndexedIndirectArgsA32;
 use crate::renderer::gpu::chunk_entry::GPUChunkEntryHeader;
 use crate::renderer::gpu::{GPUChunkEntry, MultiBufferAllocation, VMallocFirstFit, VMallocMultiBuffer, VirtualMalloc};

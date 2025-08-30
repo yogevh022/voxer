@@ -17,7 +17,7 @@ pub fn world_to_chunk_pos(vec: Vec3) -> IVec3 {
     )
 }
 
-pub fn chunk_to_world_pos(chunk_pos: &IVec3) -> Vec3 {
+pub fn chunk_to_world_pos(chunk_pos: IVec3) -> Vec3 {
     let world_pos_round = chunk_pos * CHUNK_DIM as i32;
     Vec3::new(
         world_pos_round.x as f32,

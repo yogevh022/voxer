@@ -1,6 +1,6 @@
 use glam::{IVec2};
 
-pub struct Circle {}
+pub struct Circle;
 
 impl Circle {
     pub fn line_intersect_hor_2p(y: isize, c: IVec2, r2: isize) -> (isize, isize) {

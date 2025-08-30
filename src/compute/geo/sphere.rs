@@ -3,7 +3,7 @@ use crate::compute::geo::circle::Circle;
 use glam::IVec3;
 use crate::compute::geo;
 
-pub struct Sphere {}
+pub struct Sphere;
 
 impl Sphere {
     pub fn point_delta<F>(a: IVec3, b: IVec3, radius: isize, mut delta_fn: F)

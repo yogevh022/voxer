@@ -30,7 +30,7 @@ fn run_app() {
 }
 
 fn main() {
-    // tracy_client::set_thread_name!("main");
+    tracy_client::set_thread_name!("main");
     run_app();
 
     // debug()

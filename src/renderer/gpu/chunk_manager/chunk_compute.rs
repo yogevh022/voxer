@@ -6,11 +6,8 @@ use crate::renderer::{
     DrawIndexedIndirectArgsA32, Index, Renderer, RendererBuilder, Vertex, resources,
 };
 use glam::Mat4;
-use parking_lot::Mutex;
 use std::array;
-use std::collections::HashMap;
 use std::num::NonZeroU64;
-use std::sync::Arc;
 
 pub struct ChunkCompute<const NumStagingBuffers: usize> {
     pipeline: wgpu::ComputePipeline,
@@ -101,22 +98,22 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
     }
 
     pub fn dispatch_staging_workgroups<const NumBuffers: usize>(
-        &self,
+        &mut self,
         renderer: &Renderer<'_>,
         chunk_render: &ChunkRender<NumBuffers>,
         staging_entries: [Vec<GPUChunkEntry>; NumStagingBuffers],
         staging_mapping: [StagingBufferMapping<NumBuffers>; NumStagingBuffers],
-        delta_draw: &Arc<Mutex<Option<BufferDrawArgs<NumBuffers>>>>,
+        active_draw: &mut BufferDrawArgs<NumBuffers>,
     ) {
+        let mut encoder = renderer.create_encoder("chunk_mesh_compute_encoder");
         for (staging_buffer_i, (copy_mapping, entries)) in staging_mapping
             .into_iter()
             .zip(staging_entries.into_iter())
             .enumerate()
         {
-            let mut encoder = renderer.create_encoder("chunk_mesh_compute_encoder");
             {
                 let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some(Self::COMPUTE_PASS_LABELS[staging_buffer_i]),
+                    label: Some("test"),
                     timestamp_writes: None,
                 });
                 compute_pass.set_pipeline(&self.pipeline);
@@ -126,6 +123,7 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
             for (i, entry) in entries.iter().enumerate() {
                 let target_buffer_i = copy_mapping.targets[i].allocation.buffer_index;
                 let target_offset = copy_mapping.targets[i].allocation.offset as u64;
+                let target_size = copy_mapping.targets[i].size;
 
                 encoder.copy_buffer_to_buffer(
                     &self.staging_vertex_buffers[staging_buffer_i],
@@ -148,29 +146,19 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
                     entry.header.slab_index as u64 * size_of::<Mat4>() as u64,
                     size_of::<Mat4>() as u64,
                 );
+                active_draw[target_buffer_i].insert(
+                    entries[i].header.slab_index as usize,
+                    DrawIndexedIndirectArgsA32::new(
+                        target_size as u32 * 6,
+                        1,
+                        target_offset as u32 * 6,
+                        0,
+                        entries[i].header.slab_index,
+                    ),
+                );
             }
-            let delta_ref = delta_draw.clone();
-            renderer.queue.submit(Some(encoder.finish()));
-            renderer.queue.on_submitted_work_done(move || {
-                let mut guard = delta_ref.lock();
-                if guard.is_none() {
-                    *guard = Some(array::from_fn(|_| HashMap::new()));
-                }
-                let delta = guard.as_mut().unwrap();
-                for (i, buffer_target) in copy_mapping.targets.into_iter().enumerate() {
-                    delta[buffer_target.allocation.buffer_index].insert(
-                        entries[i].header.slab_index as usize,
-                        DrawIndexedIndirectArgsA32::new(
-                            buffer_target.size as u32 * 6,
-                            1,
-                            buffer_target.allocation.offset as u32 * 6,
-                            0,
-                            entries[i].header.slab_index,
-                        ),
-                    );
-                }
-            });
         }
+        renderer.queue.submit(Some(encoder.finish()));
     }
 }
 
