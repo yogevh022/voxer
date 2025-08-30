@@ -132,7 +132,7 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
         self.active_draw[full_alloc.buffer_index].remove(&slab_index);
         if let Err(e) = self.mesh_allocator.free(full_alloc) {
             // fixme this should never happen
-            println!("malloc::free failed for {:?}, {:?}", position, e);
+            // println!("malloc::free failed for {:?}, {:?}", position, e);
         }
     }
 

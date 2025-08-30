@@ -18,6 +18,7 @@ crossbeam = "0.8.4"
 slab = "0.4.11"
 tracy-client = "0.18.2"
 rand = { version = "0.8.5"}
+rustc-hash = "2.1.1"
 
 [profile.dev]
 strip = false

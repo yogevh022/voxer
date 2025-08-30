@@ -113,7 +113,7 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         {
             {
                 let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("test"),
+                    label: Some("test"), // todo fix naming
                     timestamp_writes: None,
                 });
                 compute_pass.set_pipeline(&self.pipeline);

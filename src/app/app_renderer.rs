@@ -20,7 +20,7 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
 {
     pub fn load_chunks(&mut self, chunks: Vec<Chunk>) {
         self.chunk_manager.write_new(&self.renderer, chunks);
-        self.chunk_manager.malloc_debug();
+        // self.chunk_manager.malloc_debug();
     }
 
     pub fn unload_chunks(&mut self, positions: Vec<IVec3>) {

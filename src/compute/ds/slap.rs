@@ -1,5 +1,5 @@
 use slab::Slab;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::hash::Hash;
 
 pub struct Slap<K, V>
@@ -7,7 +7,7 @@ where
     K: Hash + Eq,
 {
     slab: Slab<V>,
-    map: HashMap<K, usize>,
+    map: FxHashMap<K, usize>,
 }
 
 impl<K, V> Slap<K, V>
@@ -17,7 +17,7 @@ where
     pub fn new() -> Self {
         Self {
             slab: Slab::new(),
-            map: HashMap::new(),
+            map: FxHashMap::default(),
         }
     }
 
