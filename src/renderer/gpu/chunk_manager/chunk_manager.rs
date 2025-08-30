@@ -129,11 +129,10 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
     pub fn drop(&mut self, position: IVec3) {
         let slap_entry_opt = self.chunk_allocations.remove(&position);
         let (slab_index, full_alloc) = slap_entry_opt.unwrap();
-        let buffer_index = self.buffer_index_for(position);
-        self.active_draw[buffer_index].remove(&slab_index);
+        self.active_draw[full_alloc.buffer_index].remove(&slab_index);
         if let Err(e) = self.mesh_allocator.free(full_alloc) {
             // fixme this should never happen
-            // println!("malloc::free failed for {:?}, {:?}", position, e);
+            println!("malloc::free failed for {:?}, {:?}", position, e);
         }
     }
 

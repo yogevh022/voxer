@@ -1,5 +1,5 @@
+use super::VirtualMalloc;
 use super::virtual_malloc::{MallocError, SimpleAllocation, SimpleAllocationRequest};
-use super::{VirtualMalloc};
 use std::array;
 use std::fmt::{Debug, Display, Formatter};
 
@@ -21,10 +21,7 @@ pub struct VMallocMultiBuffer<M: VirtualMalloc, const N: usize> {
 
 impl<M: VirtualMalloc, const N: usize> VirtualMalloc for VMallocMultiBuffer<M, N>
 where
-    M: VirtualMalloc<
-            AllocationRequest = SimpleAllocationRequest,
-            Allocation = SimpleAllocation,
-        >,
+    M: VirtualMalloc<AllocationRequest = SimpleAllocationRequest, Allocation = SimpleAllocation>,
 {
     type AllocationRequest = MultiBufferAllocationRequest;
     type Allocation = MultiBufferAllocation;
@@ -38,8 +35,11 @@ where
         &mut self,
         allocation_request: MultiBufferAllocationRequest,
     ) -> Result<Self::Allocation, MallocError> {
-        let inner_request = M::AllocationRequest { size: allocation_request.size };
-        let inner_allocation = self.virtual_buffers[allocation_request.buffer_index].alloc(inner_request)?;
+        let inner_request = M::AllocationRequest {
+            size: allocation_request.size,
+        };
+        let inner_allocation =
+            self.virtual_buffers[allocation_request.buffer_index].alloc(inner_request)?;
         Ok(Self::Allocation {
             buffer_index: allocation_request.buffer_index,
             offset: inner_allocation.offset,
@@ -47,9 +47,14 @@ where
     }
 
     fn free(&mut self, allocation: Self::Allocation) -> Result<(), MallocError> {
-        let buff = self.virtual_buffers.get_mut(allocation.buffer_index).unwrap();
-        
-        let inner_allocation = SimpleAllocation { offset: allocation.offset };
+        let buff = self
+            .virtual_buffers
+            .get_mut(allocation.buffer_index)
+            .unwrap();
+
+        let inner_allocation = SimpleAllocation {
+            offset: allocation.offset,
+        };
         buff.free(inner_allocation)?;
         Ok(())
     }
@@ -60,7 +65,6 @@ where
         }
     }
 }
-
 
 impl<M: VirtualMalloc, const N: usize> VMallocMultiBuffer<M, N> {
     pub fn buffer_size(&self) -> usize {
@@ -76,9 +80,12 @@ impl<M: VirtualMalloc, const N: usize> Display for VMallocMultiBuffer<M, N> {
             let width_ratio = b.total_size() / BAR_SIZE;
             debug_display.push_str(format!("buffer {:2}: [", i).as_str());
             debug_display.push_str(&*"#".repeat(b.used_size() / width_ratio));
-            debug_display
-                .push_str(&*" ".repeat(BAR_SIZE - b.used_size() / width_ratio));
-            debug_display.push_str("]\n\n");
+            debug_display.push_str(&*" ".repeat(BAR_SIZE - b.used_size() / width_ratio));
+            debug_display.push_str(&format!(
+                "] ab: {:2}, ub: {:2}\n\n",
+                b.available_count(),
+                b.used_count()
+            ));
         }
         write!(f, "{}", debug_display)
     }

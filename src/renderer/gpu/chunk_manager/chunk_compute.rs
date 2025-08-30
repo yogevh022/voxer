@@ -124,36 +124,37 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
                 let target_buffer_i = copy_mapping.targets[i].allocation.buffer_index;
                 let target_offset = copy_mapping.targets[i].allocation.offset as u64;
                 let target_size = copy_mapping.targets[i].size;
+                let header = entry.header;
 
                 encoder.copy_buffer_to_buffer(
                     &self.staging_vertex_buffers[staging_buffer_i],
-                    entry.header.buffer_data.staging_offset as u64 * 4 * size_of::<Vertex>() as u64,
+                    header.buffer_data.staging_offset as u64 * 4 * size_of::<Vertex>() as u64,
                     &chunk_render.vertex_buffers[target_buffer_i],
                     target_offset * 4 * size_of::<Vertex>() as u64,
-                    entry.header.buffer_data.face_count as u64 * 4 * size_of::<Vertex>() as u64,
+                    header.buffer_data.face_count as u64 * 4 * size_of::<Vertex>() as u64,
                 );
                 encoder.copy_buffer_to_buffer(
                     &self.staging_index_buffers[staging_buffer_i],
-                    entry.header.buffer_data.staging_offset as u64 * 6 * size_of::<Index>() as u64,
+                    header.buffer_data.staging_offset as u64 * 6 * size_of::<Index>() as u64,
                     &chunk_render.index_buffers[target_buffer_i],
                     target_offset * 6 * size_of::<Index>() as u64,
-                    entry.header.buffer_data.face_count as u64 * 6 * size_of::<Index>() as u64,
+                    header.buffer_data.face_count as u64 * 6 * size_of::<Index>() as u64,
                 );
                 encoder.copy_buffer_to_buffer(
                     &self.staging_mmat_buffers[staging_buffer_i],
-                    entry.header.slab_index as u64 * size_of::<Mat4>() as u64,
+                    header.slab_index as u64 * size_of::<Mat4>() as u64,
                     &chunk_render.mmat_buffer,
-                    entry.header.slab_index as u64 * size_of::<Mat4>() as u64,
+                    header.slab_index as u64 * size_of::<Mat4>() as u64,
                     size_of::<Mat4>() as u64,
                 );
                 active_draw[target_buffer_i].insert(
-                    entries[i].header.slab_index as usize,
+                    header.slab_index as usize,
                     DrawIndexedIndirectArgsA32::new(
                         target_size as u32 * 6,
                         1,
                         target_offset as u32 * 6,
                         0,
-                        entries[i].header.slab_index,
+                        header.slab_index,
                     ),
                 );
             }

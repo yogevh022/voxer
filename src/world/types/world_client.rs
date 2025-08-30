@@ -18,7 +18,7 @@ pub struct WorldClient<'window> {
 impl<'window> WorldClient<'window> {
     pub fn new(window: Arc<Window>, config: WorldClientConfig) -> Self {
         Self {
-            renderer: app_renderer::make_app_renderer(window, config.render_distance as f32),
+            renderer: app_renderer::make_app_renderer(window),
             config,
             player_position: Vec3::ZERO,
         }
@@ -37,7 +37,6 @@ impl<'window> WorldClient<'window> {
             geo::world_to_chunk_pos(self.player_position),
             self.config.render_distance as isize,
             |chunk_position| {
-                // todo if within frustum ..
                 if func(chunk_position) {
                     positions.push(chunk_position);
                 };

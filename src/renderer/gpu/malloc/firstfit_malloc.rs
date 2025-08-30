@@ -1,6 +1,8 @@
 use crate::renderer::gpu::VirtualMalloc;
-use crate::renderer::gpu::malloc::virtual_malloc::{MallocError, SimpleAllocation, SimpleAllocationRequest};
-use crate::renderer::gpu::malloc::{VirtualMemSlot};
+use crate::renderer::gpu::malloc::VirtualMemSlot;
+use crate::renderer::gpu::malloc::virtual_malloc::{
+    MallocError, SimpleAllocation, SimpleAllocationRequest,
+};
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -61,10 +63,7 @@ impl VirtualMalloc for VMallocFirstFit {
         })
     }
 
-    fn free(
-        &mut self,
-        allocation: Self::Allocation,
-    ) -> Result<(), MallocError> {
+    fn free(&mut self, allocation: Self::Allocation) -> Result<(), MallocError> {
         let slot_opt = self.used_blocks.remove(&allocation.offset);
         let mut slot = slot_opt.ok_or(MallocError::InvalidAllocation)?;
         let next_index = allocation.offset + slot.size;
@@ -73,10 +72,21 @@ impl VirtualMalloc for VMallocFirstFit {
         let greedy_index = allocation.offset - slot.prev_free;
         self.free_blocks.remove(&greedy_index);
         slot.prev_free = 0;
-        self.free_blocks.insert(greedy_index, slot);
+        // todo clean this mess
         self.used_blocks
             .get_mut(&next_index)
-            .map(|s| s.prev_free = slot.size);
+            .map(|s| s.prev_free = slot.size)
+            .unwrap_or_else(|| {
+                self.free_blocks
+                    .remove(&next_index)
+                    .map(|s| {
+                        slot.size += s.size;
+                        self.used_blocks.get_mut(&(next_index + s.size)).map(|us| {
+                            us.prev_free = slot.size;
+                        });
+                    });
+            });
+        self.free_blocks.insert(greedy_index, slot);
         Ok(())
     }
 
@@ -88,7 +98,7 @@ impl VirtualMalloc for VMallocFirstFit {
     fn total_size(&self) -> usize {
         self.arena_size
     }
-    
+
     fn available_size(&self) -> usize {
         self.free_blocks.iter().map(|(_, s)| s.size).sum()
     }

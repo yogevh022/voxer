@@ -20,7 +20,7 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
 {
     pub fn load_chunks(&mut self, chunks: Vec<Chunk>) {
         self.chunk_manager.write_new(&self.renderer, chunks);
-        // self.chunk_manager.malloc_debug();
+        self.chunk_manager.malloc_debug();
     }
 
     pub fn unload_chunks(&mut self, positions: Vec<IVec3>) {
@@ -75,7 +75,6 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
 
 pub fn make_app_renderer<'a, const NumBuffers: usize, const NumStagingBuffers: usize>(
     window: Arc<Window>,
-    render_distance: f32,
 ) -> AppRenderer<'a, NumBuffers, NumStagingBuffers> {
     let renderer_builder = RendererBuilder::new(window);
 
