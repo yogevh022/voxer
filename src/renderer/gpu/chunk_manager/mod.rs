@@ -2,14 +2,16 @@ mod chunk_compute;
 mod chunk_manager;
 mod chunk_render;
 
-use std::array;
 use crate::renderer::DrawIndexedIndirectArgsA32;
 use crate::renderer::gpu::chunk_entry::GPUChunkEntryHeader;
-use crate::renderer::gpu::{GPUChunkEntry, MultiBufferAllocation, VMallocFirstFit, VMallocMultiBuffer, VirtualMalloc};
-pub use chunk_manager::ChunkManager;
-use std::collections::HashMap;
-use glam::IVec3;
+use crate::renderer::gpu::{
+    GPUChunkEntry, MultiBufferAllocation, VMallocFirstFit, VMallocMultiBuffer, VirtualMalloc,
+};
 use crate::world::types::Chunk;
+pub use chunk_manager::ChunkManager;
+use glam::IVec3;
+use std::array;
+use std::collections::HashMap;
 
 type BufferDrawArgs<const N: usize> = [HashMap<usize, DrawIndexedIndirectArgsA32>; N];
 type MeshAllocator<const N: usize> = VMallocMultiBuffer<VMallocFirstFit, N>;
@@ -32,6 +34,7 @@ struct BufferCopyTarget {
 
 #[derive(Debug, Clone)]
 struct StagingBufferMapping<const NUM_BUFFERS: usize> {
+    pub staging_entries: Vec<GPUChunkEntry>,
     pub buffer_offsets: [u64; NUM_BUFFERS],
     pub last_entry_offsets: [u64; NUM_BUFFERS],
     pub targets: Vec<BufferCopyTarget>,
@@ -40,10 +43,18 @@ struct StagingBufferMapping<const NUM_BUFFERS: usize> {
 impl<const NUM_BUFFERS: usize> StagingBufferMapping<NUM_BUFFERS> {
     pub const fn new() -> Self {
         Self {
+            staging_entries: Vec::new(),
             buffer_offsets: [0; NUM_BUFFERS],
             last_entry_offsets: [0; NUM_BUFFERS],
             targets: Vec::new(),
         }
+    }
+
+    pub fn pop_target(&mut self) -> Option<(GPUChunkEntry, BufferCopyTarget)> {
+        if self.targets.is_empty() {
+            return None;
+        }
+        Some((self.staging_entries.pop().unwrap(), self.targets.pop().unwrap()))
     }
 
     pub fn push_to(&mut self, size: u64, allocation: MeshAllocation) {
@@ -63,14 +74,14 @@ impl<const NUM_BUFFERS: usize> StagingBufferMapping<NUM_BUFFERS> {
         }
     }
 
-    pub fn push_to_staging<F>(&self, chunks: &[Chunk], staging_entries: &mut Vec<GPUChunkEntry>, mut insert_allocation_fn: F)
+    pub fn push_to_staging<F>(&mut self, chunks: &[Chunk], mut insert_allocation_fn: F)
     where
-        F: FnMut(IVec3, MultiBufferAllocation) -> usize
+        F: FnMut(IVec3, MultiBufferAllocation) -> usize,
     {
         for i in 0..self.targets.len() {
             let chunk = &chunks[i];
             let target = &self.targets[i];
-            
+
             let mesh_alloc = target.allocation;
             let slab_index = insert_allocation_fn(chunk.position, mesh_alloc);
             let staging_offset = self.buffer_offsets[mesh_alloc.buffer_index] + target.entry_offset;
@@ -81,7 +92,8 @@ impl<const NUM_BUFFERS: usize> StagingBufferMapping<NUM_BUFFERS> {
                 slab_index as u32,
                 chunk.position,
             );
-            staging_entries.push(GPUChunkEntry::new(header, chunk.blocks));
+            self.staging_entries
+                .push(GPUChunkEntry::new(header, chunk.blocks));
         }
     }
 }

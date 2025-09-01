@@ -13,10 +13,6 @@ pub fn face_count(blocks: &ChunkBlocks) -> usize {
     faces.iter().map(|b| b.count_ones() as usize).sum::<usize>()
 }
 
-pub fn position_to_id(position: IVec3) -> u128 {
-    ((position.x as u128) << 64) | ((position.y as u128) << 32) | (position.z as u128)
-}
-
 fn faces(packed_blocks: [u16; CHUNK_SLICE]) -> [u16; CHUNK_SLICE * 3] {
     let mut result = [0u16; CHUNK_SLICE * 3];
     let result_layers: &mut [[u16; CHUNK_DIM]; CHUNK_DIM * 3] =

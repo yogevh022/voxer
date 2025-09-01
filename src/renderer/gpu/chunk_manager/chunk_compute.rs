@@ -1,7 +1,7 @@
 use super::chunk_render::ChunkRender;
 use crate::const_labels;
 use crate::renderer::gpu::GPUChunkEntry;
-use crate::renderer::gpu::chunk_manager::{BufferDrawArgs, StagingBufferMapping};
+use crate::renderer::gpu::chunk_manager::{BufferCopyTarget, BufferDrawArgs, StagingBufferMapping};
 use crate::renderer::{
     DrawIndexedIndirectArgsA32, Index, Renderer, RendererBuilder, Vertex, resources,
 };
@@ -13,9 +13,9 @@ pub struct ChunkCompute<const NumStagingBuffers: usize> {
     pipeline: wgpu::ComputePipeline,
     bind_groups: [wgpu::BindGroup; NumStagingBuffers],
     staging_chunk_buffers: [wgpu::Buffer; NumStagingBuffers],
-    staging_vertex_buffers: [wgpu::Buffer; NumStagingBuffers],
-    staging_index_buffers: [wgpu::Buffer; NumStagingBuffers],
-    staging_mmat_buffers: [wgpu::Buffer; NumStagingBuffers],
+    pub(crate) staging_vertex_buffers: [wgpu::Buffer; NumStagingBuffers],
+    pub(crate) staging_index_buffers: [wgpu::Buffer; NumStagingBuffers],
+    pub(crate) staging_mmat_buffers: [wgpu::Buffer; NumStagingBuffers],
 }
 
 impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
@@ -77,23 +77,23 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         }
     }
 
-    pub fn write_to_staging_chunks(
+    pub fn write_to_staging_chunks<const NumBuffers: usize>(
         &self,
         renderer: &Renderer<'_>,
-        staging_entries: &[Vec<GPUChunkEntry>; NumStagingBuffers],
+        staging_mapping: &[StagingBufferMapping<NumBuffers>; NumStagingBuffers],
     ) {
         let mut offset = 0usize;
         for i in 0..NumStagingBuffers {
             //fixme handle multiple staging buffers
-            if staging_entries[i].is_empty() {
+            if staging_mapping[i].staging_entries.is_empty() {
                 continue;
             }
             renderer.write_buffer(
                 &self.staging_chunk_buffers[i],
                 offset as u64 * size_of::<GPUChunkEntry>() as u64,
-                bytemuck::cast_slice(&staging_entries[i]),
+                bytemuck::cast_slice(&staging_mapping[i].staging_entries),
             );
-            offset += staging_entries[i].len();
+            offset += staging_mapping[i].staging_entries.len();
         }
     }
 
@@ -101,65 +101,84 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         &mut self,
         renderer: &Renderer<'_>,
         chunk_render: &ChunkRender<NumBuffers>,
-        staging_entries: [Vec<GPUChunkEntry>; NumStagingBuffers],
-        staging_mapping: [StagingBufferMapping<NumBuffers>; NumStagingBuffers],
         active_draw: &mut BufferDrawArgs<NumBuffers>,
-    ) {
+        staging_mapping: [StagingBufferMapping<NumBuffers>; NumStagingBuffers],
+    ) -> Vec<(usize, GPUChunkEntry, BufferCopyTarget)> {
+        let mut queue = Vec::new();
         let mut encoder = renderer.create_encoder("chunk_mesh_compute_encoder");
-        for (staging_buffer_i, (copy_mapping, entries)) in staging_mapping
-            .into_iter()
-            .zip(staging_entries.into_iter())
-            .enumerate()
         {
-            {
-                let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("test"), // todo fix naming
-                    timestamp_writes: None,
-                });
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("chunk_meshing_compute_pass"),
+                timestamp_writes: None,
+            });
+            for (staging_buffer_i, mapping) in staging_mapping.iter().enumerate() {
                 compute_pass.set_pipeline(&self.pipeline);
                 compute_pass.set_bind_group(0, &self.bind_groups[staging_buffer_i], &[]);
-                compute_pass.dispatch_workgroups(entries.len() as u32, 1, 1);
+                compute_pass.dispatch_workgroups(mapping.staging_entries.len() as u32, 1, 1);
             }
-            for (i, entry) in entries.iter().enumerate() {
-                let target_buffer_i = copy_mapping.targets[i].allocation.buffer_index;
-                let target_offset = copy_mapping.targets[i].allocation.offset as u64;
-                let target_size = copy_mapping.targets[i].size;
-                let header = entry.header;
-
-                encoder.copy_buffer_to_buffer(
-                    &self.staging_vertex_buffers[staging_buffer_i],
-                    header.buffer_data.staging_offset as u64 * 4 * size_of::<Vertex>() as u64,
-                    &chunk_render.vertex_buffers[target_buffer_i],
-                    target_offset * 4 * size_of::<Vertex>() as u64,
-                    header.buffer_data.face_count as u64 * 4 * size_of::<Vertex>() as u64,
-                );
-                encoder.copy_buffer_to_buffer(
-                    &self.staging_index_buffers[staging_buffer_i],
-                    header.buffer_data.staging_offset as u64 * 6 * size_of::<Index>() as u64,
-                    &chunk_render.index_buffers[target_buffer_i],
-                    target_offset * 6 * size_of::<Index>() as u64,
-                    header.buffer_data.face_count as u64 * 6 * size_of::<Index>() as u64,
-                );
-                encoder.copy_buffer_to_buffer(
-                    &self.staging_mmat_buffers[staging_buffer_i],
-                    header.slab_index as u64 * size_of::<Mat4>() as u64,
-                    &chunk_render.mmat_buffer,
-                    header.slab_index as u64 * size_of::<Mat4>() as u64,
-                    size_of::<Mat4>() as u64,
-                );
-                active_draw[target_buffer_i].insert(
-                    header.slab_index as usize,
-                    DrawIndexedIndirectArgsA32::new(
-                        target_size as u32 * 6,
-                        1,
-                        target_offset as u32 * 6,
-                        0,
-                        header.slab_index,
-                    ),
-                );
+        }
+        for (staging_buffer_i, mapping) in staging_mapping.into_iter().enumerate() {
+            for i in 0..mapping.staging_entries.len() {
+                self.copy_from_staging_to_active_buffers(
+                    chunk_render,
+                    &mut encoder,
+                    active_draw,
+                    staging_buffer_i,
+                    &mapping.targets[i],
+                    mapping.staging_entries[i].header.buffer_data.staging_offset as u64,
+                    mapping.staging_entries[i].header.slab_index as u64,
+                )
             }
         }
         renderer.queue.submit(Some(encoder.finish()));
+        queue
+    }
+
+    fn copy_from_staging_to_active_buffers<const NumBuffers: usize>(
+        &mut self,
+        chunk_render: &ChunkRender<NumBuffers>,
+        encoder: &mut wgpu::CommandEncoder,
+        active_draw: &mut BufferDrawArgs<NumBuffers>,
+        staging_buffer_i: usize,
+        copy_target: &BufferCopyTarget,
+        staging_offset: u64,
+        slab_index: u64,
+    ) {
+        let target_buffer_i = copy_target.allocation.buffer_index;
+        let target_offset = copy_target.allocation.offset as u64;
+        let target_size = copy_target.size;
+
+        encoder.copy_buffer_to_buffer(
+            &self.staging_vertex_buffers[staging_buffer_i],
+            staging_offset * 4 * size_of::<Vertex>() as u64,
+            &chunk_render.vertex_buffers[target_buffer_i],
+            target_offset * 4 * size_of::<Vertex>() as u64,
+            target_size * 4 * size_of::<Vertex>() as u64,
+        );
+        encoder.copy_buffer_to_buffer(
+            &self.staging_index_buffers[staging_buffer_i],
+            staging_offset * 6 * size_of::<Index>() as u64,
+            &chunk_render.index_buffers[target_buffer_i],
+            target_offset * 6 * size_of::<Index>() as u64,
+            target_size * 6 * size_of::<Index>() as u64,
+        );
+        encoder.copy_buffer_to_buffer(
+            &self.staging_mmat_buffers[staging_buffer_i],
+            slab_index * size_of::<Mat4>() as u64,
+            &chunk_render.mmat_buffer,
+            slab_index * size_of::<Mat4>() as u64,
+            size_of::<Mat4>() as u64,
+        );
+        active_draw[target_buffer_i].insert(
+            slab_index as usize,
+            DrawIndexedIndirectArgsA32::new(
+                target_size as u32 * 6,
+                1,
+                target_offset as u32 * 6,
+                0,
+                slab_index as u32,
+            ),
+        );
     }
 }
 

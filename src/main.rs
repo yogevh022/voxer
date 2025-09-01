@@ -5,6 +5,9 @@ mod renderer;
 mod vtypes;
 mod world;
 
+use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
+use rustc_hash::FxHashMap;
 use crate::world::types::{WorldServer, WorldServerConfig};
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
@@ -34,69 +37,19 @@ fn main() {
     run_app();
 
     // debug()
-
-    // debug_chunk_gen();
 }
 
 fn debug() {
     use std::time::Instant;
     use glam::{IVec3, Vec3};
 
-    let ipoint = IVec3::ZERO;
-    let mut ps = Vec::new();
-    let start = Instant::now();
-    compute::geo::Sphere::discrete_points(ipoint, 2, |p| {
-        ps.push(p);
-    });
-    println!("{}; {:?}", ps.len(), start.elapsed());
-    println!("{:?}", ps);
-}
+    let mut vec_vec = Vec::new();
+    let mut packed_vec = Vec::new();
 
-fn debug_chunk_gen() {
-    use crate::world::generation::WorldGenConfig;
-    use crate::world::generation::generate_chunk;
-    use glam::IVec3;
-    use std::time::Instant;
 
-    let noise = noise::OpenSimplex::new(0);
-
-    let worldgen_config = WorldGenConfig {
-        seed: 0,
-        noise_scale: 0.05,
-    };
-    let mut chunks = Vec::new();
-    for i in 0..1 {
-        let c_pos = IVec3::new(2, 0, 0);
-        let chunk = generate_chunk(worldgen_config, c_pos);
-        // let chunk = Chunk {
-        //     last_visited: None,
-        //     blocks: ChunkBlocks::checkerboard(
-        //         Block {
-        //             value: 1u16 << 15u16,
-        //         },
-        //         Block { value: 0u16 },
-        //     ),
-        // };
-        // let chunk = Chunk {
-        //     last_visited: None,
-        //     blocks: ChunkBlocks::splat(Block {
-        //         value: 1u16 << 15u16,
-        //     }),
-        // };
-        chunks.push(chunk);
+    let count = 20_000;
+    for i in 0..count {
+        vec_vec.push(IVec3::new(i, 0, 0));
+        packed_vec.push(((i as u64) << 40) | ((i as u64) << 16) | i as u64);
     }
-
-    let start = Instant::now();
-    let mut total_verts = 0;
-    for c in chunks.iter() {
-        let size = compute::chunk::face_count(&c.blocks);
-        total_verts += size;
-    }
-    println!("Time: {:?}", start.elapsed());
-
-    println!(
-        "total {}, total size: {}kb",
-        total_verts,
-        ((total_verts * 4 * 4 * 3) + (total_verts * 4 * 6)) / 1024
-    );
 }

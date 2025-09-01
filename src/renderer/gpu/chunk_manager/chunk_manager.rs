@@ -72,7 +72,6 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
         let staging_chunks_slices =
             chunks_slices_by_max_face_count(&chunks, max_faces_per_buffer, NumStagingBuffers);
         for (staging_index, staging_slice) in staging_chunks_slices.into_iter().enumerate() {
-            let mut staging_entries = init_staging_entries::<NumStagingBuffers>();
             let mut staging_mapping = init_staging_mapping::<NumBuffers, NumStagingBuffers>();
             for (chunk, &face_count) in staging_slice.0.iter().zip(staging_slice.1.iter()) {
                 debug_assert_eq!(self.chunk_allocations.get(&chunk.position).is_some(), false);
@@ -92,24 +91,18 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
                 .for_each(|mapping| mapping.update_buffer_offsets());
             staging_mapping[staging_index].push_to_staging(
                 &chunks,
-                &mut staging_entries[staging_index],
                 |chunk_position, mesh_allocation| {
                     self.chunk_allocations
                         .insert(chunk_position, mesh_allocation)
                 },
             );
             self.compute
-                .write_to_staging_chunks(renderer, &staging_entries);
-            let mut s_entries = init_staging_entries::<NumStagingBuffers>();
-            let mut s_mapping = init_staging_mapping::<NumBuffers, NumStagingBuffers>();
-            std::mem::swap(&mut s_entries, &mut staging_entries);
-            std::mem::swap(&mut s_mapping, &mut staging_mapping);
+                .write_to_staging_chunks(renderer, &staging_mapping);
             self.compute.dispatch_staging_workgroups(
                 renderer,
                 &self.render,
-                s_entries,
-                s_mapping,
                 &mut self.active_draw,
+                staging_mapping,
             );
         }
     }

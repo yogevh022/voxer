@@ -6,7 +6,7 @@ use glam::{IVec3, Vec3};
 use std::collections::{HashMap, HashSet};
 
 pub struct WorldServerConfig {
-    pub seed: u32,
+    pub seed: i32,
     pub simulation_distance: usize,
 }
 
