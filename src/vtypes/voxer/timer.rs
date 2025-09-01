@@ -13,8 +13,9 @@ impl Timer {
         self.frames += 1;
         self.delta_time = self.last_frame.elapsed().as_secs_f32();
         self.last_frame = Instant::now();
-        if self.second_start.elapsed().as_secs() > 1 {
-            self.fps = self.frames as f32;
+        if self.second_start.elapsed().as_millis() > 500 {
+            // bi-second updates
+            self.fps = self.frames as f32 * 2f32;
             self.frames = 0;
             self.second_start = Instant::now();
         }

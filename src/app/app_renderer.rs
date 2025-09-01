@@ -1,201 +1,70 @@
-use crate::renderer::builder::RendererAtlas;
-use crate::renderer::gpu::{
-    GPUChunkEntryBuffer, GPUChunkEntryHeader, MeshVMallocMultiBuffer, MultiBufferAllocationRequest,
-    MultiBufferMeshAllocation, VMallocFirstFit,
-};
+use crate::renderer::gpu::GPUChunkEntry;
+use crate::renderer::gpu::chunk_manager::ChunkManager;
 use crate::renderer::resources;
-use crate::renderer::resources::mesh_buffer::MeshBuffer;
-use crate::renderer::{Index, Renderer, RendererBuilder, Vertex};
+use crate::renderer::{Renderer, RendererBuilder};
 use crate::world::types::Chunk;
-use crate::{call_every, compute, vtypes};
-use glam::IVec3;
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, RwLock};
-use std::{array, mem};
-use wgpu::wgt::DrawIndexedIndirectArgs;
+use crate::{compute};
+use glam::{IVec3, Mat4};
+use std::sync::Arc;
 use winit::window::Window;
+use crate::vtypes::Camera;
 
-const VOID_MESH_OFFSET: usize = 8;
-
-pub struct AppRenderer<'window, const BUFF_N: usize> {
+pub struct AppRenderer<'window, const ChunkBuffers: usize, const ChunkStagingBuffers: usize> {
     pub renderer: Renderer<'window>,
-
-    pub staging_vertex_buff: wgpu::Buffer,
-    pub staging_index_buff: wgpu::Buffer,
-    pub staging_mmat_buff: wgpu::Buffer,
-    pub staging_chunk_buff: wgpu::Buffer,
-    pub mmat_buff: wgpu::Buffer,
-    pub vertex_buff: wgpu::Buffer,
-    pub index_buff: wgpu::Buffer,
-
-    pub mesh_buffers: [MeshBuffer; BUFF_N],
-
-    pub staged_chunks: HashMap<IVec3, GPUChunkEntryHeader>,
-    pub loaded_chunks: Arc<RwLock<HashMap<IVec3, GPUChunkEntryHeader>>>,
-    pub remove_queue: HashSet<IVec3>,
-
-    pub chunk_malloc: MeshVMallocMultiBuffer<VMallocFirstFit, BUFF_N>,
-    pub multi_buffer_allocations:
-        [Vec<(usize, MultiBufferMeshAllocation<VMallocFirstFit>)>; BUFF_N],
-    pub multi_buffer_remove_queue: Vec<MultiBufferMeshAllocation<VMallocFirstFit>>,
-
-    pub chunk_compute_bind_group: wgpu::BindGroup,
-    pub transform_mats_bind_group: wgpu::BindGroup,
-    pub texture_atlas: RendererAtlas,
-
+    chunk_manager: ChunkManager<ChunkBuffers, ChunkStagingBuffers>,
     pub render_pipeline: wgpu::RenderPipeline,
-    pub compute_pipeline: wgpu::ComputePipeline,
 }
 
-impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
-    pub fn write_new_chunks(&mut self, chunks: Vec<(usize, IVec3, Chunk)>) {
-        let mut chunk_entries = GPUChunkEntryBuffer::new(chunks.len());
-        for (slab_index, chunk_pos, chunk) in chunks.into_iter() {
-            let face_count = compute::chunk::face_count(&chunk.blocks);
-            let vertex_count = face_count * 4;
-            let index_count = face_count * 6;
-            let alloc_request = MultiBufferAllocationRequest {
-                vertex_size: vertex_count,
-                index_size: index_count,
-            };
-            let mb_mesh_malloc = self.chunk_malloc.alloc(alloc_request).unwrap();
-            let header = GPUChunkEntryHeader::new(
-                mb_mesh_malloc.vertex_offset as u32,
-                mb_mesh_malloc.index_offset as u32,
-                vertex_count as u32,
-                index_count as u32,
-                slab_index as u32,
-                chunk_pos,
-            );
-            self.multi_buffer_allocations[mb_mesh_malloc.buffer_index]
-                .push((slab_index, mb_mesh_malloc));
-            self.staged_chunks.insert(chunk_pos, header.clone());
-            chunk_entries.insert(header, chunk.blocks);
-        }
-
-        self.renderer.write_buffer(
-            &self.staging_chunk_buff,
-            0,
-            &bytemuck::cast_slice(&chunk_entries),
-        );
-
-        // self.chunk_malloc.vertex.draw_cli();
+impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
+    AppRenderer<'_, ChunkBuffers, ChunkStagingBuffers>
+{
+    pub fn load_chunks(&mut self, chunks: Vec<Chunk>) {
+        self.chunk_manager.write_new(&self.renderer, chunks);
+        // self.chunk_manager.malloc_debug();
     }
 
-    pub fn unload_chunks(&mut self, chunks: Vec<IVec3>) {
-        self.remove_queue.extend(chunks);
-        let mut loaded_chunks = self.loaded_chunks.write().unwrap();
-        for mesh_allocation in self.multi_buffer_remove_queue.drain(..) {
-            self.chunk_malloc.free(mesh_allocation).unwrap();
+    pub fn unload_chunks(&mut self, positions: Vec<IVec3>) {
+        for position in positions {
+            self.chunk_manager.drop(position);
         }
-        // self.remove_queue.retain(|c_pos| {
-        //     loaded_chunks
-        //         .remove(c_pos)
-        //         .and_then(|chunk_entry| {
-        //             let req = MultiBufferAllocationRequest {
-        //                 vertex_size: chunk_entry.vertex_count as usize,
-        //                 index_size: chunk_entry.index_count as usize,
-        //             };
-        //             self.chunk_malloc.free(req);
-        //             Some(false)
-        //         })
-        //         .unwrap_or(true)
-        // });
-
-        // self.gpu_vertex_malloc.draw_cli();
     }
 
-    pub fn compute_chunks(&mut self) {
-        let mut encoder = create_encoder(&self.renderer.device);
-        {
-            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("compute_pass"),
-                timestamp_writes: None,
-            });
-            compute_pass.set_pipeline(&self.compute_pipeline);
-            compute_pass.set_bind_group(0, &self.chunk_compute_bind_group, &[]);
-            compute_pass.dispatch_workgroups(self.staged_chunks.len() as u32, 1, 1);
-        }
-        for chunk in self.staged_chunks.values() {
-            let vertex_offset_bytes = chunk.vertex_offset as u64 * Vertex::size() as u64;
-            encoder.copy_buffer_to_buffer(
-                &self.staging_vertex_buff,
-                vertex_offset_bytes,
-                &self.vertex_buff,
-                vertex_offset_bytes,
-                Some(chunk.vertex_count as u64 * Vertex::size() as u64),
-            );
-            let index_offset_bytes = chunk.index_offset as u64 * size_of::<Index>() as u64;
-            encoder.copy_buffer_to_buffer(
-                &self.staging_index_buff,
-                index_offset_bytes,
-                &self.index_buff,
-                index_offset_bytes,
-                Some(chunk.index_count as u64 * size_of::<Index>() as u64),
-            );
-            let mmat_offset_bytes = chunk.slab_index as u64 * size_of::<[[f32; 4]; 4]>() as u64;
-            encoder.copy_buffer_to_buffer(
-                &self.staging_mmat_buff,
-                mmat_offset_bytes,
-                &self.mmat_buff,
-                mmat_offset_bytes,
-                Some(size_of::<[[f32; 4]; 4]>() as u64),
-            );
-        }
-        self.renderer.queue.submit(Some(encoder.finish()));
-        let staged_chunks = mem::take(&mut self.staged_chunks);
-        let loaded_chunks = self.loaded_chunks.clone();
-        self.renderer.queue.on_submitted_work_done(move || {
-            loaded_chunks.write().unwrap().extend(staged_chunks);
-        });
+    pub fn is_chunk_rendered(&self, position: IVec3) -> bool {
+        self.chunk_manager.is_rendered(position)
     }
 
-    pub fn encode_render_pass(
+    pub fn map_rendered_chunk_positions<F>(&self, func: F) -> Vec<IVec3>
+    where
+        F: FnMut(IVec3) -> bool,
+    {
+        self.chunk_manager.map_rendered_chunk_positions(func)
+    }
+
+    fn render_chunks(
         &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-        camera: &vtypes::Camera,
+        render_pass: &mut wgpu::RenderPass,
+        camera: &Camera,
     ) {
-        let mut render_pass =
-            resources::render_pass::begin(encoder, view, &self.renderer.depth_texture_view);
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &self.texture_atlas.bind_group, &[]);
+        render_pass.set_bind_group(0, &self.renderer.bind_groups.texture_atlas, &[]);
+        render_pass.set_bind_group(1, &self.renderer.bind_groups.view_projection, &[]);
 
-        let view_proj = camera.get_view_projection().to_cols_array();
-        self.renderer.write_buffer(
-            &self.renderer.view_projection_buffer,
-            0u64,
-            bytemuck::cast_slice(&[view_proj]),
-        );
+        let view_proj = camera.get_view_projection();
+        self.renderer.write_view_projection(view_proj);
 
-        // let loaded_chunks = self.loaded_chunks.read().unwrap();
-        // if !loaded_chunks.is_empty() {
-        //     let buffer_commands = loaded_chunks
-        //         .values()
-        //         .map(|header| header.draw_indexed_indirect_args())
-        //         .collect::<Vec<_>>();
-        //     drop(loaded_chunks);
-        //     self.renderer.write_buffer(
-        //         &self.indirect_buff,
-        //         0,
-        //         &bytemuck::cast_slice(&buffer_commands),
-        //     );
-        //     render_pass.multi_draw_indexed_indirect(
-        //         &self.indirect_buff,
-        //         0,
-        //         buffer_commands.len() as u32,
-        //     );
-        // }
+        self.chunk_manager.draw(&self.renderer, render_pass);
     }
 
-    pub fn render(&mut self, camera: &vtypes::Camera) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, camera: &Camera) -> Result<(), wgpu::SurfaceError> {
         let frame = self.renderer.surface.get_current_texture()?;
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut encoder = create_encoder(&self.renderer.device);
-        self.encode_render_pass(&mut encoder, &view, camera);
+        let mut encoder = self.renderer.create_encoder("render_encoder");
+        {
+            let mut render_pass = begin_render_pass(&mut encoder, &view, &self.renderer.depth_texture_view);
+            self.render_chunks(&mut render_pass, camera);
+        }
 
         self.renderer.queue.submit(Some(encoder.finish()));
 
@@ -204,185 +73,65 @@ impl<const BUFF_N: usize> AppRenderer<'_, BUFF_N> {
     }
 }
 
-pub fn make_app_renderer<'a, const BUFF_N: usize>(
+pub fn make_app_renderer<'a, const NumBuffers: usize, const NumStagingBuffers: usize>(
     window: Arc<Window>,
-    render_distance: f32,
-) -> AppRenderer<'a, BUFF_N> {
+) -> AppRenderer<'a, NumBuffers, NumStagingBuffers> {
     let renderer_builder = RendererBuilder::new(window);
-    let atlas = renderer_builder.make_atlas(get_atlas_image());
 
-    // >upper bound of max chunks to be buffered at once
-    let max_rendered_chunks = compute::geo::max_discrete_sphere_pts(render_distance);
-    let temp_size = (compute::MIB * 128) as u64;
-    // buffers
-    let staging_vertex_buff = RendererBuilder::make_buffer(
-        &renderer_builder.device.as_ref().unwrap(),
-        "staging_vertex_buffer",
-        temp_size,
-        wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
-    );
-    let staging_index_buff = RendererBuilder::make_buffer(
-        &renderer_builder.device.as_ref().unwrap(),
-        "staging_index_buffer",
-        temp_size,
-        wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
-    );
-    let staging_mmat_buff = RendererBuilder::make_buffer(
-        &renderer_builder.device.as_ref().unwrap(),
-        "staging_mmat_buffer",
-        (max_rendered_chunks * size_of::<[[f32; 4]; 4]>()) as u64,
-        wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
-    );
-    let vertex_buff = renderer_builder.make_vertex_buffer(temp_size);
-    let index_buff = renderer_builder.make_index_buffer(temp_size);
-    let (staging_chunk_buff, staging_chunk_buff_layout) =
-        chunk_blocks_buffer(&renderer_builder, temp_size as usize);
-    let mmat_buff = RendererBuilder::make_buffer(
-        &renderer_builder.device.as_ref().unwrap(),
-        "mmat_buffer",
-        (max_rendered_chunks * size_of::<[[f32; 4]; 4]>()) as u64,
-        wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
-    );
-
-    let (transform_mats_bgl, transform_mats_bind_group) = transform_matrices_binds(
-        &renderer_builder,
-        renderer_builder.view_projection_buffer.as_ref().unwrap(),
-        &mmat_buff,
-    );
-
-    // pipelines
-    let cb_compute_pipeline =
-        block_compute_pipeline(&renderer_builder, &[&staging_chunk_buff_layout]);
-    let render_pipeline = renderer_builder.make_render_pipeline(
-        resources::shader::main_shader().into(),
-        &[&atlas.texture_bind_group_layout, &transform_mats_bgl],
-    );
-
-    let chunk_compute_bind_group =
-        renderer_builder
-            .device
-            .as_ref()
-            .unwrap()
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("chunk_compute_bind_group"),
-                layout: &staging_chunk_buff_layout,
-                entries: &resources::bind_group::index_based_entries([
-                    staging_chunk_buff.as_entire_binding(),
-                    staging_vertex_buff.as_entire_binding(),
-                    staging_index_buff.as_entire_binding(),
-                    staging_mmat_buff.as_entire_binding(),
-                ]),
-            });
-
+    let surface_format = renderer_builder.surface_format.unwrap();
     let renderer = renderer_builder.build();
 
-    let chunk_malloc = MeshVMallocMultiBuffer::<VMallocFirstFit, BUFF_N>::new(
-        temp_size as usize / Vertex::size(),
-        temp_size as usize / size_of::<Index>(),
-        VOID_MESH_OFFSET,
+    let render_pipeline = RendererBuilder::make_render_pipeline(
+        &renderer.device,
+        surface_format,
+        resources::shader::main_shader().into(),
+        &[
+            &renderer.layouts.texture_atlas,   // 0
+            &renderer.layouts.view_projection, // 1
+            &renderer.layouts.mmat,            // 2
+        ],
     );
 
-    let mesh_buffers: [MeshBuffer; BUFF_N] = array::from_fn(|_| {
-        MeshBuffer::new(&renderer.device, temp_size as usize, temp_size as usize)
-    });
+    let max_buffer_size = compute::MIB * 128;
+    let chunk_manager = ChunkManager::<NumBuffers, NumStagingBuffers>::new(
+        &renderer,
+        max_buffer_size,
+        12_288 * size_of::<GPUChunkEntry>(), // fixme this is overkill
+        12_288 * size_of::<Mat4>(),
+    );
 
     AppRenderer {
         renderer,
-        staging_vertex_buff,
-        staging_index_buff,
-        staging_mmat_buff,
-        mmat_buff,
-        vertex_buff,
-        index_buff,
-        staging_chunk_buff,
-        staged_chunks: HashMap::new(),
-        loaded_chunks: Arc::new(RwLock::new(HashMap::new())),
-        remove_queue: HashSet::new(),
-        chunk_malloc,
-        multi_buffer_allocations: array::from_fn(|_| vec![]),
-        multi_buffer_remove_queue: vec![],
-        chunk_compute_bind_group,
-        transform_mats_bind_group,
-        texture_atlas: atlas,
+        chunk_manager,
         render_pipeline,
-        compute_pipeline: cb_compute_pipeline,
-        mesh_buffers,
     }
 }
 
-pub fn transform_matrices_binds(
-    renderer_builder: &RendererBuilder,
-    view_proj_buffer: &wgpu::Buffer,
-    model_mat_buffer: &wgpu::Buffer,
-) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-    let view_projection_binding = wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-        buffer: view_proj_buffer,
-        offset: 0,
-        size: std::num::NonZeroU64::new(view_proj_buffer.size()),
-    });
-    resources::transform_matrices::create_bind_group(
-        renderer_builder.device.as_ref().unwrap(),
-        &resources::bind_group::index_based_entries([
-            view_projection_binding,              // 0
-            model_mat_buffer.as_entire_binding(), // 1
-        ]),
-    )
-}
-
-pub fn chunk_blocks_buffer(
-    renderer_builder: &RendererBuilder,
-    size: usize,
-) -> (wgpu::Buffer, wgpu::BindGroupLayout) {
-    let block_buffer =
-        resources::chunk::create_chunk_buffer(renderer_builder.device.as_ref().unwrap(), size);
-    (
-        block_buffer,
-        resources::chunk::chunk_buffer_bind_group_layout(renderer_builder.device.as_ref().unwrap()),
-    )
-}
-
-pub fn block_compute_pipeline(
-    renderer_builder: &RendererBuilder,
-    bind_group_layouts: &[&wgpu::BindGroupLayout],
-) -> wgpu::ComputePipeline {
-    let shader = resources::shader::create(
-        renderer_builder.device.as_ref().unwrap(),
-        resources::shader::chunk_meshing().into(),
-    );
-    resources::pipeline::create_compute(
-        renderer_builder.device.as_ref().unwrap(),
-        bind_group_layouts,
-        &shader,
-        "block_buffer_compute_pipeline",
-    )
-}
-
-pub fn indirect_buffer(device: &wgpu::Device, size: u64) -> wgpu::Buffer {
-    device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("temp_indirect_buffer"),
-        size,
-        usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    })
-}
-
-pub fn get_atlas_image() -> image::RgbaImage {
-    let q = std::env::current_exe().unwrap();
-    let project_root = q
-        .parent() // target/debug
-        .unwrap()
-        .parent() // target
-        .unwrap()
-        .parent() // project root
-        .unwrap();
-
-    let atlas_image = image::open(project_root.join("src/renderer/texture/images/atlas.png"))
-        .expect("failed to load atlas.png");
-    atlas_image.to_rgba8()
-}
-
-pub fn create_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
-    device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("render_encoder"),
+fn begin_render_pass<'a>(
+    encoder: &'a mut wgpu::CommandEncoder,
+    frame_view: &wgpu::TextureView,
+    depth_view: &wgpu::TextureView,
+) -> wgpu::RenderPass<'a> {
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("render_pass"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: frame_view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: depth_view,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: wgpu::StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }),
+        timestamp_writes: None,
+        occlusion_query_set: None,
     })
 }

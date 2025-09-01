@@ -1,38 +1,3 @@
-pub fn create_bind_group(
-    device: &wgpu::Device,
-    entries: &[wgpu::BindGroupEntry],
-) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-    let texture_bind_group_layout =
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("texture_bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("texture_bind_group"),
-        layout: &texture_bind_group_layout,
-        entries,
-    });
-    (texture_bind_group_layout, bind_group)
-}
-
 pub fn create_diffuse(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -109,4 +74,19 @@ pub fn get_image_extent3d(image: &image::RgbaImage) -> wgpu::Extent3d {
         height: image.height(),
         depth_or_array_layers: 1,
     }
+}
+
+pub fn get_atlas_image() -> image::RgbaImage {
+    let q = std::env::current_exe().unwrap();
+    let project_root = q
+        .parent() // target/debug
+        .unwrap()
+        .parent() // target
+        .unwrap()
+        .parent() // project root
+        .unwrap();
+
+    let atlas_image = image::open(project_root.join("src/renderer/texture/images/atlas.png"))
+        .expect("failed to load atlas.png");
+    atlas_image.to_rgba8()
 }

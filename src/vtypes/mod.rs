@@ -4,7 +4,7 @@ mod scene_object;
 mod transform;
 mod voxer;
 
-pub use camera::{Camera, CameraController};
+pub use camera::{Camera, CameraController, ViewFrustum};
 pub use scene::Scene;
 pub use scene_object::{VObject, VoxerObject};
 pub use transform::Transform;

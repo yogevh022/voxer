@@ -5,7 +5,7 @@ use glam::{Mat4, Quat};
 #[derive(Default)]
 pub struct Camera {
     pub transform: Transform,
-    pub properties: CameraProperties,
+    pub properties: ViewFrustum,
 }
 
 impl Camera {
@@ -27,14 +27,24 @@ impl Camera {
     }
 }
 
-pub struct CameraProperties {
+pub struct ViewFrustum {
     pub fov: f32,
     pub near: f32,
     pub far: f32,
     pub aspect_ratio: f32,
 }
 
-impl Default for CameraProperties {
+impl ViewFrustum {
+    pub fn half_height_at_depth(&self, depth: f32) -> f32 {
+        depth * 0.5f32.tan()
+    }
+    
+    pub fn half_width_at_depth(&self, depth: f32) -> f32 {
+        self.aspect_ratio * self.half_height_at_depth(depth)
+    }
+}
+
+impl Default for ViewFrustum {
     fn default() -> Self {
         Self {
             fov: 70f32.to_radians(),

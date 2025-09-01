@@ -2,18 +2,19 @@ use crate::compute::array::Array3D;
 use crate::world::types::{Block, CHUNK_DIM, Chunk, ChunkBlocks};
 use crossbeam::channel;
 use crossbeam::channel::SendError;
+use fastnoise2::generator::Generator;
 use glam::IVec3;
-use noise::{NoiseFn, OpenSimplex};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use std::collections::HashSet;
+use std::hash::{Hash};
 
 pub type WorldGenRequest = Vec<IVec3>;
 pub type WorldGenResponse = Vec<(IVec3, Chunk)>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct WorldGenConfig {
-    pub seed: u32,
+    pub seed: i32,
     pub noise_scale: f64,
 }
 
@@ -84,13 +85,6 @@ pub fn world_generation_task(
     receive: channel::Receiver<WorldGenRequest>,
 ) {
     while let Ok(chunk_positions) = receive.recv() {
-        // for chunks in chunk_positions.chunks(16) {
-        //     let generated_chunks = chunks
-        //         .into_par_iter()
-        //         .map(|&chunk_pos| (chunk_pos, generate_chunk(config, chunk_pos)))
-        //         .collect();
-        //     send.send(generated_chunks).unwrap();
-        // }
         let generated_chunks = chunk_positions
             .into_par_iter()
             .map(|chunk_pos| (chunk_pos, generate_chunk(config, chunk_pos)))
@@ -100,34 +94,39 @@ pub fn world_generation_task(
 }
 
 pub(crate) fn generate_chunk(gen_config: WorldGenConfig, chunk_position: IVec3) -> Chunk {
-    let blocks = generate_chunk_blocks(gen_config, chunk_position);
-    Chunk {
-        blocks,
-        last_visited: None,
-    }
+    let (solid_count, blocks) = generate_chunk_blocks(gen_config, chunk_position);
+    Chunk::new(chunk_position, blocks, solid_count)
 }
 
-fn generate_chunk_blocks(gen_config: WorldGenConfig, chunk_position: IVec3) -> ChunkBlocks {
-    let noise = OpenSimplex::new(gen_config.seed); // fixme creating this every time?
-    let blocks: ChunkBlocks = Array3D(std::array::from_fn(|x| {
-        std::array::from_fn(|y| {
-            std::array::from_fn(|z| {
-                if noise.get([
-                    (chunk_position.x * CHUNK_DIM as i32 + x as i32) as f64
-                        * gen_config.noise_scale,
-                    (chunk_position.y * CHUNK_DIM as i32 + y as i32) as f64
-                        * gen_config.noise_scale,
-                    (chunk_position.z * CHUNK_DIM as i32 + z as i32) as f64
-                        * gen_config.noise_scale,
-                ]) > 0.1
-                {
-                    // fixme this is horrible
-                    Block { value: 1u16 << 15 }
-                } else {
-                    Block { value: 0u16 }
-                }
-            })
-        })
-    }));
-    blocks
+fn generate_chunk_blocks(
+    gen_config: WorldGenConfig,
+    chunk_position: IVec3,
+) -> (usize, ChunkBlocks) {
+    let mut noise_output = vec![0.0; CHUNK_DIM * CHUNK_DIM * CHUNK_DIM];
+    let noise = fastnoise2::generator::prelude::opensimplex2().build();
+    noise.gen_uniform_grid_3d(
+        &mut noise_output,
+        chunk_position.x * CHUNK_DIM as i32,
+        chunk_position.y * CHUNK_DIM as i32,
+        chunk_position.z * CHUNK_DIM as i32,
+        CHUNK_DIM as i32,
+        CHUNK_DIM as i32,
+        CHUNK_DIM as i32,
+        gen_config.noise_scale as f32,
+        gen_config.seed,
+    );
+    let mut solid_count = 0;
+    let mut blocks: [Block; CHUNK_DIM * CHUNK_DIM * CHUNK_DIM] = std::array::from_fn(|i| {
+        if noise_output[i] > 0.1 {
+            solid_count += 1;
+            Block { value: 1u16 << 15 }
+        } else {
+            Block { value: 0u16 }
+        }
+    });
+    let blocks3d: [[[Block; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] =
+        unsafe { *(blocks.as_mut_ptr() as *mut [[[Block; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM]) };
+    
+    let blocks: ChunkBlocks = Array3D(blocks3d);
+    (solid_count, blocks)
 }

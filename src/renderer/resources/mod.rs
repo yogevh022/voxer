@@ -1,13 +1,3 @@
-pub mod bind_group;
-pub mod chunk;
-pub mod chunk_model;
-pub mod index;
-pub mod mesh_buffer;
-mod mesh_buffer_manager;
-pub mod pipeline;
-pub mod render_pass;
 pub mod shader;
 pub mod texture;
-pub mod transform_matrices;
-pub mod uniform;
-pub mod vertex;
+pub mod utils;

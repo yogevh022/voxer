@@ -1,8 +1,8 @@
 pub mod app_renderer;
 
 use crate::vtypes::{Scene, Voxer, VoxerObject};
-use crate::world::types::{WorldClient, WorldClientConfig, WorldServer};
-use crate::{SIMULATION_AND_RENDER_DISTANCE, vtypes};
+use crate::world::types::{CHUNK_DIM, WorldClient, WorldClientConfig, WorldServer};
+use crate::{SIMULATION_AND_RENDER_DISTANCE, compute, vtypes};
 use glam::IVec3;
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -153,22 +153,46 @@ impl<'a> App<'a> {
         }
 
         let player_pos = self.v.camera.transform.position;
-        self.server.set_player(0, &player_pos);
+        self.server.set_player(0, player_pos);
         self.client
             .as_mut()
             .unwrap()
             .set_player_position(player_pos);
 
+        let frustum_planes = compute::geo::Frustum::planes(self.v.camera.get_view_projection());
         if self.v.time.temp_200th_frame() {
             self.server.update();
-            self.client.as_mut().unwrap().update();
-            let client_nearby_chunks = self.client.as_mut().unwrap().take_nearby_chunks_delta();
-            let nearby_chunks_data = self.server.get_chunks(client_nearby_chunks.into_iter());
-
-            self.client
-                .as_mut()
-                .unwrap()
-                .sync_with_renderer(nearby_chunks_data);
+            let m_client = self.client.as_mut().unwrap();
+            let unload_chunks = m_client.renderer.map_rendered_chunk_positions(|c_pos| {
+                let chunk_world_pos = compute::geo::chunk_to_world_pos(c_pos);
+                !compute::geo::Frustum::is_aabb_within_frustum(
+                    chunk_world_pos,
+                    chunk_world_pos + CHUNK_DIM as f32,
+                    &frustum_planes,
+                )
+            });
+            if !unload_chunks.is_empty() {
+                m_client.renderer.unload_chunks(unload_chunks);
+            }
+        }
+        {
+            let m_client = self.client.as_mut().unwrap();
+            let load_chunk_positions = m_client.map_visible_chunk_positions(|c_pos| {
+                let chunk_world_pos = compute::geo::chunk_to_world_pos(c_pos);
+                !m_client.renderer.is_chunk_rendered(c_pos)
+                    && compute::geo::Frustum::is_aabb_within_frustum(
+                        chunk_world_pos,
+                        chunk_world_pos + CHUNK_DIM as f32,
+                        &frustum_planes,
+                    )
+            });
+            
+            if !load_chunk_positions.is_empty() {
+                let load_chunks = self.server.get_chunks(load_chunk_positions);
+                if !load_chunks.is_empty() { //fixme temp
+                    m_client.renderer.load_chunks(load_chunks);
+                }
+            }
         }
     }
 }

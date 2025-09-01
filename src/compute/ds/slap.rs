@@ -1,5 +1,5 @@
 use slab::Slab;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::hash::Hash;
 
 pub struct Slap<K, V>
@@ -7,7 +7,7 @@ where
     K: Hash + Eq,
 {
     slab: Slab<V>,
-    map: HashMap<K, usize>,
+    map: FxHashMap<K, usize>,
 }
 
 impl<K, V> Slap<K, V>
@@ -17,20 +17,22 @@ where
     pub fn new() -> Self {
         Self {
             slab: Slab::new(),
-            map: HashMap::new(),
+            map: FxHashMap::default(),
         }
     }
 
     pub fn insert(&mut self, key: K, value: V) -> usize {
         let index = self.slab.insert(value);
-        self.map.insert(key, index);
+        self.map
+            .insert(key, index)
+            .map(|old_index| self.slab.remove(old_index));
         index
     }
 
-    pub fn remove(&mut self, key: &K) -> Option<V> {
+    pub fn remove(&mut self, key: &K) -> Option<(usize, V)> {
         self.map
             .remove(key)
-            .and_then(|index| Some(self.slab.remove(index)))
+            .and_then(|index| Some((index, self.slab.remove(index))))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {

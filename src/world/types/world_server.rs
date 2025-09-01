@@ -6,7 +6,7 @@ use glam::{IVec3, Vec3};
 use std::collections::{HashMap, HashSet};
 
 pub struct WorldServerConfig {
-    pub seed: u32,
+    pub seed: i32,
     pub simulation_distance: usize,
 }
 
@@ -40,13 +40,20 @@ impl WorldServer {
     }
 
     pub(crate) fn update(&mut self) {
-        let mut active_chunk_positions = HashSet::new();
+        let mut active_chunk_positions = Vec::new();
         for (_, player_pos) in self.players.iter() {
-            active_chunk_positions.extend(geo::discrete_sphere_pts(
-                &(*player_pos / CHUNK_DIM as f32),
-                self.config.simulation_distance as f32,
-            ));
+            geo::Sphere::discrete_points(
+                geo::world_to_chunk_pos(*player_pos),
+                self.config.simulation_distance as isize,
+                |point| {
+                    active_chunk_positions.push(point);
+                },
+            );
         }
+        // active_chunk_positions.push(IVec3::new(0, 0, 0));
+        // active_chunk_positions.push(IVec3::new(1, 0, 0));
+        // active_chunk_positions.push(IVec3::new(2, 0, 0));
+        // active_chunk_positions.push(IVec3::new(3, 0, 0));
         self.try_receive_generation();
         let (generated, ungenerated): (HashSet<_>, HashSet<_>) =
             self.partition_chunks_by_existence(active_chunk_positions);
@@ -54,23 +61,22 @@ impl WorldServer {
         self.simulated_chunks = generated;
     }
 
-    pub fn set_player(&mut self, player_id: usize, player_pos: &Vec3) {
-        self.players.insert(player_id, *player_pos);
+    pub fn set_player(&mut self, player_id: usize, player_pos: Vec3) {
+        self.players.insert(player_id, player_pos);
     }
 
-    pub fn get_chunks(
-        &self,
-        positions: impl Iterator<Item = IVec3>,
-    ) -> Vec<(IVec3, Option<Chunk>)> {
+    pub fn get_chunks(&self, positions: Vec<IVec3>) -> Vec<Chunk> {
         // cloning here because the server will have to send clones to clients anyway
+        // only returns chunks that are generated
         positions
-            .map(|c_pos| (c_pos, self.chunks.get(&c_pos).cloned()))
+            .into_iter()
+            .filter_map(|c_pos| self.chunks.get(&c_pos).cloned())
             .collect()
     }
 
     fn partition_chunks_by_existence(
         &self,
-        chunk_positions: HashSet<IVec3>,
+        chunk_positions: Vec<IVec3>,
     ) -> (HashSet<IVec3>, HashSet<IVec3>) {
         chunk_positions.into_iter().partition(|c_pos| {
             self.chunks.contains_key(c_pos) || self.generation_handle.is_pending(c_pos)

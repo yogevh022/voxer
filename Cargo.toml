@@ -4,24 +4,29 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-wgpu = "26.0.1"
+#wgpu = { version = "26.0.1", features = ["dx12", "vulkan", "metal"] }
+wgpu = { path="C:/Users/Yogev/RustroverProjects/wgpu/wgpu", features = ["dx12", "vulkan", "metal"] }
 winit = "0.30.12"
 pollster = "0.4.0"
 bytemuck = "1.23.1"
 image = "0.25.6"
 glam = { version = "0.30.5", features = ["bytemuck"] }
 parking_lot = "0.12.4"
-noise = "0.9.0"
+fastnoise2 = "0.3.1"
 rayon = "1.10.0"
 crossbeam = "0.8.4"
 slab = "0.4.11"
 tracy-client = "0.18.2"
 rand = { version = "0.8.5"}
+rustc-hash = "2.1.1"
+
 
 [profile.dev]
 strip = false
 debug = true
 
 [profile.release]
+strip = false
 debug = true
-#opt-level = 3
+lto = "fat"
+opt-level = 3 # change to 3 when building for real

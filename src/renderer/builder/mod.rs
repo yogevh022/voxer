@@ -4,24 +4,52 @@ use winit::window::Window;
 
 mod atlas;
 mod buffer;
+mod layouts;
 mod render_pipeline;
+
 use crate::compute;
-pub use atlas::RendererAtlas;
+use crate::renderer::builder::layouts::{
+    create_mmat_layout, create_texture_layout, create_view_projection_layout,
+};
+use crate::renderer::resources::texture::get_atlas_image;
+
+const DXC_DLL_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/renderer/resources/dxc/bin/x64/dxcompiler.dll");
 
 pub struct RendererBuilder<'window> {
     pub(crate) config: Option<wgpu::SurfaceConfiguration>,
     pub(crate) surface: Option<wgpu::Surface<'window>>,
     pub(crate) surface_format: Option<wgpu::TextureFormat>,
+    pub(crate) adapter: Option<wgpu::Adapter>,
     pub(crate) device: Option<wgpu::Device>,
-    pub(crate) indirect_buffer: Option<wgpu::Buffer>,
     pub(crate) queue: Option<wgpu::Queue>,
+    pub(crate) indirect_buffer: Option<wgpu::Buffer>,
     pub(crate) view_projection_buffer: Option<wgpu::Buffer>,
     pub(crate) depth_texture_view: Option<wgpu::TextureView>,
+    pub(crate) mmat_layout: Option<wgpu::BindGroupLayout>,
+    pub(crate) view_projection_layout: Option<wgpu::BindGroupLayout>,
+    pub(crate) texture_atlas_layout: Option<wgpu::BindGroupLayout>,
+    pub(crate) texture_atlas_bind_group: Option<wgpu::BindGroup>,
+    pub(crate) view_projection_bind_group: Option<wgpu::BindGroup>,
 }
 
 impl<'window> RendererBuilder<'window> {
     pub(crate) fn new(window: Arc<Window>) -> Self {
-        let instance = wgpu::Instance::default();
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::DX12,
+            flags: Default::default(),
+            memory_budget_thresholds: Default::default(),
+            backend_options: wgpu::BackendOptions {
+                gl: Default::default(),
+                dx12: wgpu::Dx12BackendOptions {
+                    shader_compiler: wgpu::Dx12Compiler::DynamicDxc {
+                        dxc_path: DXC_DLL_PATH.to_string(),
+                        max_shader_model: wgpu::DxcShaderModel::V6_0,
+                    },
+                    latency_waitable_object: Default::default(),
+                },
+                noop: Default::default(),
+            },
+        });
         let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -41,7 +69,7 @@ impl<'window> RendererBuilder<'window> {
             trace: Default::default(),
         }))
         .unwrap();
-
+        
         let size = window.inner_size();
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps.formats[0];
@@ -60,8 +88,8 @@ impl<'window> RendererBuilder<'window> {
 
         let indirect_buffer = RendererBuilder::make_buffer(
             &device,
-            "temp_indirect_buffer",
-            250 * compute::KIB as u64,
+            "indirect_buffer",
+            256 * compute::KIB as u64,
             wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
         );
 
@@ -69,24 +97,54 @@ impl<'window> RendererBuilder<'window> {
             .limits()
             .min_uniform_buffer_offset_alignment
             .min(size_of::<[[f32; 4]; 4]>() as u32) as u64;
-        let view_projection_buffer = resources::uniform::create_buffer(
+        let view_projection_buffer = RendererBuilder::make_buffer(
             &device,
-            uniform_buffer_size,
             "view_projection_buffer",
+            uniform_buffer_size,
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         );
 
         let depth_texture_view = resources::texture::create_depth(&device, &config)
             .create_view(&wgpu::TextureViewDescriptor::default());
 
+        let mmat_layout = create_mmat_layout(&device);
+        let view_projection_layout = create_view_projection_layout(&device);
+        let texture_atlas_layout = create_texture_layout(&device);
+
+        let view_projection_binding = wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+            buffer: &view_projection_buffer,
+            offset: 0,
+            size: std::num::NonZeroU64::new(view_projection_buffer.size()),
+        });
+
+        let view_projection_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &view_projection_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: view_projection_binding,
+            }],
+            label: Some("view_projection_bind_group"),
+        });
+
+        let texture_atlas_bind_group =
+            RendererBuilder::make_atlas(&device, &queue, &texture_atlas_layout, get_atlas_image())
+                .bind_group;
+
         Self {
             surface: Some(surface),
             surface_format: Some(surface_format),
-            device: Some(device),
-            indirect_buffer: Some(indirect_buffer),
-            queue: Some(queue),
             config: Some(config),
+            adapter: Some(adapter),
+            device: Some(device),
+            queue: Some(queue),
+            indirect_buffer: Some(indirect_buffer),
             view_projection_buffer: Some(view_projection_buffer),
             depth_texture_view: Some(depth_texture_view),
+            mmat_layout: Some(mmat_layout),
+            view_projection_layout: Some(view_projection_layout),
+            texture_atlas_layout: Some(texture_atlas_layout),
+            texture_atlas_bind_group: Some(texture_atlas_bind_group),
+            view_projection_bind_group: Some(view_projection_bind_group),
         }
     }
 
