@@ -42,14 +42,4 @@ fn main() {
 fn debug() {
     use std::time::Instant;
     use glam::{IVec3, Vec3};
-
-    let mut vec_vec = Vec::new();
-    let mut packed_vec = Vec::new();
-
-
-    let count = 20_000;
-    for i in 0..count {
-        vec_vec.push(IVec3::new(i, 0, 0));
-        packed_vec.push(((i as u64) << 40) | ((i as u64) << 16) | i as u64);
-    }
 }

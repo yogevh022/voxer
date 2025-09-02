@@ -27,8 +27,6 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         const_labels!("index_staging", NumStagingBuffers);
     const STAGING_MMAT_LABELS: [&'static str; NumStagingBuffers] =
         const_labels!("mmat_staging", NumStagingBuffers);
-    const COMPUTE_PASS_LABELS: [&'static str; NumStagingBuffers] =
-        const_labels!("compute_pass", NumStagingBuffers);
     pub fn init(
         device: &wgpu::Device,
         chunk_buffer_size: wgpu::BufferAddress,
@@ -77,7 +75,7 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         }
     }
 
-    pub fn write_to_staging_chunks<const NumBuffers: usize>(
+    pub fn write_to_staging<const NumBuffers: usize>(
         &self,
         renderer: &Renderer<'_>,
         staging_mapping: &[StagingBufferMapping<NumBuffers>; NumStagingBuffers],
@@ -116,16 +114,15 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
                 compute_pass.dispatch_workgroups(mapping.staging_entries.len() as u32, 1, 1);
             }
         }
-        for (staging_buffer_i, mapping) in staging_mapping.into_iter().enumerate() {
-            for i in 0..mapping.staging_entries.len() {
+        for (staging_buffer_index, mapping) in staging_mapping.into_iter().enumerate() {
+            for mapping_target_index in 0..mapping.staging_entries.len() {
                 self.copy_from_staging_to_active_buffers(
                     chunk_render,
                     &mut encoder,
                     active_draw,
-                    staging_buffer_i,
-                    &mapping.targets[i],
-                    mapping.staging_entries[i].header.buffer_data.staging_offset as u64,
-                    mapping.staging_entries[i].header.slab_index as u64,
+                    &mapping,
+                    staging_buffer_index,
+                    mapping_target_index,
                 )
             }
         }
@@ -137,31 +134,38 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         chunk_render: &ChunkRender<NumBuffers>,
         encoder: &mut wgpu::CommandEncoder,
         active_draw: &mut BufferDrawArgs<NumBuffers>,
-        staging_buffer_i: usize,
-        copy_target: &BufferCopyTarget,
-        staging_offset: u64,
-        slab_index: u64,
+        mapping: &StagingBufferMapping<NumBuffers>,
+        staging_buffer_index: usize,
+        mapping_target_index: usize,
     ) {
-        let target_buffer_i = copy_target.allocation.buffer_index;
-        let target_offset = copy_target.allocation.offset as u64;
-        let target_size = copy_target.size;
+        let mapping_target = &mapping.targets[mapping_target_index];
+        let target_buffer_i = mapping_target.allocation.buffer_index;
+        let target_offset = mapping_target.allocation.offset as u64;
+        let target_size = mapping_target.size;
+        let staging_offset = mapping.staging_entries[mapping_target_index]
+            .header
+            .buffer_data
+            .staging_offset as u64;
+        let slab_index = mapping.staging_entries[mapping_target_index]
+            .header
+            .slab_index as u64;
 
         encoder.copy_buffer_to_buffer(
-            &self.staging_vertex_buffers[staging_buffer_i],
+            &self.staging_vertex_buffers[staging_buffer_index],
             staging_offset * 4 * size_of::<Vertex>() as u64,
             &chunk_render.vertex_buffers[target_buffer_i],
             target_offset * 4 * size_of::<Vertex>() as u64,
             target_size * 4 * size_of::<Vertex>() as u64,
         );
         encoder.copy_buffer_to_buffer(
-            &self.staging_index_buffers[staging_buffer_i],
+            &self.staging_index_buffers[staging_buffer_index],
             staging_offset * 6 * size_of::<Index>() as u64,
             &chunk_render.index_buffers[target_buffer_i],
             target_offset * 6 * size_of::<Index>() as u64,
             target_size * 6 * size_of::<Index>() as u64,
         );
         encoder.copy_buffer_to_buffer(
-            &self.staging_mmat_buffers[staging_buffer_i],
+            &self.staging_mmat_buffers[staging_buffer_index],
             slab_index * size_of::<Mat4>() as u64,
             &chunk_render.mmat_buffer,
             slab_index * size_of::<Mat4>() as u64,

@@ -132,8 +132,8 @@ fn mesh_chunk_position(chunk_index: u32, target_offset_delta: i32, x: u32, y: u3
         var z_faces = current_z_a ^ current_z_b;
         var z_dirs = current_z_a & (~current_z_b);
 
-        // fixme y / 2u is called twice as much as needed (0/2, 1/2 == 0, 2/2, 3/2 == 1)
-        let next_z: u32 = select(chunk.adjacent_blocks[2u][x][y / 2u], chunk.blocks[x][y][z + 1u], z < (CHUNK_DIM_HALF - 1));
+        let adjacent_z = chunk.adjacent_blocks[2u][x][y / 2u];
+        let next_z: u32 = select(adjacent_z >> (16 * (y % 2u)), chunk.blocks[x][y][z + 1u], z < (CHUNK_DIM_HALF - 1));
         let next_z_a = next_z & 0xFFFFu;
         z_faces |= ((current_z_b ^ next_z_a) << 16u);
         z_dirs |= (current_z_b & (~next_z_a)) << 16u;

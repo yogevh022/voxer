@@ -44,6 +44,10 @@ where
     pub fn get(&self, key: &K) -> Option<&V> {
         self.map.get(key).and_then(|&index| self.slab.get(index))
     }
+    
+    pub fn contains(&self, key: &K) -> bool {
+        self.map.contains_key(key)
+    }
 
     pub fn iget(&self, key: usize) -> Option<&V> {
         self.slab.get(key)

@@ -14,7 +14,7 @@ pub struct ChunkRender<const N: usize> {
 impl<const NumBuffers: usize> ChunkRender<NumBuffers> {
     const VERTEX_LABELS: [&'static str; NumBuffers] = const_labels!("vertex", NumBuffers);
     const INDEX_LABELS: [&'static str; NumBuffers] = const_labels!("index", NumBuffers);
-    const MMAT_LABEL: &'static str = "mmat_0";
+    const MMAT_LABEL: &'static str = "mmat";
 
     pub fn init(
         renderer: &Renderer<'_>,

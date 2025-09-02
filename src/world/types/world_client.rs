@@ -98,7 +98,7 @@ impl<'window> WorldClient<'window> {
         positions
     }
 }
-pub type ChunkAdjacentBlocks = Array3D<Block, CHUNK_DIM, CHUNK_DIM, 3>;
+pub type ChunkAdjacentBlocks = Array3D<Block, 3, CHUNK_DIM, CHUNK_DIM>;
 
 pub struct ChunkRelevantBlocks {
     pub chunk: Chunk,

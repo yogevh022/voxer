@@ -41,27 +41,24 @@ impl WorldServer {
 
     pub(crate) fn update(&mut self) {
         let mut active_chunk_positions = Vec::new();
-        // for (_, player_pos) in self.players.iter() {
-        //     geo::Sphere::discrete_points(
-        //         geo::world_to_chunk_pos(*player_pos),
-        //         self.config.simulation_distance as isize,
-        //         |point| {
-        //             active_chunk_positions.push(point);
-        //         },
-        //     );
-        // }
-        active_chunk_positions.push(IVec3::new(0, 0, 0));
-        active_chunk_positions.push(IVec3::new(1, 0, 0));
-        active_chunk_positions.push(IVec3::new(2, 0, 0));
-        active_chunk_positions.push(IVec3::new(3, 0, 0));
-        active_chunk_positions.push(IVec3::new(0, 1, 0));
-        active_chunk_positions.push(IVec3::new(1, 1, 0));
-        active_chunk_positions.push(IVec3::new(2, 1, 0));
-        active_chunk_positions.push(IVec3::new(3, 1, 0));
-        active_chunk_positions.push(IVec3::new(0, 0, 1));
-        active_chunk_positions.push(IVec3::new(1, 0, 1));
-        active_chunk_positions.push(IVec3::new(2, 0, 1));
-        active_chunk_positions.push(IVec3::new(3, 0, 1));
+        for (_, player_pos) in self.players.iter() {
+            geo::Sphere::discrete_points(
+                geo::world_to_chunk_pos(*player_pos),
+                self.config.simulation_distance as isize,
+                |point| {
+                    active_chunk_positions.push(point);
+                },
+            );
+        }
+        // active_chunk_positions.push(IVec3::new(1, 0, 0));
+        // active_chunk_positions.push(IVec3::new(2, 0, 0));
+        // active_chunk_positions.push(IVec3::new(3, 0, 0));
+        // active_chunk_positions.push(IVec3::new(1, 1, 0));
+        // active_chunk_positions.push(IVec3::new(2, 1, 0));
+        // active_chunk_positions.push(IVec3::new(3, 1, 0));
+        // active_chunk_positions.push(IVec3::new(1, 0, 1));
+        // active_chunk_positions.push(IVec3::new(2, 0, 1));
+        // active_chunk_positions.push(IVec3::new(3, 0, 1));
         self.try_receive_generation();
         let (generated, ungenerated): (HashSet<_>, HashSet<_>) =
             self.partition_chunks_by_existence(active_chunk_positions);

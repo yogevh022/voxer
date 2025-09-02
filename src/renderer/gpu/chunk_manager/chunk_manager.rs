@@ -7,7 +7,7 @@ use crate::renderer::gpu::chunk_manager::{
 };
 use crate::renderer::gpu::{GPUChunkEntry, VMallocMultiBuffer, VirtualMalloc};
 use crate::renderer::{Index, Renderer, Vertex};
-use crate::world::types::{Chunk, ChunkRelevantBlocks};
+use crate::world::types::ChunkRelevantBlocks;
 use glam::IVec3;
 use std::array;
 use std::collections::HashMap;
@@ -54,7 +54,7 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
     }
 
     pub fn is_rendered(&self, position: IVec3) -> bool {
-        self.chunk_allocations.get(&position).is_some()
+        self.chunk_allocations.contains(&position)
     }
 
     pub fn map_rendered_chunk_positions<F>(&self, mut func: F) -> Vec<IVec3>
@@ -74,9 +74,11 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
         for (staging_index, staging_slice) in staging_chunks_slices.into_iter().enumerate() {
             let mut staging_mapping = init_staging_mapping::<NumBuffers, NumStagingBuffers>();
             for (chunk_rel, &face_count) in staging_slice.0.iter().zip(staging_slice.1.iter()) {
-                debug_assert_eq!(self.chunk_allocations.get(&chunk_rel.chunk.position).is_some(), false);
+                if self.chunk_allocations.contains(&chunk_rel.chunk.position) {
+                    // remeshing currently rendered chunk, drop first
+                    self.drop(chunk_rel.chunk.position);
+                }
                 let target_buffer = self.buffer_index_for(chunk_rel.chunk.position);
-
                 let mesh_alloc = self
                     .mesh_allocator
                     .alloc(MeshAllocationRequest {
@@ -86,18 +88,9 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
                     .unwrap();
                 staging_mapping[staging_index].push_to(face_count as u64, mesh_alloc);
             }
-            staging_mapping
-                .iter_mut()
-                .for_each(|mapping| mapping.update_buffer_offsets());
-            staging_mapping[staging_index].push_to_staging(
-                &chunks,
-                |chunk_position, mesh_allocation| {
-                    self.chunk_allocations
-                        .insert(chunk_position, mesh_allocation)
-                },
-            );
-            self.compute
-                .write_to_staging_chunks(renderer, &staging_mapping);
+            staging_mapping[staging_index].update_buffer_offsets();
+            staging_mapping[staging_index].push_to_staging(&chunks, &mut self.chunk_allocations);
+            self.compute.write_to_staging(renderer, &staging_mapping);
             self.compute.dispatch_staging_workgroups(
                 renderer,
                 &self.render,
@@ -132,11 +125,6 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
     pub fn malloc_debug(&self) {
         println!("\x1B[2J\x1B[1;1H{}", self.mesh_allocator); // the blob clears cli
     }
-}
-
-const fn init_staging_entries<const NUM_STAGING_BUFFERS: usize>()
--> [Vec<GPUChunkEntry>; NUM_STAGING_BUFFERS] {
-    [const { Vec::<GPUChunkEntry>::new() }; NUM_STAGING_BUFFERS]
 }
 
 const fn init_staging_mapping<const NUM_BUFFERS: usize, const NUM_STAGING_BUFFERS: usize>()
