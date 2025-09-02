@@ -5,7 +5,7 @@ use crate::compute::chunk::TRANSPARENT_LAYER_BLOCKS;
 use crate::compute::geo;
 use crate::world::types::{Block, CHUNK_DIM, Chunk};
 use glam::{IVec3, Vec3};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::array;
 use std::sync::Arc;
 use winit::window::Window;
@@ -66,6 +66,42 @@ impl<'window> WorldClient<'window> {
             self.chunks.remove(&pos);
         }
     }
+    
+    pub fn chunks_to_mesh(&self, frustum_planes: &[geo::Plane; 6]) -> Vec<IVec3>
+    {
+        let mut added_chunks = FxHashSet::default();
+        let mut positions = Vec::new();
+        
+        geo::Sphere::discrete_points(
+            geo::world_to_chunk_pos(self.player_position),
+            self.config.render_distance as isize,
+            |chunk_position| {
+                // todo optimize this
+                let chunk_world_position = geo::chunk_to_world_pos(chunk_position);
+                if geo::Frustum::is_aabb_within_frustum(
+                    chunk_world_position,
+                    chunk_world_position + CHUNK_DIM as f32,
+                    &frustum_planes,
+                ) && !self.renderer.is_chunk_rendered(chunk_position) {
+                    added_chunks.insert(chunk_position);
+                    positions.push(chunk_position);
+                    let mx_chunk_position = IVec3::new(chunk_position.x - 1, chunk_position.y, chunk_position.z);
+                    let my_chunk_position = IVec3::new(chunk_position.x, chunk_position.y - 1, chunk_position.z);
+                    let mz_chunk_position = IVec3::new(chunk_position.x, chunk_position.y, chunk_position.z - 1);
+                    if added_chunks.insert(mx_chunk_position) {
+                        positions.push(mx_chunk_position);
+                    }
+                    if added_chunks.insert(my_chunk_position) {
+                        positions.push(my_chunk_position);
+                    }
+                    if added_chunks.insert(mz_chunk_position) {
+                        positions.push(mz_chunk_position);
+                    }
+                };
+            },
+        );
+        positions
+    }
 
     pub fn chunk_rel_blocks(&self, positions: Vec<IVec3>) -> Vec<ChunkRelevantBlocks> {
         let mut renders = Vec::new();
@@ -79,23 +115,6 @@ impl<'window> WorldClient<'window> {
 
     pub fn set_player_position(&mut self, position: Vec3) {
         self.player_position = position;
-    }
-
-    pub fn map_visible_chunk_positions<F>(&self, mut func: F) -> Vec<IVec3>
-    where
-        F: FnMut(IVec3) -> bool,
-    {
-        let mut positions = Vec::new();
-        geo::Sphere::discrete_points(
-            geo::world_to_chunk_pos(self.player_position),
-            self.config.render_distance as isize,
-            |chunk_position| {
-                if func(chunk_position) {
-                    positions.push(chunk_position);
-                };
-            },
-        );
-        positions
     }
 }
 pub type ChunkAdjacentBlocks = Array3D<Block, 3, CHUNK_DIM, CHUNK_DIM>;

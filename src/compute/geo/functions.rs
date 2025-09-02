@@ -3,11 +3,6 @@ use glam::{IVec3, Vec3};
 use std::f32::consts::PI;
 use crate::compute::geo::Sphere;
 
-pub fn distance_squared_i(a: IVec3, b: IVec3) -> i32 {
-    let d = a - b;
-    d.x * d.x + d.y * d.y + d.z * d.z
-}
-
 pub fn world_to_chunk_pos(vec: Vec3) -> IVec3 {
     let chunk_pos_float = vec / CHUNK_DIM as f32;
     IVec3::new(

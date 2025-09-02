@@ -12,7 +12,7 @@ impl Sphere {
     {
         let radius_sq = radius.pow(2) as i32;
         Sphere::discrete_points(a, radius, |point| {
-            if geo::distance_squared_i(b, point) > radius_sq {
+            if b.distance_squared(point) > radius_sq {
                 delta_fn(point);
             }
         });

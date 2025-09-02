@@ -1,4 +1,4 @@
-use crate::compute::geo::plane::Plane;
+use super::Plane;
 use glam::{Mat4, Vec3};
 
 pub struct Frustum;

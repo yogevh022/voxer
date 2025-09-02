@@ -177,21 +177,14 @@ impl<'a> App<'a> {
         }
         {
             let m_client = self.client.as_mut().unwrap();
-            let load_chunk_positions = m_client.map_visible_chunk_positions(|c_pos| {
-                let chunk_world_pos = compute::geo::chunk_to_world_pos(c_pos);
-                !m_client.renderer.is_chunk_rendered(c_pos)
-                    && compute::geo::Frustum::is_aabb_within_frustum(
-                        chunk_world_pos,
-                        chunk_world_pos + CHUNK_DIM as f32,
-                        &frustum_planes,
-                    )
-            });
-            
-            if !load_chunk_positions.is_empty() {
-                let load_chunks = self.server.get_chunks(&load_chunk_positions);
-                m_client.add_chunks(load_chunks);
-                let chunk_rel_blocks = m_client.chunk_rel_blocks(load_chunk_positions);
-                if !chunk_rel_blocks.is_empty() { //fixme temp
+            let chunk_positions_to_mesh = m_client.chunks_to_mesh(&frustum_planes);
+
+            if !chunk_positions_to_mesh.is_empty() {
+                let chunks_to_mesh = self.server.get_chunks(&chunk_positions_to_mesh);
+                m_client.add_chunks(chunks_to_mesh);
+                let chunk_rel_blocks = m_client.chunk_rel_blocks(chunk_positions_to_mesh);
+                if !chunk_rel_blocks.is_empty() {
+                    //fixme temp
                     m_client.renderer.load_chunks(chunk_rel_blocks);
                 }
             }
