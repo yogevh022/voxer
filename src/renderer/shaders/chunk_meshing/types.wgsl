@@ -24,8 +24,10 @@ struct ChunkEntryHeader {
 
 struct ChunkEntry {
     header: ChunkEntryHeader,
+    adjacent_blocks: ChunkAdjacentBlocks,
     blocks: ChunkBlocks,
 }
 
-alias ChunkBlocks = array<array<array<u32, CHUNK_DIM_HALF>, CHUNK_DIM>, CHUNK_DIM>; // wgsl has no u16 :D
+alias ChunkBlocks = array<array<array<u32, CHUNK_DIM_HALF>, CHUNK_DIM>, CHUNK_DIM>;
+alias ChunkAdjacentBlocks = array<array<array<u32, CHUNK_DIM_HALF>, CHUNK_DIM>, 3>;
 alias ChunkEntryBuffer = array<ChunkEntry, MAX_CHUNK_ENTRIES>;

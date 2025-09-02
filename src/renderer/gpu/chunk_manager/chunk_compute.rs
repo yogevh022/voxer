@@ -103,16 +103,15 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         chunk_render: &ChunkRender<NumBuffers>,
         active_draw: &mut BufferDrawArgs<NumBuffers>,
         staging_mapping: [StagingBufferMapping<NumBuffers>; NumStagingBuffers],
-    ) -> Vec<(usize, GPUChunkEntry, BufferCopyTarget)> {
-        let mut queue = Vec::new();
+    ) {
         let mut encoder = renderer.create_encoder("chunk_mesh_compute_encoder");
         {
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("chunk_meshing_compute_pass"),
                 timestamp_writes: None,
             });
+            compute_pass.set_pipeline(&self.pipeline);
             for (staging_buffer_i, mapping) in staging_mapping.iter().enumerate() {
-                compute_pass.set_pipeline(&self.pipeline);
                 compute_pass.set_bind_group(0, &self.bind_groups[staging_buffer_i], &[]);
                 compute_pass.dispatch_workgroups(mapping.staging_entries.len() as u32, 1, 1);
             }
@@ -131,7 +130,6 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
             }
         }
         renderer.queue.submit(Some(encoder.finish()));
-        queue
     }
 
     fn copy_from_staging_to_active_buffers<const NumBuffers: usize>(

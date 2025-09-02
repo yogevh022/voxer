@@ -5,6 +5,7 @@ use glam::IVec3;
 
 type GPUPackedBlockPair = u32;
 type GPUChunkBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM];
+type GPUChunkAdjacentBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DIM]; 3];
 
 #[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
@@ -30,14 +31,16 @@ impl GPUChunkEntryBufferData {
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkEntry {
     pub header: GPUChunkEntryHeader,
+    pub adjacent_blocks: GPUChunkAdjacentBlocks,
     pub blocks: GPUChunkBlocks,
 }
 
 impl GPUChunkEntry {
-    pub fn new(header: GPUChunkEntryHeader, blocks: ChunkBlocks) -> Self {
+    pub fn new(header: GPUChunkEntryHeader, adjacent_blocks: GPUChunkAdjacentBlocks, blocks: ChunkBlocks) -> Self {
         let gpu_blocks: GPUChunkBlocks = unsafe { std::mem::transmute(blocks) };
         Self {
             header,
+            adjacent_blocks,
             blocks: gpu_blocks,
         }
     }

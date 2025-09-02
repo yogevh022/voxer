@@ -99,7 +99,7 @@ fn mesh_chunk_position(chunk_index: u32, target_offset_delta: i32, x: u32, y: u3
     var local_count: u32 = 0u;
     for (var z: u32 = 0u; z < CHUNK_DIM_HALF; z++) {
         let current: u32 = chunk.blocks[x][y][z];
-        let next_x: u32 = select(0u, chunk.blocks[x+1u][y][z], x < (CHUNK_DIM - 1));
+        let next_x: u32 = select(chunk.adjacent_blocks[0u][y][z], chunk.blocks[x+1u][y][z], x < (CHUNK_DIM - 1));
         let x_faces = current ^ next_x;
         let x_dirs = current & (~next_x);
         write_faces_x(
@@ -113,7 +113,7 @@ fn mesh_chunk_position(chunk_index: u32, target_offset_delta: i32, x: u32, y: u3
             (z+1u)*2,
         );
 
-        let next_y: u32 = select(0u, chunk.blocks[x][y+1u][z], y < (CHUNK_DIM - 1));
+        let next_y: u32 = select(chunk.adjacent_blocks[1u][x][z], chunk.blocks[x][y+1u][z], y < (CHUNK_DIM - 1));
         let y_faces = current ^ next_y;
         let y_dirs = current & (~next_y);
         write_faces_y(
@@ -132,9 +132,10 @@ fn mesh_chunk_position(chunk_index: u32, target_offset_delta: i32, x: u32, y: u3
         var z_faces = current_z_a ^ current_z_b;
         var z_dirs = current_z_a & (~current_z_b);
 
-        let next_z: u32 = select(0u, chunk.blocks[x][y][z + 1u], z < (CHUNK_DIM_HALF - 1));
+        // fixme y / 2u is called twice as much as needed (0/2, 1/2 == 0, 2/2, 3/2 == 1)
+        let next_z: u32 = select(chunk.adjacent_blocks[2u][x][y / 2u], chunk.blocks[x][y][z + 1u], z < (CHUNK_DIM_HALF - 1));
         let next_z_a = next_z & 0xFFFFu;
-        z_faces |= (current_z_b ^ next_z_a) << 16u;
+        z_faces |= ((current_z_b ^ next_z_a) << 16u);
         z_dirs |= (current_z_b & (~next_z_a)) << 16u;
         write_faces_z(
             z_faces,

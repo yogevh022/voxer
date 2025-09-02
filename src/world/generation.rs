@@ -7,7 +7,8 @@ use glam::IVec3;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use std::collections::HashSet;
-use std::hash::{Hash};
+use std::hash::Hash;
+use std::mem::MaybeUninit;
 
 pub type WorldGenRequest = Vec<IVec3>;
 pub type WorldGenResponse = Vec<(IVec3, Chunk)>;
@@ -98,14 +99,22 @@ pub(crate) fn generate_chunk(gen_config: WorldGenConfig, chunk_position: IVec3) 
     Chunk::new(chunk_position, blocks, solid_count)
 }
 
-fn generate_chunk_blocks(
+fn generate_chunk_noise(
     gen_config: WorldGenConfig,
     chunk_position: IVec3,
-) -> (usize, ChunkBlocks) {
-    let mut noise_output = vec![0.0; CHUNK_DIM * CHUNK_DIM * CHUNK_DIM];
+) -> [[[f32; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] {
+    let mut noise_uninit: [[[MaybeUninit<f32>; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] =
+        unsafe { MaybeUninit::uninit().assume_init() };
+    let noise_mut_slice: &mut [f32] = unsafe {
+        std::slice::from_raw_parts_mut(
+            noise_uninit.as_mut_ptr() as *mut f32,
+            CHUNK_DIM * CHUNK_DIM * CHUNK_DIM,
+        )
+    };
+    // todo reuse generators?
     let noise = fastnoise2::generator::prelude::opensimplex2().build();
     noise.gen_uniform_grid_3d(
-        &mut noise_output,
+        noise_mut_slice,
         chunk_position.x * CHUNK_DIM as i32,
         chunk_position.y * CHUNK_DIM as i32,
         chunk_position.z * CHUNK_DIM as i32,
@@ -115,18 +124,33 @@ fn generate_chunk_blocks(
         gen_config.noise_scale as f32,
         gen_config.seed,
     );
+    unsafe { *(noise_uninit.as_mut_ptr() as *mut [[[f32; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM]) }
+}
+
+fn generate_chunk_blocks(
+    gen_config: WorldGenConfig,
+    chunk_position: IVec3,
+) -> (usize, ChunkBlocks) {
+    let noise = generate_chunk_noise(gen_config, chunk_position);
+
+    let mut blocks: [[[MaybeUninit<Block>; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] =
+        unsafe { MaybeUninit::uninit().assume_init() };
+    
     let mut solid_count = 0;
-    let mut blocks: [Block; CHUNK_DIM * CHUNK_DIM * CHUNK_DIM] = std::array::from_fn(|i| {
-        if noise_output[i] > 0.1 {
-            solid_count += 1;
-            Block { value: 1u16 << 15 }
-        } else {
-            Block { value: 0u16 }
+    for z in 0..CHUNK_DIM {
+        for y in 0..CHUNK_DIM {
+            for x in 0..CHUNK_DIM {
+                if noise[z][y][x] > 0.1 {
+                    solid_count += 1;
+                    blocks[x][y][z] = MaybeUninit::new(Block { value: 1u16 << 15 });
+                } else {
+                    blocks[x][y][z] = MaybeUninit::new(Block { value: 0u16 });
+                }
+            }
         }
-    });
+    }
     let blocks3d: [[[Block; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] =
         unsafe { *(blocks.as_mut_ptr() as *mut [[[Block; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM]) };
-    
-    let blocks: ChunkBlocks = Array3D(blocks3d);
-    (solid_count, blocks)
+
+    (solid_count, Array3D(blocks3d))
 }

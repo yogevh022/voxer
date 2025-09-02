@@ -7,7 +7,7 @@ use crate::renderer::gpu::chunk_entry::GPUChunkEntryHeader;
 use crate::renderer::gpu::{
     GPUChunkEntry, MultiBufferAllocation, VMallocFirstFit, VMallocMultiBuffer, VirtualMalloc,
 };
-use crate::world::types::Chunk;
+use crate::world::types::{Block, Chunk, ChunkRelevantBlocks, CHUNK_DIM, PACKED_CHUNK_DIM};
 pub use chunk_manager::ChunkManager;
 use glam::IVec3;
 use std::array;
@@ -74,26 +74,30 @@ impl<const NUM_BUFFERS: usize> StagingBufferMapping<NUM_BUFFERS> {
         }
     }
 
-    pub fn push_to_staging<F>(&mut self, chunks: &[Chunk], mut insert_allocation_fn: F)
+    pub fn push_to_staging<F>(&mut self, chunks: &[ChunkRelevantBlocks], mut insert_allocation_fn: F)
     where
         F: FnMut(IVec3, MultiBufferAllocation) -> usize,
     {
         for i in 0..self.targets.len() {
-            let chunk = &chunks[i];
+            let chunk_rel = &chunks[i];
             let target = &self.targets[i];
 
             let mesh_alloc = target.allocation;
-            let slab_index = insert_allocation_fn(chunk.position, mesh_alloc);
+            let slab_index = insert_allocation_fn(chunk_rel.chunk.position, mesh_alloc);
             let staging_offset = self.buffer_offsets[mesh_alloc.buffer_index] + target.entry_offset;
             let header = GPUChunkEntryHeader::new(
                 staging_offset as u32,
                 mesh_alloc.offset as i32 - staging_offset as i32,
                 target.size as u32,
                 slab_index as u32,
-                chunk.position,
+                chunk_rel.chunk.position,
             );
+            let adjacent_blocks: [[[u32; PACKED_CHUNK_DIM]; CHUNK_DIM]; 3] = 
+            unsafe {
+                *(chunk_rel.adjacent_blocks.as_ptr() as *const [[[u32; PACKED_CHUNK_DIM]; CHUNK_DIM]; 3])
+            };
             self.staging_entries
-                .push(GPUChunkEntry::new(header, chunk.blocks));
+                .push(GPUChunkEntry::new(header, adjacent_blocks, chunk_rel.chunk.blocks));
         }
     }
 }

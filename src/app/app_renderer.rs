@@ -2,7 +2,7 @@ use crate::renderer::gpu::GPUChunkEntry;
 use crate::renderer::gpu::chunk_manager::ChunkManager;
 use crate::renderer::resources;
 use crate::renderer::{Renderer, RendererBuilder};
-use crate::world::types::Chunk;
+use crate::world::types::{Chunk, ChunkRelevantBlocks};
 use crate::{compute};
 use glam::{IVec3, Mat4};
 use std::sync::Arc;
@@ -18,13 +18,13 @@ pub struct AppRenderer<'window, const ChunkBuffers: usize, const ChunkStagingBuf
 impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
     AppRenderer<'_, ChunkBuffers, ChunkStagingBuffers>
 {
-    pub fn load_chunks(&mut self, chunks: Vec<Chunk>) {
-        self.chunk_manager.write_new(&self.renderer, chunks);
+    pub fn load_chunks(&mut self, chunk_rel_blocks: Vec<ChunkRelevantBlocks>) {
+        self.chunk_manager.write_new(&self.renderer, chunk_rel_blocks);
         // self.chunk_manager.malloc_debug();
     }
 
-    pub fn unload_chunks(&mut self, positions: Vec<IVec3>) {
-        for position in positions {
+    pub fn unload_chunks(&mut self, positions: &Vec<IVec3>) {
+        for &position in positions {
             self.chunk_manager.drop(position);
         }
     }

@@ -7,7 +7,7 @@ use crate::renderer::gpu::chunk_manager::{
 };
 use crate::renderer::gpu::{GPUChunkEntry, VMallocMultiBuffer, VirtualMalloc};
 use crate::renderer::{Index, Renderer, Vertex};
-use crate::world::types::Chunk;
+use crate::world::types::{Chunk, ChunkRelevantBlocks};
 use glam::IVec3;
 use std::array;
 use std::collections::HashMap;
@@ -67,15 +67,15 @@ impl<const NumBuffers: usize, const NumStagingBuffers: usize>
             .collect()
     }
 
-    pub fn write_new(&mut self, renderer: &Renderer<'_>, chunks: Vec<Chunk>) {
+    pub fn write_new(&mut self, renderer: &Renderer<'_>, chunks: Vec<ChunkRelevantBlocks>) {
         let max_faces_per_buffer = self.mesh_allocator.buffer_size();
         let staging_chunks_slices =
             chunks_slices_by_max_face_count(&chunks, max_faces_per_buffer, NumStagingBuffers);
         for (staging_index, staging_slice) in staging_chunks_slices.into_iter().enumerate() {
             let mut staging_mapping = init_staging_mapping::<NumBuffers, NumStagingBuffers>();
-            for (chunk, &face_count) in staging_slice.0.iter().zip(staging_slice.1.iter()) {
-                debug_assert_eq!(self.chunk_allocations.get(&chunk.position).is_some(), false);
-                let target_buffer = self.buffer_index_for(chunk.position);
+            for (chunk_rel, &face_count) in staging_slice.0.iter().zip(staging_slice.1.iter()) {
+                debug_assert_eq!(self.chunk_allocations.get(&chunk_rel.chunk.position).is_some(), false);
+                let target_buffer = self.buffer_index_for(chunk_rel.chunk.position);
 
                 let mesh_alloc = self
                     .mesh_allocator
@@ -145,17 +145,17 @@ const fn init_staging_mapping<const NUM_BUFFERS: usize, const NUM_STAGING_BUFFER
 }
 
 fn chunks_slices_by_max_face_count(
-    chunks: &Vec<Chunk>,
+    chunks: &Vec<ChunkRelevantBlocks>,
     max_faces_per_buffer: usize,
     max_slices: usize,
-) -> Vec<(&[Chunk], Vec<usize>)> {
+) -> Vec<(&[ChunkRelevantBlocks], Vec<usize>)> {
     let mut slices = Vec::new();
     let mut face_counts = Vec::new();
     let mut acc = 0usize;
     let mut i = 0usize;
     let mut j = 0usize;
     while j < chunks.len() {
-        let face_count = compute::chunk::face_count(&chunks[j].blocks);
+        let face_count = compute::chunk::face_count(&chunks[j]);
         if acc + face_count < max_faces_per_buffer {
             acc += face_count;
             j += 1;

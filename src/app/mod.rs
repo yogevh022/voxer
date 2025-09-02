@@ -172,7 +172,7 @@ impl<'a> App<'a> {
                 )
             });
             if !unload_chunks.is_empty() {
-                m_client.renderer.unload_chunks(unload_chunks);
+                m_client.renderer.unload_chunks(&unload_chunks);
             }
         }
         {
@@ -188,9 +188,11 @@ impl<'a> App<'a> {
             });
             
             if !load_chunk_positions.is_empty() {
-                let load_chunks = self.server.get_chunks(load_chunk_positions);
-                if !load_chunks.is_empty() { //fixme temp
-                    m_client.renderer.load_chunks(load_chunks);
+                let load_chunks = self.server.get_chunks(&load_chunk_positions);
+                m_client.add_chunks(load_chunks);
+                let chunk_rel_blocks = m_client.chunk_rel_blocks(load_chunk_positions);
+                if !chunk_rel_blocks.is_empty() { //fixme temp
+                    m_client.renderer.load_chunks(chunk_rel_blocks);
                 }
             }
         }

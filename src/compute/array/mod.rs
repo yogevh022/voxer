@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct Array3D<T, const X: usize, const Y: usize, const Z: usize>(pub [[[T; Z]; Y]; X])
+pub struct Array3D<T, const X: usize, const Y: usize, const Z: usize>(pub [[[T; X]; Y]; Z])
 where
     T: Copy + Default + Pod + Zeroable + NoUninit;
 
@@ -14,24 +14,24 @@ where
     T: Copy + Default + Pod + Zeroable + NoUninit,
 {
     pub fn splat(value: T) -> Self {
-        Self([(); X].map(|_| [(); Y].map(|_| [(); Z].map(|_| value))))
+        Self([(); Z].map(|_| [(); Y].map(|_| [(); X].map(|_| value))))
     }
 
     pub fn checkerboard(a: T, b: T) -> Self {
-        Self(core::array::from_fn(|x| {
+        Self(core::array::from_fn(|z| {
             core::array::from_fn(|y| {
-                core::array::from_fn(|z| if (x + y + z) % 2 == 0 { a } else { b })
+                core::array::from_fn(|x| if (x + y + z) % 2 == 0 { a } else { b })
             })
         }))
     }
 }
 
-impl<T, const X: usize, const Y: usize, const Z: usize> From<[[[T; Z]; Y]; X]>
+impl<T, const X: usize, const Y: usize, const Z: usize> From<[[[T; X]; Y]; Z]>
     for Array3D<T, X, Y, Z>
 where
     T: Copy + Default + Pod + Zeroable + NoUninit,
 {
-    fn from(arr: [[[T; Z]; Y]; X]) -> Self {
+    fn from(arr: [[[T; X]; Y]; Z]) -> Self {
         Self(arr)
     }
 }
@@ -41,14 +41,14 @@ where
     T: Copy + Default + Pod + Zeroable + NoUninit,
 {
     fn default() -> Self {
-        [[[T::default(); Z]; Y]; X].into()
+        [[[T::default(); X]; Y]; Z].into()
     }
 }
 impl<T, const X: usize, const Y: usize, const Z: usize> Deref for Array3D<T, X, Y, Z>
 where
     T: Copy + Default + Pod + Zeroable + NoUninit,
 {
-    type Target = [[[T; Z]; Y]; X];
+    type Target = [[[T; X]; Y]; Z];
 
     fn deref(&self) -> &Self::Target {
         &self.0
