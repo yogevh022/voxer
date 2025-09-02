@@ -1,8 +1,8 @@
 pub mod app_renderer;
-pub mod network;
 
 use crate::vtypes::{Scene, Voxer, VoxerObject};
-use crate::world::types::{CHUNK_DIM, WorldClient, WorldClientConfig, WorldServer};
+use crate::world::types::{CHUNK_DIM, WorldClient, WorldClientConfig};
+use crate::world::WorldServer;
 use crate::{SIMULATION_AND_RENDER_DISTANCE, compute, vtypes};
 use glam::IVec3;
 use std::sync::Arc;
@@ -154,7 +154,6 @@ impl<'a> App<'a> {
         }
 
         let player_pos = self.v.camera.transform.position;
-        self.server.set_player(0, player_pos);
         self.client
             .as_mut()
             .unwrap()
@@ -162,7 +161,6 @@ impl<'a> App<'a> {
 
         let frustum_planes = compute::geo::Frustum::planes(self.v.camera.get_view_projection());
         if self.v.time.temp_200th_frame() {
-            self.server.update();
             let m_client = self.client.as_mut().unwrap();
             let unload_chunks = m_client.renderer.map_rendered_chunk_positions(|c_pos| {
                 let chunk_world_pos = compute::geo::chunk_to_world_pos(c_pos);
@@ -180,15 +178,15 @@ impl<'a> App<'a> {
             let m_client = self.client.as_mut().unwrap();
             let chunk_positions_to_mesh = m_client.chunks_to_mesh(&frustum_planes);
 
-            if !chunk_positions_to_mesh.is_empty() {
-                let chunks_to_mesh = self.server.get_chunks(&chunk_positions_to_mesh);
-                m_client.add_chunks(chunks_to_mesh);
-                let chunks = m_client.get_chunks(chunk_positions_to_mesh);
-                if !chunks.is_empty() {
-                    //fixme temp
-                    m_client.renderer.load_chunks(chunks);
-                }
-            }
+            // if !chunk_positions_to_mesh.is_empty() {
+            //     let chunks_to_mesh = self.server.get_chunks(&chunk_positions_to_mesh);
+            //     m_client.add_chunks(chunks_to_mesh);
+            //     let chunks = m_client.get_chunks(chunk_positions_to_mesh);
+            //     if !chunks.is_empty() {
+            //         //fixme temp
+            //         m_client.renderer.load_chunks(chunks);
+            //     }
+            // }
         }
     }
 }

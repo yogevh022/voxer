@@ -7,20 +7,39 @@ use glam::IVec3;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use std::collections::HashSet;
-use std::hash::Hash;
 use std::mem::MaybeUninit;
 
-pub type WorldGenRequest = Vec<IVec3>;
 pub type WorldGenResponse = Vec<(IVec3, Chunk)>;
+pub struct WorldGenRequest {
+    sig_kill: bool,
+    positions: Vec<IVec3>,
+}
+
+impl WorldGenRequest {
+    pub fn new(positions: Vec<IVec3>) -> Self {
+        Self {
+            sig_kill: false,
+            positions,
+        }
+    }
+    
+    pub fn kill() -> Self {
+        Self {
+            sig_kill: true,
+            positions: Vec::new(),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
-pub struct WorldGenConfig {
+pub struct WorldConfig {
     pub seed: i32,
     pub noise_scale: f64,
+    pub simulation_distance: usize,
 }
 
 pub struct WorldGenHandle {
-    config: WorldGenConfig,
+    config: WorldConfig,
     pending: HashSet<IVec3>,
 
     // master
@@ -33,7 +52,7 @@ pub struct WorldGenHandle {
 }
 
 impl WorldGenHandle {
-    pub fn new(config: WorldGenConfig) -> Self {
+    pub fn new(config: WorldConfig) -> Self {
         let (response_sender, response_receiver) = channel::unbounded::<WorldGenResponse>();
         let (request_sender, request_receiver) = channel::unbounded::<WorldGenRequest>();
         Self {
@@ -58,9 +77,17 @@ impl WorldGenHandle {
             world_generation_task(config, response_sender, request_receiver)
         }));
     }
+    
+    pub fn stop_thread(&mut self) {
+        if self.thread.is_none() {
+            panic!("World generation thread not started");
+        }
+        self.request_sender.send(WorldGenRequest::kill()).unwrap();
+        self.thread.take().unwrap().join().unwrap();
+    }
 
     pub fn send(&mut self, msg: WorldGenRequest) -> Result<(), SendError<WorldGenRequest>> {
-        self.pending.extend(msg.iter().cloned());
+        self.pending.extend(msg.positions.iter().cloned());
         self.request_sender.send(msg)
     }
 
@@ -81,12 +108,16 @@ impl WorldGenHandle {
 }
 
 pub fn world_generation_task(
-    config: WorldGenConfig,
+    config: WorldConfig,
     send: channel::Sender<WorldGenResponse>,
     receive: channel::Receiver<WorldGenRequest>,
 ) {
-    while let Ok(chunk_positions) = receive.recv() {
-        let generated_chunks = chunk_positions
+    while let Ok(world_gen_request) = receive.recv() {
+        if world_gen_request.sig_kill {
+            break;
+        }
+        let generated_chunks = world_gen_request
+            .positions
             .into_par_iter()
             .map(|chunk_pos| (chunk_pos, generate_chunk(config, chunk_pos)))
             .collect();
@@ -94,13 +125,13 @@ pub fn world_generation_task(
     }
 }
 
-pub(crate) fn generate_chunk(gen_config: WorldGenConfig, chunk_position: IVec3) -> Chunk {
+pub(crate) fn generate_chunk(gen_config: WorldConfig, chunk_position: IVec3) -> Chunk {
     let (solid_count, blocks) = generate_chunk_blocks(gen_config, chunk_position);
     Chunk::new(chunk_position, blocks, solid_count)
 }
 
 fn generate_chunk_noise(
-    gen_config: WorldGenConfig,
+    gen_config: WorldConfig,
     chunk_position: IVec3,
 ) -> [[[f32; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] {
     let mut noise_uninit: [[[MaybeUninit<f32>; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] =
@@ -128,7 +159,7 @@ fn generate_chunk_noise(
 }
 
 fn generate_chunk_blocks(
-    gen_config: WorldGenConfig,
+    gen_config: WorldConfig,
     chunk_position: IVec3,
 ) -> (usize, ChunkBlocks) {
     let noise = generate_chunk_noise(gen_config, chunk_position);
