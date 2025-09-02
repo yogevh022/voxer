@@ -17,7 +17,7 @@ impl<const BUFF_SIZE: usize> NetworkServer<BUFF_SIZE> {
     }
     pub fn send(&mut self, addr: &String) {
         let addr = addr.parse::<SocketAddr>().unwrap();
-        let socket = UdpSocket::bind(addr).unwrap();
+        let socket = UdpSocket::bind("0.0.0.0:12345").unwrap();
         // 192.168.50.215
         let other = SocketAddr::new("10.0.0.1".parse().unwrap(), addr.port());
         let data = vec![1,2,3,4,5,6,7,8,9,10];

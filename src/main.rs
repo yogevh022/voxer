@@ -35,12 +35,12 @@ fn main() {
     // tracy_client::set_thread_name!("main");
     // run_app();
 
-    // debug()
+    debug_server();
 }
 
 fn debug_server() {
     let mut net_server = NetworkServer::<1024>::new();
-    net_server.send(&"192.168.50.165".to_string());
+    net_server.send(&"192.168.50.165:12345".to_string());
 }
 
 fn debug_client() {
