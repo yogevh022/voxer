@@ -1,9 +1,11 @@
+use crate::compute;
+use crate::compute::array::Array3D;
 use crate::compute::geo;
 use crate::vtypes::Scene;
 use crate::world::generation::{WorldGenConfig, WorldGenHandle};
 use crate::world::types::{Block, CHUNK_DIM, Chunk, ChunkBlocks};
 use glam::{IVec3, Vec3};
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 pub struct WorldServerConfig {
     pub seed: i32,
@@ -12,10 +14,10 @@ pub struct WorldServerConfig {
 
 pub struct WorldServer {
     generation_handle: WorldGenHandle,
-    chunks: HashMap<IVec3, Chunk>,
-    simulated_chunks: HashSet<IVec3>,
+    chunks: FxHashMap<IVec3, Chunk>,
+    simulated_chunks: FxHashSet<IVec3>,
     scene: Scene,
-    players: HashMap<usize, Vec3>,
+    players: FxHashMap<usize, Vec3>,
     config: WorldServerConfig,
 }
 
@@ -30,7 +32,7 @@ impl WorldServer {
             chunks: Default::default(),
             simulated_chunks: Default::default(),
             scene: Default::default(),
-            players: HashMap::new(),
+            players: FxHashMap::default(),
             config,
         }
     }
@@ -60,7 +62,7 @@ impl WorldServer {
         // active_chunk_positions.push(IVec3::new(2, 0, 1));
         // active_chunk_positions.push(IVec3::new(3, 0, 1));
         self.try_receive_generation();
-        let (generated, ungenerated): (HashSet<_>, HashSet<_>) =
+        let (generated, ungenerated): (FxHashSet<_>, FxHashSet<_>) =
             self.partition_chunks_by_existence(active_chunk_positions);
         self.request_generation(ungenerated);
         self.simulated_chunks = generated;
@@ -82,7 +84,7 @@ impl WorldServer {
     fn partition_chunks_by_existence(
         &self,
         chunk_positions: Vec<IVec3>,
-    ) -> (HashSet<IVec3>, HashSet<IVec3>) {
+    ) -> (FxHashSet<IVec3>, FxHashSet<IVec3>) {
         chunk_positions.into_iter().partition(|c_pos| {
             self.chunks.contains_key(c_pos) || self.generation_handle.is_pending(c_pos)
         })
@@ -94,7 +96,7 @@ impl WorldServer {
         }
     }
 
-    fn request_generation(&mut self, chunk_positions: HashSet<IVec3>) {
+    fn request_generation(&mut self, chunk_positions: FxHashSet<IVec3>) {
         self.generation_handle
             .send(chunk_positions.into_iter().collect::<Vec<_>>())
             .expect("Failed to send generation request");

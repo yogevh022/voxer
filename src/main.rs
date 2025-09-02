@@ -5,14 +5,13 @@ mod renderer;
 mod vtypes;
 mod world;
 
-use std::collections::HashMap;
-use std::hash::{BuildHasherDefault, Hasher};
-use rustc_hash::FxHashMap;
+use crate::app::network::{NetworkClient, NetworkServer, Networking};
 use crate::world::types::{WorldServer, WorldServerConfig};
+use std::net::SocketAddr;
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
-const SIMULATION_AND_RENDER_DISTANCE: usize = 5; // fixme temp location
+const SIMULATION_AND_RENDER_DISTANCE: usize = 8; // fixme temp location
 
 fn run_app() {
     let mut server = WorldServer::new(WorldServerConfig {
@@ -34,12 +33,17 @@ fn run_app() {
 
 fn main() {
     // tracy_client::set_thread_name!("main");
-    run_app();
+    // run_app();
 
     // debug()
 }
 
-fn debug() {
-    use std::time::Instant;
-    use glam::{IVec3, Vec3};
+fn debug_server() {
+    let mut net_server = NetworkServer::<1024>::new();
+    net_server.send(&"192.168.50.165".to_string());
+}
+
+fn debug_client() {
+    let mut net_client = NetworkClient::<1024>::new();
+    net_client.listen(&"192.168.50.215:12345".to_string());
 }

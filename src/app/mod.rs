@@ -1,4 +1,5 @@
 pub mod app_renderer;
+pub mod network;
 
 use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::types::{CHUNK_DIM, WorldClient, WorldClientConfig, WorldServer};
@@ -182,10 +183,10 @@ impl<'a> App<'a> {
             if !chunk_positions_to_mesh.is_empty() {
                 let chunks_to_mesh = self.server.get_chunks(&chunk_positions_to_mesh);
                 m_client.add_chunks(chunks_to_mesh);
-                let chunk_rel_blocks = m_client.chunk_rel_blocks(chunk_positions_to_mesh);
-                if !chunk_rel_blocks.is_empty() {
+                let chunks = m_client.get_chunks(chunk_positions_to_mesh);
+                if !chunks.is_empty() {
                     //fixme temp
-                    m_client.renderer.load_chunks(chunk_rel_blocks);
+                    m_client.renderer.load_chunks(chunks);
                 }
             }
         }

@@ -11,9 +11,9 @@ pub struct ChunkRender<const N: usize> {
     mmat_bind_group: wgpu::BindGroup,
 }
 
-impl<const NumBuffers: usize> ChunkRender<NumBuffers> {
-    const VERTEX_LABELS: [&'static str; NumBuffers] = const_labels!("vertex", NumBuffers);
-    const INDEX_LABELS: [&'static str; NumBuffers] = const_labels!("index", NumBuffers);
+impl<const N_BUFF: usize> ChunkRender<N_BUFF> {
+    const VERTEX_LABELS: [&'static str; N_BUFF] = const_labels!("vertex", N_BUFF);
+    const INDEX_LABELS: [&'static str; N_BUFF] = const_labels!("index", N_BUFF);
     const MMAT_LABEL: &'static str = "mmat";
 
     pub fn init(
@@ -50,8 +50,8 @@ impl<const NumBuffers: usize> ChunkRender<NumBuffers> {
     pub fn write_args_to_indirect_buffer(
         &self,
         renderer: &Renderer<'_>,
-        buffer_draw_args: &BufferDrawArgs<NumBuffers>,
-    ) -> [MultiDrawInstruction; NumBuffers] {
+        buffer_draw_args: &BufferDrawArgs<N_BUFF>,
+    ) -> [MultiDrawInstruction; N_BUFF] {
         let mut command_count = 0;
         let indirect_offsets = array::from_fn(|i| {
             let instruction = MultiDrawInstruction {
@@ -79,10 +79,10 @@ impl<const NumBuffers: usize> ChunkRender<NumBuffers> {
         &self,
         renderer: &Renderer<'_>,
         render_pass: &mut wgpu::RenderPass,
-        multi_draw_instructions: [MultiDrawInstruction; NumBuffers],
+        multi_draw_instructions: [MultiDrawInstruction; N_BUFF],
     ) {
         render_pass.set_bind_group(2, &self.mmat_bind_group, &[]);
-        for i in 0..NumBuffers {
+        for i in 0..N_BUFF {
             render_pass.set_vertex_buffer(0, self.vertex_buffers[i].slice(..));
             render_pass
                 .set_index_buffer(self.index_buffers[i].slice(..), wgpu::IndexFormat::Uint32);
