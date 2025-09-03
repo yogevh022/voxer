@@ -35,8 +35,8 @@ fn main() {
     // tracy_client::set_thread_name!("main");
     // run_app();
 
-    debug_server();
-    // debug_client();
+    // debug_server();
+    debug_client();
 }
 
 
@@ -71,7 +71,7 @@ fn debug_client() {
             break;
         } else {
             println!("eep");
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            std::thread::sleep(std::time::Duration::from_millis(400));
         }
     }
 }
