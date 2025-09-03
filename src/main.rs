@@ -35,8 +35,8 @@ fn main() {
     // tracy_client::set_thread_name!("main");
     // run_app();
 
-    // debug_server();
-    debug_client();
+    debug_server();
+    // debug_client();
 }
 
 

@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU32;
 
-pub type MessageTagType = u16;
+pub type MessageTagType = u8;
 const FRAGMENTED_TAG: MessageTagType = MessageTagType::MAX;
 static FRAGMENT_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 fn next_fragment_id() -> u32 {
@@ -12,9 +12,9 @@ fn next_fragment_id() -> u32 {
 #[derive(Debug, Copy, Clone)]
 pub struct NetworkMessageFragmentHeader {
     pub tag: MessageTagType,
-    pub id: u32,
     pub index: u8,
     pub total: u8,
+    pub id: u32,
 }
 
 #[repr(C)]
@@ -106,7 +106,6 @@ impl<'a> NetworkDeserializable for NetworkRawMessage<'a> {
                 );
                 let fragment_index = self.data[tag_size + size_of::<u32>()];
                 let fragment_total = self.data[tag_size + size_of::<u32>() + size_of::<u8>()];
-
                 let header = NetworkMessageFragmentHeader {
                     tag,
                     id: fragment_id,
@@ -131,7 +130,10 @@ fn fragment_bytes(
     fragment_count: usize,
     whole_bytes: &[u8],
 ) -> Vec<Vec<u8>> {
-    let fragment_size = (whole_bytes.len() / fragment_count) + size_of::<NetworkMessageFragmentHeader>();
+    let inner_tag_offset = size_of::<MessageTagType>();
+    let fragment_data_size = (whole_bytes.len() + inner_tag_offset) / fragment_count;
+    let fragment_size = fragment_data_size + size_of::<NetworkMessageFragmentHeader>();
+    dbg!(size_of::<NetworkMessageFragmentHeader>(), whole_bytes.len(), fragment_size);
     debug_assert_eq!(
         fragment_size % fragment_count,
         0
@@ -141,13 +143,15 @@ fn fragment_bytes(
     for i in 0..fragment_count {
         let mut data = Vec::with_capacity(fragment_size);
         data.extend(FRAGMENTED_TAG.to_be_bytes());
-        data.extend_from_slice(fragment_id_slice);
         data.push(i as u8);
         data.push(fragment_count as u8);
+        data.extend_from_slice(fragment_id_slice);
         if i == 0 {
             data.extend(inner_tag.to_be_bytes());
+            data.extend_from_slice(&whole_bytes[i * fragment_data_size..((i + 1) * fragment_data_size - inner_tag_offset)]);
+        } else {
+            data.extend_from_slice(&whole_bytes[(i * fragment_data_size) - inner_tag_offset..((i + 1) * fragment_data_size) - inner_tag_offset]);
         }
-        data.extend_from_slice(&whole_bytes[i * fragment_size..(i + 1) * fragment_size]);
         fragments.push(data);
     }
 
