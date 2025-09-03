@@ -6,6 +6,7 @@ mod voxer_network;
 mod vtypes;
 mod world;
 
+use std::io::Read;
 use bytemuck::{Pod, Zeroable};
 use crate::world::{WorldServer, WorldServerConfig};
 use vtypes::{CameraController, VObject};
@@ -64,11 +65,12 @@ fn debug_server() {
 fn debug_client() {
     let mut net = voxer_network::network::VoxerUdpSocket::<1024>::bind_port(3100);
     loop {
-        let r = net.full_recv();
-        if !r.is_empty() {
-            // let t: &Test = bytemuck::from_bytes(&r[0].data);
-            let t = &r[0];
-            dbg!(&t.data);
+        let new_messages = net.full_recv();
+        if !new_messages.is_empty() {
+            for mut message in new_messages {
+                let test_struct: &Test = bytemuck::from_bytes(&message.data[..message.data.len() - 1]);
+                dbg!(test_struct);
+            }
             break;
         } else {
             println!("eep");
