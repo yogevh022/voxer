@@ -57,7 +57,6 @@ fn debug_server() {
         hello: 45569,
         world: 34468964,
     };
-    dbg!(size_of::<Test>());
     let r = net.send_to(test, &String::from("192.168.50.165:3100"));
     dbg!(r);
 }
@@ -67,7 +66,9 @@ fn debug_client() {
     loop {
         let r = net.full_recv();
         if !r.is_empty() {
-            dbg!(r);
+            // let t: &Test = bytemuck::from_bytes(&r[0].data);
+            let t = &r[0];
+            dbg!(&t.data);
             break;
         } else {
             println!("eep");
