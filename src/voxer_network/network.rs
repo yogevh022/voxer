@@ -36,7 +36,7 @@ impl<const BUFF_SIZE: usize> VoxerUdpSocket<BUFF_SIZE> {
         Self::bind("0.0.0.0:0")
     }
 
-    pub fn try_recv(&mut self) -> Result<(SocketAddr, NetworkRawMessage), NetworkingError> {
+    fn try_recv(&mut self) -> Result<(SocketAddr, NetworkRawMessage), NetworkingError> {
         let (n_bytes, src) = match self.socket.recv_from(&mut self.buffer) {
             Ok(result) => result,
             Err(e) if e.kind() == ErrorKind::WouldBlock => Err(NetworkingError::WouldBlock)?,

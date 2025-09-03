@@ -50,7 +50,7 @@ struct Test {
 }
 impl voxer_network::NetworkSerializable for Test {
     const TAG: voxer_network::NetworkMessageTagType = 1;
-    const FRAGMENT_COUNT: usize = 2;
+    const FRAGMENT_COUNT: usize = 4;
 }
 
 fn debug_server() {
@@ -68,7 +68,7 @@ fn debug_client() {
     loop {
         let new_messages = net.full_recv();
         if !new_messages.is_empty() {
-            for mut message in new_messages {
+            for message in new_messages {
                 let test_struct: &Test = bytemuck::from_bytes(&message.data[..message.data.len() - 1]);
                 dbg!(test_struct);
             }
