@@ -110,9 +110,8 @@ impl<'a> NetworkDeserializable for NetworkRawMessage<'a> {
     fn deserialize(self) -> NetworkReceiveMessage {
         let tag_size = size_of::<MessageTagType>();
         let tag_end = self.data.len() - tag_size;
-        let tag = MessageTagType::from_be_bytes(
-            self.data[tag_end..self.data.len()].try_into().unwrap(),
-        );
+        let tag =
+            MessageTagType::from_be_bytes(self.data[tag_end..self.data.len()].try_into().unwrap());
         match tag {
             FRAGMENTED_TAG => {
                 let fragment_total = self.data[tag_end - 2];
@@ -149,16 +148,29 @@ fn fragment_bytes(
     let whole_size = whole_bytes.len() + size_of::<MessageTagType>();
     let fragment_data_size = whole_size / fragment_count;
     let fragment_remainder_size = whole_size % fragment_count;
-    let fragment_full_size = fragment_data_size + size_of::<NetworkMessageFragmentTail>();
-    let fragment_remainder_offset = fragment_remainder_size - size_of::<MessageTagType>();
+    let fragment_full_size = size_of::<NetworkMessageFragmentTail>() + fragment_data_size;
 
     let mut fragments = Vec::with_capacity(1 + fragment_count);
     let fragment_id_slice = &fragment_id.to_be_bytes();
 
-    // insert remainder as index 0, so we have extra space for the inner tag (even if remainder is 0)
+    for i in 0..fragment_count {
+        let mut data = Vec::with_capacity(fragment_full_size);
+        data.extend_from_slice(
+            &whole_bytes[(i * fragment_data_size)..((i + 1) * fragment_data_size)],
+        );
+
+        data.extend_from_slice(fragment_id_slice);
+        data.push(i as u8);
+        data.push(1 + fragment_count as u8);
+        data.push(0u8); // padding
+        data.extend(FRAGMENTED_TAG.to_be_bytes());
+
+        fragments.push(data);
+    }
+
     let mut data =
-        Vec::with_capacity(fragment_remainder_size + size_of::<NetworkMessageFragmentTail>());
-    data.extend_from_slice(&whole_bytes[0..fragment_remainder_offset]);
+        Vec::with_capacity(size_of::<NetworkMessageFragmentTail>() + fragment_remainder_size);
+    data.extend_from_slice(&whole_bytes[(fragment_count * fragment_data_size)..]);
     data.extend(inner_tag.to_be_bytes());
 
     data.extend_from_slice(fragment_id_slice);
@@ -168,22 +180,6 @@ fn fragment_bytes(
     data.extend(FRAGMENTED_TAG.to_be_bytes());
 
     fragments.push(data);
-
-    for i in 0..fragment_count {
-        let mut data = Vec::with_capacity(fragment_full_size);
-        data.extend_from_slice(
-            &whole_bytes[(i * fragment_data_size) + fragment_remainder_offset
-                ..((i + 1) * fragment_data_size) + fragment_remainder_offset],
-        );
-
-        data.extend_from_slice(fragment_id_slice);
-        data.push(1 + i as u8);
-        data.push(1 + fragment_count as u8);
-        data.push(0u8); // padding
-        data.extend(FRAGMENTED_TAG.to_be_bytes());
-
-        fragments.push(data);
-    }
 
     fragments
 }

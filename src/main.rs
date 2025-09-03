@@ -1,3 +1,5 @@
+extern crate core;
+
 mod app;
 pub mod compute;
 mod macros;
@@ -6,7 +8,6 @@ mod voxer_network;
 mod vtypes;
 mod world;
 
-use std::io::Read;
 use bytemuck::{Pod, Zeroable};
 use crate::world::{WorldServer, WorldServerConfig};
 use vtypes::{CameraController, VObject};
@@ -36,8 +37,8 @@ fn main() {
     // tracy_client::set_thread_name!("main");
     // run_app();
 
-    debug_server();
-    // debug_client();
+    // debug_server();
+    debug_client();
 }
 
 

@@ -76,7 +76,6 @@ impl<const BUFF_SIZE: usize> VoxerUdpSocket<BUFF_SIZE> {
             }
             NetworkSendMessage::Fragmented(fragments) => {
                 for fragment in fragments {
-                    dbg!(&fragment);
                     self.send_bytes_to(fragment, addr)?;
                 }
             }
