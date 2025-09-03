@@ -4,6 +4,7 @@ mod macros;
 mod renderer;
 mod vtypes;
 mod world;
+mod voxer_network;
 
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;

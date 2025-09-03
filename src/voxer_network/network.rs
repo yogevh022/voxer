@@ -1,18 +1,13 @@
 use crc32fast::Hasher;
 use std::io::ErrorKind;
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
+use super::message::NetworkMessage;
 
 #[derive(Debug)]
 pub enum NetworkingError {
     SocketError,
     WouldBlock,
     InvalidChecksum,
-}
-
-#[derive(Debug)]
-pub struct NetworkMessage {
-    pub other: SocketAddr,
-    pub data: Vec<u8>,
 }
 
 pub struct VoxerUdpSocket<const BUFF_SIZE: usize> {
