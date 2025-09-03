@@ -95,10 +95,9 @@ impl<const BUFF_SIZE: usize> VoxerUdpSocket<BUFF_SIZE> {
         }
         Ok(())
     }
-    
+
     fn send_bytes_to<A: ToSocketAddrs>(&self, data: Vec<u8>, addr: &A) -> Result<(), NetworkingError> {
         let msg_bytes = prepare_message(data);
-
         self.socket
             .send_to(&msg_bytes, addr)
             .ok()

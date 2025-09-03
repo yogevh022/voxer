@@ -1,14 +1,15 @@
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU32;
 
-pub type MessageTagType = u8;
-const FRAGMENTED_TAG: u8 = u8::MAX;
+pub type MessageTagType = u16;
+const FRAGMENTED_TAG: MessageTagType = MessageTagType::MAX;
 static FRAGMENT_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 fn next_fragment_id() -> u32 {
     FRAGMENT_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct NetworkMessageFragment {
     pub id: u32,
     pub index: u8,
@@ -65,7 +66,7 @@ pub trait NetworkSerializable: Sized {
             }
             1 => {
                 let mut data = Vec::with_capacity(Self::TAG_SIZE + size_of::<Self>());
-                data.push(Self::TAG);
+                data.extend(Self::TAG.to_be_bytes());
                 data.extend_from_slice(bytes);
                 NetworkSendMessage::Single(data)
             }
@@ -123,9 +124,9 @@ fn fragment_bytes(
     let mut fragments = Vec::with_capacity(fragment_count);
     for i in 0..fragment_count {
         let mut data = Vec::with_capacity(size_of::<MessageTagType>() + fragment_size);
-        data.push(FRAGMENTED_TAG);
+        data.extend(FRAGMENTED_TAG.to_be_bytes());
         if i == 0 {
-            data.push(inner_tag);
+            data.extend(inner_tag.to_be_bytes());
         }
         data.extend_from_slice(next_fragment_id().to_be_bytes().as_slice());
         data.push(i as u8);

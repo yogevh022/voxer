@@ -6,6 +6,7 @@ mod voxer_network;
 mod vtypes;
 mod world;
 
+use bytemuck::{Pod, Zeroable};
 use crate::world::{WorldServer, WorldServerConfig};
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
@@ -34,26 +35,30 @@ fn main() {
     // tracy_client::set_thread_name!("main");
     // run_app();
 
-    // debug_server();
+    debug_server();
     // debug_client();
 }
 
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct Test {
-    hello: String,
-    world: String,
+    hello: u64,
+    world: u64,
 }
 impl voxer_network::NetworkSerializable for Test {
     const TAG: voxer_network::NetworkMessageTagType = 1;
+    const FRAGMENT_COUNT: usize = 2;
 }
 
 fn debug_server() {
     let mut net = voxer_network::network::VoxerUdpSocket::<1024>::bind_port(3100);
     let test = Test {
-        hello: "yoad".to_string(),
-        world: "shriky".to_string(),
+        hello: 45569,
+        world: 34468964,
     };
-    let r = net.send_to(test, &String::from("192.168.59.214:3100"));
+    dbg!(size_of::<Test>());
+    let r = net.send_to(test, &String::from("192.168.50.165:3100"));
     dbg!(r);
 }
 
