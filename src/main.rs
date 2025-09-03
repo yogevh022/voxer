@@ -2,13 +2,13 @@ mod app;
 pub mod compute;
 mod macros;
 mod renderer;
+mod voxer_network;
 mod vtypes;
 mod world;
-mod voxer_network;
 
+use crate::world::{WorldServer, WorldServerConfig};
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
-use crate::world::{WorldServer, WorldServerConfig};
 
 const SIMULATION_AND_RENDER_DISTANCE: usize = 8; // fixme temp location
 
@@ -35,4 +35,38 @@ fn main() {
     // run_app();
 
     // debug_server();
+    // debug_client();
+}
+
+
+struct Test {
+    hello: String,
+    world: String,
+}
+impl voxer_network::NetworkSerializable for Test {
+    const TAG: voxer_network::NetworkMessageTagType = 1;
+}
+
+fn debug_server() {
+    let mut net = voxer_network::network::VoxerUdpSocket::<1024>::bind_port(3100);
+    let test = Test {
+        hello: "yoad".to_string(),
+        world: "shriky".to_string(),
+    };
+    let r = net.send_to(test, &String::from("192.168.59.214:3100"));
+    dbg!(r);
+}
+
+fn debug_client() {
+    let mut net = voxer_network::network::VoxerUdpSocket::<1024>::bind_port(3100);
+    loop {
+        let r = net.full_recv();
+        if !r.is_empty() {
+            dbg!(r);
+            break;
+        } else {
+            println!("eep");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
 }

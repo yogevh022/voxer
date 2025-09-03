@@ -1,7 +1,8 @@
+use crate::voxer_network::fragment::FragmentAssembler;
+use crate::voxer_network::message::{NetworkDeserializable, NetworkMessage, NetworkRawMessage, NetworkReceiveMessage, NetworkSendMessage, NetworkSerializable};
 use crc32fast::Hasher;
 use std::io::ErrorKind;
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
-use super::message::NetworkMessage;
 
 #[derive(Debug)]
 pub enum NetworkingError {
@@ -12,6 +13,7 @@ pub enum NetworkingError {
 
 pub struct VoxerUdpSocket<const BUFF_SIZE: usize> {
     socket: UdpSocket,
+    fragment_assembler: FragmentAssembler,
     buffer: [u8; BUFF_SIZE],
 }
 
@@ -21,6 +23,7 @@ impl<const BUFF_SIZE: usize> VoxerUdpSocket<BUFF_SIZE> {
         socket.set_nonblocking(true).unwrap();
         Self {
             socket,
+            fragment_assembler: FragmentAssembler::default(),
             buffer: [0; BUFF_SIZE],
         }
     }
@@ -33,7 +36,7 @@ impl<const BUFF_SIZE: usize> VoxerUdpSocket<BUFF_SIZE> {
         Self::bind("0.0.0.0:0")
     }
 
-    pub fn try_recv(&mut self) -> Result<NetworkMessage, NetworkingError> {
+    pub fn try_recv(&mut self) -> Result<(SocketAddr, NetworkRawMessage), NetworkingError> {
         let (n_bytes, src) = match self.socket.recv_from(&mut self.buffer) {
             Ok(result) => result,
             Err(e) if e.kind() == ErrorKind::WouldBlock => Err(NetworkingError::WouldBlock)?,
@@ -46,23 +49,42 @@ impl<const BUFF_SIZE: usize> VoxerUdpSocket<BUFF_SIZE> {
         if compute_checksum(payload) != received_checksum {
             return Err(NetworkingError::InvalidChecksum);
         }
-        Ok(NetworkMessage {
-            other: src,
-            data: payload.to_vec(),
-        })
+        Ok((src, NetworkRawMessage::new(payload)))
     }
 
-    pub fn send_to(&self, data: Vec<u8>, addr: &SocketAddr) -> Result<(), NetworkingError> {
-        let msg_bytes = prepare_message(data);
+    pub fn full_recv(&mut self) -> Vec<NetworkMessage> {
+        let mut received_messages = Vec::new();
+        while let Ok((src, raw_message)) = self.try_recv() {
+            match raw_message.deserialize() {
+                NetworkReceiveMessage::Single(single) => {
+                    received_messages.push(NetworkMessage::new(src, single))
+                }
+                NetworkReceiveMessage::Fragment(fragment) => {
+                    self.fragment_assembler
+                        .insert_fragment(fragment)
+                        .map(|msg| received_messages.push(NetworkMessage::new(src, msg)));
+                }
+            };
+        }
+        received_messages
+    }
 
-        self.socket
-            .send_to(&msg_bytes, addr)
-            .ok()
-            .ok_or(NetworkingError::SocketError)?;
+    pub fn send_to<S: NetworkSerializable, A: ToSocketAddrs>(&self, data: S, addr: &A) -> Result<(), NetworkingError> {
+        match data.serialize() {
+            NetworkSendMessage::Single(single) => {
+                self.send_bytes_to(single, addr)?;
+            }
+            NetworkSendMessage::Fragmented(fragments) => {
+                for fragment in fragments {
+                    self.send_bytes_to(fragment, addr)?;
+                }
+            }
+        }
         Ok(())
     }
 
     pub fn send_to_many(&self, data: Vec<u8>, addrs: &[SocketAddr]) -> Result<(), NetworkingError> {
+        todo!();
         let msg_bytes = prepare_message(data);
 
         for addr in addrs {
@@ -71,6 +93,16 @@ impl<const BUFF_SIZE: usize> VoxerUdpSocket<BUFF_SIZE> {
                 .ok()
                 .ok_or(NetworkingError::SocketError)?;
         }
+        Ok(())
+    }
+    
+    fn send_bytes_to<A: ToSocketAddrs>(&self, data: Vec<u8>, addr: &A) -> Result<(), NetworkingError> {
+        let msg_bytes = prepare_message(data);
+
+        self.socket
+            .send_to(&msg_bytes, addr)
+            .ok()
+            .ok_or(NetworkingError::SocketError)?;
         Ok(())
     }
 }
