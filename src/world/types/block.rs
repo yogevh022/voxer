@@ -3,7 +3,7 @@ use std::ops::{BitXor, Deref};
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
-pub struct Block {
+pub struct VoxelBlock {
     pub value: u16,
 }
 
@@ -12,14 +12,14 @@ pub trait BlockBytewise {
     fn is_transparent(&self) -> bool;
 }
 
-impl BlockBytewise for Block {
+impl BlockBytewise for VoxelBlock {
     #[inline(always)]
     fn is_transparent(&self) -> bool {
         self.value & Self::TRANSPARENT_BIT == 0
     }
 }
 
-impl BitXor for Block {
+impl BitXor for VoxelBlock {
     type Output = Self;
 
     fn bitxor(self, rhs: Self) -> Self::Output {
@@ -29,7 +29,7 @@ impl BitXor for Block {
     }
 }
 
-impl Deref for Block {
+impl Deref for VoxelBlock {
     type Target = u16;
 
     fn deref(&self) -> &Self::Target {

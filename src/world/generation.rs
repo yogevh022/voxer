@@ -1,5 +1,5 @@
 use crate::compute::array::Array3D;
-use crate::world::types::{Block, CHUNK_DIM, Chunk, ChunkBlocks};
+use crate::world::types::{VoxelBlock, CHUNK_DIM, Chunk, ChunkBlocks};
 use crossbeam::channel;
 use crossbeam::channel::SendError;
 use fastnoise2::generator::Generator;
@@ -164,7 +164,7 @@ fn generate_chunk_blocks(
 ) -> (usize, ChunkBlocks) {
     let noise = generate_chunk_noise(gen_config, chunk_position);
 
-    let mut blocks: [[[MaybeUninit<Block>; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] =
+    let mut blocks: [[[MaybeUninit<VoxelBlock>; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] =
         unsafe { MaybeUninit::uninit().assume_init() };
     
     let mut solid_count = 0;
@@ -173,15 +173,15 @@ fn generate_chunk_blocks(
             for x in 0..CHUNK_DIM {
                 if noise[z][y][x] > 0.1 {
                     solid_count += 1;
-                    blocks[x][y][z] = MaybeUninit::new(Block { value: 1u16 << 15 });
+                    blocks[x][y][z] = MaybeUninit::new(VoxelBlock { value: 1u16 << 15 });
                 } else {
-                    blocks[x][y][z] = MaybeUninit::new(Block { value: 0u16 });
+                    blocks[x][y][z] = MaybeUninit::new(VoxelBlock { value: 0u16 });
                 }
             }
         }
     }
-    let blocks3d: [[[Block; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] =
-        unsafe { *(blocks.as_mut_ptr() as *mut [[[Block; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM]) };
+    let blocks3d: [[[VoxelBlock; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] =
+        unsafe { *(blocks.as_mut_ptr() as *mut [[[VoxelBlock; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM]) };
 
     (solid_count, Array3D(blocks3d))
 }

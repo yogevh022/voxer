@@ -2,10 +2,10 @@ use bytemuck::Pod;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU32;
 
-pub type MessageTag = u8;
+pub type NetworkMessageTag = u8;
 pub type MessageBytes = Vec<u8>;
-const FRAGMENTED_TAG: MessageTag = MessageTag::MAX;
-const FRAGMENTED_TAG_BYTES: [u8; size_of::<MessageTag>()] = FRAGMENTED_TAG.to_be_bytes();
+const FRAGMENTED_TAG: NetworkMessageTag = NetworkMessageTag::MAX;
+const FRAGMENTED_TAG_BYTES: [u8; size_of::<NetworkMessageTag>()] = FRAGMENTED_TAG.to_be_bytes();
 
 static FRAGMENT_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 fn next_fragment_id() -> u32 {
@@ -25,7 +25,7 @@ pub enum SerializedMessage {
 
 pub trait NetworkMessageConfig {
     /// A unique identifier (for each message type)
-    const TAG: MessageTag;
+    const TAG: NetworkMessageTag;
     /// The number of fragments to split the message into, defaults to 1, can be 1..255
     const FRAGMENT_COUNT: usize = 1;
 }
@@ -88,7 +88,7 @@ pub(crate) struct MsgFragTail {
     pub index: u8,
     pub total: u8,
     _pad: u8, // make sure tag is the last byte
-    pub tag: MessageTag,
+    pub tag: NetworkMessageTag,
 }
 
 
@@ -99,9 +99,9 @@ pub(crate) struct RawMsg<'a> {
 
 impl<'a> RawMsg<'a> {
     pub fn consume(self) -> DecodedMessage {
-        let tag_end = self.data.len() - size_of::<MessageTag>();
+        let tag_end = self.data.len() - size_of::<NetworkMessageTag>();
         let tag =
-            MessageTag::from_be_bytes(self.data[tag_end..self.data.len()].try_into().unwrap());
+            NetworkMessageTag::from_be_bytes(self.data[tag_end..self.data.len()].try_into().unwrap());
         match tag {
             FRAGMENTED_TAG => {
                 let fragment_total = self.data[tag_end - 2];
@@ -129,9 +129,9 @@ fn fragment_bytes(
     fragment_id: u32,
     whole_bytes: &[u8],
     frag_count: usize,
-    inner_tag: MessageTag,
+    inner_tag: NetworkMessageTag,
 ) -> Vec<MessageBytes> {
-    let whole_size = whole_bytes.len() + size_of::<MessageTag>();
+    let whole_size = whole_bytes.len() + size_of::<NetworkMessageTag>();
     let frag_data_size = whole_size / frag_count;
     let frag_full_size = size_of::<MsgFragTail>() + frag_data_size;
 

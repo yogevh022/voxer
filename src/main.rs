@@ -36,10 +36,10 @@ fn run_app() {
 
 fn main() {
     // tracy_client::set_thread_name!("main");
-    // run_app();
+    run_app();
 
     // debug_server();
-    debug_client();
+    // debug_client();
 }
 
 
@@ -50,7 +50,7 @@ struct Test {
     world: u64,
 }
 impl voxer_network::NetworkMessageConfig for Test {
-    const TAG: voxer_network::MessageTag = 1;
+    const TAG: voxer_network::NetworkMessageTag = 1;
 }
 
 fn debug_server() {

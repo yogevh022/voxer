@@ -3,7 +3,7 @@ pub mod app_renderer;
 use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::types::{CHUNK_DIM, WorldClient, WorldClientConfig};
 use crate::world::WorldServer;
-use crate::{SIMULATION_AND_RENDER_DISTANCE, compute, vtypes};
+use crate::{SIMULATION_AND_RENDER_DISTANCE, compute, vtypes, call_every};
 use glam::IVec3;
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -124,7 +124,11 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             vo.update(&mut self.v);
         }
         self.update();
-        self.v.input.write().mouse.set_delta((0.0, 0.0));
+        {
+            let mut input = self.v.input.write();
+            input.mouse.set_delta((0.0, 0.0));
+            input.keyboard.reset_atomics();
+        }
 
         if let Some(window) = &self.window {
             window.request_redraw();
@@ -151,6 +155,10 @@ impl<'a> App<'a> {
                 + right_input as f32 * self.v.camera.transform.right();
             self.v.camera.transform.position +=
                 move_vec * MOVE_SPEED * fast_mul * self.v.time.delta();
+            
+            input.keyboard.key_pressed(KeyCode::Space).then(|| {
+                self.client.as_mut().unwrap().ping_server();
+            });
         }
 
         let player_pos = self.v.camera.transform.position;
@@ -160,33 +168,37 @@ impl<'a> App<'a> {
             .set_player_position(player_pos);
 
         let frustum_planes = compute::geo::Frustum::planes(self.v.camera.get_view_projection());
-        if self.v.time.temp_200th_frame() {
-            let m_client = self.client.as_mut().unwrap();
-            let unload_chunks = m_client.renderer.map_rendered_chunk_positions(|c_pos| {
-                let chunk_world_pos = compute::geo::chunk_to_world_pos(c_pos);
-                !compute::geo::Frustum::is_aabb_within_frustum(
-                    chunk_world_pos,
-                    chunk_world_pos + CHUNK_DIM as f32,
-                    &frustum_planes,
-                )
-            });
-            if !unload_chunks.is_empty() {
-                m_client.renderer.unload_chunks(&unload_chunks);
-            }
-        }
-        {
-            let m_client = self.client.as_mut().unwrap();
-            let chunk_positions_to_mesh = m_client.chunks_to_mesh(&frustum_planes);
-
-            // if !chunk_positions_to_mesh.is_empty() {
-            //     let chunks_to_mesh = self.server.get_chunks(&chunk_positions_to_mesh);
-            //     m_client.add_chunks(chunks_to_mesh);
-            //     let chunks = m_client.get_chunks(chunk_positions_to_mesh);
-            //     if !chunks.is_empty() {
-            //         //fixme temp
-            //         m_client.renderer.load_chunks(chunks);
-            //     }
-            // }
-        }
+        
+        call_every!(SERVER_TICK, 500, || { self.server.tick() });
+        
+        
+        // if self.v.time.temp_200th_frame() {
+        //     let m_client = self.client.as_mut().unwrap();
+        //     let unload_chunks = m_client.renderer.map_rendered_chunk_positions(|c_pos| {
+        //         let chunk_world_pos = compute::geo::chunk_to_world_pos(c_pos);
+        //         !compute::geo::Frustum::is_aabb_within_frustum(
+        //             chunk_world_pos,
+        //             chunk_world_pos + CHUNK_DIM as f32,
+        //             &frustum_planes,
+        //         )
+        //     });
+        //     if !unload_chunks.is_empty() {
+        //         m_client.renderer.unload_chunks(&unload_chunks);
+        //     }
+        // }
+        // {
+        //     let m_client = self.client.as_mut().unwrap();
+        //     let chunk_positions_to_mesh = m_client.chunks_to_mesh(&frustum_planes);
+        // 
+        //     // if !chunk_positions_to_mesh.is_empty() {
+        //     //     let chunks_to_mesh = self.server.get_chunks(&chunk_positions_to_mesh);
+        //     //     m_client.add_chunks(chunks_to_mesh);
+        //     //     let chunks = m_client.get_chunks(chunk_positions_to_mesh);
+        //     //     if !chunks.is_empty() {
+        //     //         //fixme temp
+        //     //         m_client.renderer.load_chunks(chunks);
+        //     //     }
+        //     // }
+        // }
     }
 }

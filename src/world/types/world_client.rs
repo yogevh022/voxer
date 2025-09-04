@@ -1,14 +1,17 @@
+use std::net::SocketAddr;
 use crate::app::app_renderer;
 use crate::app::app_renderer::AppRenderer;
 use crate::compute;
 use crate::compute::array::Array3D;
 use crate::compute::geo;
 use crate::world::types::chunk::ChunkAdjacentBlocks;
-use crate::world::types::{Block, CHUNK_DIM, Chunk};
+use crate::world::types::{VoxelBlock, CHUNK_DIM, Chunk};
 use glam::{IVec3, Vec3};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use winit::window::Window;
+use crate::voxer_network::UdpChannel;
+use crate::world::network;
 
 pub struct WorldClientConfig {
     pub render_distance: usize,
@@ -18,17 +21,29 @@ pub struct WorldClient<'window> {
     pub config: WorldClientConfig,
     pub renderer: AppRenderer<'window, 2, 1>,
     pub chunks: FxHashMap<IVec3, Chunk>,
+    network: UdpChannel<1024>,
     player_position: Vec3,
 }
 
 impl<'window> WorldClient<'window> {
     pub fn new(window: Arc<Window>, config: WorldClientConfig) -> Self {
+        let socket_addr = SocketAddr::from(([0, 0, 0, 0], 0));
         Self {
             renderer: app_renderer::make_app_renderer(window),
             chunks: FxHashMap::default(),
             config,
+            network: UdpChannel::bind(socket_addr),
             player_position: Vec3::ZERO,
         }
+    }
+
+    pub fn ping_server(&self) {
+        let server_addr = SocketAddr::from(([127, 0, 0, 1], 3100));
+        let ping = network::MsgPing {
+            byte: 62,
+        };
+        let ping_res = self.network.send_to(ping, &server_addr);
+        println!("Client: {:?} -> {:?}", ping.byte, ping_res);
     }
 
     pub fn add_chunks(&mut self, chunks: Vec<Chunk>) {
