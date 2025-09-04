@@ -10,4 +10,3 @@ pub use scene_object::{VObject, VoxerObject};
 pub use transform::Transform;
 pub use voxer::input;
 pub use voxer::Voxer;
-pub use crate::voxer_network::network::VoxerUdpSocket;

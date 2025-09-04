@@ -2,10 +2,11 @@ mod config;
 mod network;
 mod player;
 mod world;
+
+use std::net::SocketAddr;
 pub use config::WorldServerConfig;
 
-use crate::compute;
-use crate::vtypes::VoxerUdpSocket;
+use crate::{compute, voxer_network};
 use crate::world::generation::WorldConfig;
 use crate::world::server::player::Player;
 use crate::world::server::world::{Earth, World};
@@ -15,7 +16,7 @@ use rustc_hash::FxHashMap;
 pub struct WorldServer {
     worlds: Vec<Box<dyn World>>,
     players: FxHashMap<usize, Player>,
-    network: VoxerUdpSocket<{ compute::KIB * 16 }>,
+    network: voxer_network::UdpChannel<{ compute::KIB * 16 }>,
     config: WorldServerConfig,
 }
 
@@ -26,10 +27,11 @@ impl WorldServer {
             noise_scale: 0.05,
             simulation_distance: config.simulation_distance,
         };
+        let socket_addr = SocketAddr::from(([0, 0, 0, 0], 3100));;
         Self {
             worlds: vec![Box::new(Earth::new(world_config))],
             players: FxHashMap::default(),
-            network: VoxerUdpSocket::bind_port(3100),
+            network: voxer_network::UdpChannel::bind(socket_addr),
             config,
         }
     }

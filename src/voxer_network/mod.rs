@@ -1,6 +1,9 @@
-pub mod network;
-mod message;
 mod fragment;
+mod message;
+mod network;
 
-pub use message::{NetworkSerializable, NetworkDeserializable, NetworkMessage};
-pub use message::MessageTagType as NetworkMessageTagType;
+pub use message::{
+    MessageBytes, MessageTag, NetworkMessage, NetworkMessageConfig, ReceivedMessage,
+    SerializedMessage,
+};
+pub use network::{NetworkingError, UdpChannel};

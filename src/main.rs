@@ -8,6 +8,7 @@ mod voxer_network;
 mod vtypes;
 mod world;
 
+use std::net::SocketAddr;
 use bytemuck::{Pod, Zeroable};
 use crate::world::{WorldServer, WorldServerConfig};
 use vtypes::{CameraController, VObject};
@@ -48,13 +49,13 @@ struct Test {
     hello: u64,
     world: u64,
 }
-impl voxer_network::NetworkSerializable for Test {
-    const TAG: voxer_network::NetworkMessageTagType = 1;
-    const FRAGMENT_COUNT: usize = 4;
+impl voxer_network::NetworkMessageConfig for Test {
+    const TAG: voxer_network::MessageTag = 1;
 }
 
 fn debug_server() {
-    let mut net = voxer_network::network::VoxerUdpSocket::<1024>::bind_port(3100);
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3100));
+    let net = voxer_network::UdpChannel::<1024>::bind(addr);
     let test = Test {
         hello: 45569,
         world: 34468964,
@@ -64,9 +65,10 @@ fn debug_server() {
 }
 
 fn debug_client() {
-    let mut net = voxer_network::network::VoxerUdpSocket::<1024>::bind_port(3100);
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3100));
+    let mut net = voxer_network::UdpChannel::<1024>::bind(addr);
     loop {
-        let new_messages = net.full_recv();
+        let new_messages = net.recv_complete();
         if !new_messages.is_empty() {
             for message in new_messages {
                 let test_struct: &Test = bytemuck::from_bytes(&message.data[..message.data.len() - 1]);
