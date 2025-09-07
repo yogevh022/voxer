@@ -2,24 +2,24 @@ use crate::renderer::gpu::GPUChunkEntry;
 use crate::renderer::gpu::chunk_manager::ChunkManager;
 use crate::renderer::resources;
 use crate::renderer::{Renderer, RendererBuilder};
-use crate::world::types::{Chunk, ChunkRelevantBlocks};
-use crate::{compute};
+use crate::world::types::Chunk;
+use crate::compute;
 use glam::{IVec3, Mat4};
 use std::sync::Arc;
 use winit::window::Window;
 use crate::vtypes::Camera;
 
-pub struct AppRenderer<'window, const ChunkBuffers: usize, const ChunkStagingBuffers: usize> {
+pub struct AppRenderer<'window, const CHUNK_N_BUFF: usize, const CHUNK_N_STAGE_BUFF: usize> {
     pub renderer: Renderer<'window>,
-    chunk_manager: ChunkManager<ChunkBuffers, ChunkStagingBuffers>,
+    chunk_manager: ChunkManager<CHUNK_N_BUFF, CHUNK_N_STAGE_BUFF>,
     pub render_pipeline: wgpu::RenderPipeline,
 }
 
-impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
-    AppRenderer<'_, ChunkBuffers, ChunkStagingBuffers>
+impl<const CHUNK_N_BUFF: usize, const CHUNK_N_STAGE_BUFF: usize>
+    AppRenderer<'_, CHUNK_N_BUFF, CHUNK_N_STAGE_BUFF>
 {
-    pub fn load_chunks(&mut self, chunk_rel_blocks: Vec<ChunkRelevantBlocks>) {
-        self.chunk_manager.write_new(&self.renderer, chunk_rel_blocks);
+    pub fn load_chunks<'a>(&mut self, chunks: &mut impl Iterator<Item = &'a Chunk>) {
+        self.chunk_manager.write_new(&self.renderer, chunks);
         // self.chunk_manager.malloc_debug();
     }
 
@@ -73,9 +73,9 @@ impl<const ChunkBuffers: usize, const ChunkStagingBuffers: usize>
     }
 }
 
-pub fn make_app_renderer<'a, const NumBuffers: usize, const NumStagingBuffers: usize>(
+pub fn make_app_renderer<'a, const CHUNK_N_BUFF: usize, const CHUNK_N_STAGE_BUFF: usize>(
     window: Arc<Window>,
-) -> AppRenderer<'a, NumBuffers, NumStagingBuffers> {
+) -> AppRenderer<'a, CHUNK_N_BUFF, CHUNK_N_STAGE_BUFF> {
     let renderer_builder = RendererBuilder::new(window);
 
     let surface_format = renderer_builder.surface_format.unwrap();
@@ -93,7 +93,7 @@ pub fn make_app_renderer<'a, const NumBuffers: usize, const NumStagingBuffers: u
     );
 
     let max_buffer_size = compute::MIB * 128;
-    let chunk_manager = ChunkManager::<NumBuffers, NumStagingBuffers>::new(
+    let chunk_manager = ChunkManager::<CHUNK_N_BUFF, CHUNK_N_STAGE_BUFF>::new(
         &renderer,
         max_buffer_size,
         12_288 * size_of::<GPUChunkEntry>(), // fixme this is overkill

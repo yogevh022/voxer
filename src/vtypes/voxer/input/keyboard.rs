@@ -23,6 +23,7 @@ impl KeyboardInput {
         let idx = keycode::keycode_index(key_code).expect("Invalid keycode");
         self.pressed[idx as usize] = true;
         self.down[idx as usize] = true;
+        self.released[idx as usize] = false;
     }
 
     pub(crate) fn release(&mut self, key_code: KeyCode) {
@@ -30,6 +31,11 @@ impl KeyboardInput {
         self.pressed[idx as usize] = false;
         self.down[idx as usize] = false;
         self.released[idx as usize] = true;
+    }
+    
+    pub(crate) fn reset_atomics(&mut self) {
+        self.pressed = [false; 255];
+        self.released = [false; 255];
     }
 
     pub fn key_pressed(&self, key_code: KeyCode) -> bool {

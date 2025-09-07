@@ -1,3 +1,5 @@
+extern crate core;
+
 mod app;
 pub mod compute;
 mod macros;
@@ -5,17 +7,16 @@ mod renderer;
 mod vtypes;
 mod world;
 
-use std::collections::HashMap;
-use std::hash::{BuildHasherDefault, Hasher};
-use rustc_hash::FxHashMap;
-use crate::world::types::{WorldServer, WorldServerConfig};
+use bytemuck::{Pod, Zeroable};
+use crate::world::{ServerWorld, ServerWorldConfig};
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
+use voxer_network;
 
-const SIMULATION_AND_RENDER_DISTANCE: usize = 5; // fixme temp location
+const SIMULATION_AND_RENDER_DISTANCE: usize = 8; // fixme temp location
 
 fn run_app() {
-    let mut server = WorldServer::new(WorldServerConfig {
+    let mut server = ServerWorld::new(ServerWorldConfig {
         seed: 0,
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
     });
@@ -24,7 +25,7 @@ fn run_app() {
         objects: vec![VObject::Camera(CameraController::with_sensitivity(0.01))],
     };
 
-    server.start_generation_thread();
+    server.start_session();
     let mut app = app::App::new(voxer_engine, server, scene);
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
@@ -36,10 +37,14 @@ fn main() {
     // tracy_client::set_thread_name!("main");
     run_app();
 
-    // debug()
+    // debug_server();
+    // debug_client();
 }
 
-fn debug() {
-    use std::time::Instant;
-    use glam::{IVec3, Vec3};
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+struct Test {
+    hello: u64,
+    world: u64,
 }

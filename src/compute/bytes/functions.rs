@@ -15,3 +15,11 @@ pub fn repr_bytes(mut value: usize) -> String {
     repr.push_str(BYTE_UNITS_REPR[unit]);
     repr
 }
+
+pub fn pack_u32s_to_u64(a: u32, b: u32) -> u64 {
+    (a as u64) << 32 | b as u64
+}
+
+pub fn unpack_u64_to_u32s(value: u64) -> (u32, u32) {
+    (value as u32, (value >> 32) as u32)
+}

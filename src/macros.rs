@@ -72,3 +72,20 @@ macro_rules! const_labels {
         }
     };
 }
+
+#[macro_export]
+macro_rules! impl_try_from_uint {
+    ($uint:ty => $enum_type:ty) => {
+        impl TryFrom<$uint> for $enum_type {
+            type Error = ();
+
+            fn try_from(value: $uint) -> Result<Self, Self::Error> {
+                if value < Self::__Count as $uint {
+                    Ok(unsafe { std::mem::transmute(value) })
+                } else {
+                    Err(())
+                }
+            }
+        }
+    };
+}

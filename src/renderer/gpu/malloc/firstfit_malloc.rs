@@ -1,16 +1,16 @@
+use rustc_hash::FxHashMap;
 use crate::renderer::gpu::VirtualMalloc;
 use crate::renderer::gpu::malloc::VirtualMemSlot;
 use crate::renderer::gpu::malloc::virtual_malloc::{
     MallocError, SimpleAllocation, SimpleAllocationRequest,
 };
-use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct VMallocFirstFit {
     pub arena_size: usize,
     pub arena_offset: usize,
-    free_blocks: HashMap<usize, VirtualMemSlot>,
-    used_blocks: HashMap<usize, VirtualMemSlot>,
+    free_blocks: FxHashMap<usize, VirtualMemSlot>,
+    used_blocks: FxHashMap<usize, VirtualMemSlot>,
 }
 
 impl VirtualMalloc for VMallocFirstFit {
@@ -21,11 +21,13 @@ impl VirtualMalloc for VMallocFirstFit {
             size: arena_size,
             prev_free: 0,
         };
+        let mut free_blocks = FxHashMap::default();
+        free_blocks.insert(arena_offset, initial_slot);
         Self {
             arena_size,
             arena_offset,
-            free_blocks: HashMap::from([(arena_offset, initial_slot)]),
-            used_blocks: HashMap::new(),
+            free_blocks,
+            used_blocks: FxHashMap::default(),
         }
     }
 

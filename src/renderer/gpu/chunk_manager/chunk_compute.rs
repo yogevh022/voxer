@@ -1,7 +1,7 @@
 use super::chunk_render::ChunkRender;
 use crate::const_labels;
 use crate::renderer::gpu::GPUChunkEntry;
-use crate::renderer::gpu::chunk_manager::{BufferCopyTarget, BufferDrawArgs, StagingBufferMapping};
+use crate::renderer::gpu::chunk_manager::{BufferDrawArgs, StagingBufferMapping};
 use crate::renderer::{
     DrawIndexedIndirectArgsA32, Index, Renderer, RendererBuilder, Vertex, resources,
 };
@@ -9,24 +9,24 @@ use glam::Mat4;
 use std::array;
 use std::num::NonZeroU64;
 
-pub struct ChunkCompute<const NumStagingBuffers: usize> {
+pub struct ChunkCompute<const N_STAGE_BUFF: usize> {
     pipeline: wgpu::ComputePipeline,
-    bind_groups: [wgpu::BindGroup; NumStagingBuffers],
-    staging_chunk_buffers: [wgpu::Buffer; NumStagingBuffers],
-    pub(crate) staging_vertex_buffers: [wgpu::Buffer; NumStagingBuffers],
-    pub(crate) staging_index_buffers: [wgpu::Buffer; NumStagingBuffers],
-    pub(crate) staging_mmat_buffers: [wgpu::Buffer; NumStagingBuffers],
+    bind_groups: [wgpu::BindGroup; N_STAGE_BUFF],
+    staging_chunk_buffers: [wgpu::Buffer; N_STAGE_BUFF],
+    pub(crate) staging_vertex_buffers: [wgpu::Buffer; N_STAGE_BUFF],
+    pub(crate) staging_index_buffers: [wgpu::Buffer; N_STAGE_BUFF],
+    pub(crate) staging_mmat_buffers: [wgpu::Buffer; N_STAGE_BUFF],
 }
 
-impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
-    const STAGING_CHUNK_LABELS: [&'static str; NumStagingBuffers] =
-        const_labels!("chunk_staging", NumStagingBuffers);
-    const STAGING_VERTEX_LABELS: [&'static str; NumStagingBuffers] =
-        const_labels!("vertex_staging", NumStagingBuffers);
-    const STAGING_INDEX_LABELS: [&'static str; NumStagingBuffers] =
-        const_labels!("index_staging", NumStagingBuffers);
-    const STAGING_MMAT_LABELS: [&'static str; NumStagingBuffers] =
-        const_labels!("mmat_staging", NumStagingBuffers);
+impl<const N_STAGE_BUFF: usize> ChunkCompute<N_STAGE_BUFF> {
+    const STAGING_CHUNK_LABELS: [&'static str; N_STAGE_BUFF] =
+        const_labels!("chunk_staging", N_STAGE_BUFF);
+    const STAGING_VERTEX_LABELS: [&'static str; N_STAGE_BUFF] =
+        const_labels!("vertex_staging", N_STAGE_BUFF);
+    const STAGING_INDEX_LABELS: [&'static str; N_STAGE_BUFF] =
+        const_labels!("index_staging", N_STAGE_BUFF);
+    const STAGING_MMAT_LABELS: [&'static str; N_STAGE_BUFF] =
+        const_labels!("mmat_staging", N_STAGE_BUFF);
     pub fn init(
         device: &wgpu::Device,
         chunk_buffer_size: wgpu::BufferAddress,
@@ -75,13 +75,13 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         }
     }
 
-    pub fn write_to_staging<const NumBuffers: usize>(
+    pub fn write_to_staging<const N_BUFF: usize>(
         &self,
         renderer: &Renderer<'_>,
-        staging_mapping: &[StagingBufferMapping<NumBuffers>; NumStagingBuffers],
+        staging_mapping: &[StagingBufferMapping<N_BUFF>; N_STAGE_BUFF],
     ) {
         let mut offset = 0usize;
-        for i in 0..NumStagingBuffers {
+        for i in 0..N_STAGE_BUFF {
             //fixme handle multiple staging buffers
             if staging_mapping[i].staging_entries.is_empty() {
                 continue;
@@ -95,12 +95,12 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         }
     }
 
-    pub fn dispatch_staging_workgroups<const NumBuffers: usize>(
+    pub fn dispatch_staging_workgroups<const N_BUFF: usize>(
         &mut self,
         renderer: &Renderer<'_>,
-        chunk_render: &ChunkRender<NumBuffers>,
-        active_draw: &mut BufferDrawArgs<NumBuffers>,
-        staging_mapping: [StagingBufferMapping<NumBuffers>; NumStagingBuffers],
+        chunk_render: &ChunkRender<N_BUFF>,
+        active_draw: &mut BufferDrawArgs<N_BUFF>,
+        staging_mapping: [StagingBufferMapping<N_BUFF>; N_STAGE_BUFF],
     ) {
         let mut encoder = renderer.create_encoder("chunk_mesh_compute_encoder");
         {
@@ -129,12 +129,12 @@ impl<const NumStagingBuffers: usize> ChunkCompute<NumStagingBuffers> {
         renderer.queue.submit(Some(encoder.finish()));
     }
 
-    fn copy_from_staging_to_active_buffers<const NumBuffers: usize>(
+    fn copy_from_staging_to_active_buffers<const N_BUFF: usize>(
         &mut self,
-        chunk_render: &ChunkRender<NumBuffers>,
+        chunk_render: &ChunkRender<N_BUFF>,
         encoder: &mut wgpu::CommandEncoder,
-        active_draw: &mut BufferDrawArgs<NumBuffers>,
-        mapping: &StagingBufferMapping<NumBuffers>,
+        active_draw: &mut BufferDrawArgs<N_BUFF>,
+        mapping: &StagingBufferMapping<N_BUFF>,
         staging_buffer_index: usize,
         mapping_target_index: usize,
     ) {

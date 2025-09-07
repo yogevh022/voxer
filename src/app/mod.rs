@@ -1,8 +1,8 @@
 pub mod app_renderer;
 
 use crate::vtypes::{Scene, Voxer, VoxerObject};
-use crate::world::types::{CHUNK_DIM, WorldClient, WorldClientConfig, WorldServer};
-use crate::{SIMULATION_AND_RENDER_DISTANCE, compute, vtypes};
+use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld};
+use crate::{SIMULATION_AND_RENDER_DISTANCE, compute, vtypes, call_every};
 use glam::IVec3;
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -18,14 +18,14 @@ pub struct AppDebug {
 pub struct App<'a> {
     pub window: Option<Arc<Window>>,
     pub v: Voxer, // voxer engine; input, time, camera, etc
-    pub server: WorldServer,
-    pub client: Option<WorldClient<'a>>,
+    pub server: ServerWorld,
+    pub client: Option<ClientWorld<'a>>,
     pub scene: Scene,
     pub debug: AppDebug,
 }
 
 impl<'a> App<'a> {
-    pub fn new(v: Voxer, server: WorldServer, scene: Scene) -> Self {
+    pub fn new(v: Voxer, server: ServerWorld, scene: Scene) -> Self {
         Self {
             window: None,
             v,
@@ -49,10 +49,12 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             self.v.camera.set_aspect_ratio(
                 arc_window.inner_size().width as f32 / arc_window.inner_size().height as f32,
             );
-            let client_config = WorldClientConfig {
+            let client_config = ClientWorldConfig {
                 render_distance: SIMULATION_AND_RENDER_DISTANCE,
             };
-            self.client = Some(WorldClient::new(arc_window, client_config));
+            self.client = Some(ClientWorld::new(arc_window, client_config));
+            self.client.as_mut().unwrap().temp_send_req_conn();
+            
             self.debug.last_chunk_pos = IVec3::new(100, 100, 100);
         }
     }
@@ -123,7 +125,11 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             vo.update(&mut self.v);
         }
         self.update();
-        self.v.input.write().mouse.set_delta((0.0, 0.0));
+        {
+            let mut input = self.v.input.write();
+            input.mouse.set_delta((0.0, 0.0));
+            input.keyboard.reset_atomics();
+        }
 
         if let Some(window) = &self.window {
             window.request_redraw();
@@ -152,42 +158,16 @@ impl<'a> App<'a> {
                 move_vec * MOVE_SPEED * fast_mul * self.v.time.delta();
         }
 
-        let player_pos = self.v.camera.transform.position;
-        self.server.set_player(0, player_pos);
-        self.client
-            .as_mut()
-            .unwrap()
-            .set_player_position(player_pos);
-
+        let m_client = self.client.as_mut().unwrap();
+        let player_position = self.v.camera.transform.position;
         let frustum_planes = compute::geo::Frustum::planes(self.v.camera.get_view_projection());
-        if self.v.time.temp_200th_frame() {
-            self.server.update();
-            let m_client = self.client.as_mut().unwrap();
-            let unload_chunks = m_client.renderer.map_rendered_chunk_positions(|c_pos| {
-                let chunk_world_pos = compute::geo::chunk_to_world_pos(c_pos);
-                !compute::geo::Frustum::is_aabb_within_frustum(
-                    chunk_world_pos,
-                    chunk_world_pos + CHUNK_DIM as f32,
-                    &frustum_planes,
-                )
-            });
-            if !unload_chunks.is_empty() {
-                m_client.renderer.unload_chunks(&unload_chunks);
-            }
-        }
-        {
-            let m_client = self.client.as_mut().unwrap();
-            let chunk_positions_to_mesh = m_client.chunks_to_mesh(&frustum_planes);
+        m_client.set_player_position(player_position);
+        m_client.set_view_frustum(frustum_planes);
+        m_client.tick();
 
-            if !chunk_positions_to_mesh.is_empty() {
-                let chunks_to_mesh = self.server.get_chunks(&chunk_positions_to_mesh);
-                m_client.add_chunks(chunks_to_mesh);
-                let chunk_rel_blocks = m_client.chunk_rel_blocks(chunk_positions_to_mesh);
-                if !chunk_rel_blocks.is_empty() {
-                    //fixme temp
-                    m_client.renderer.load_chunks(chunk_rel_blocks);
-                }
-            }
-        }
+        call_every!(CLIENT_POS_SEND, 20, || { m_client.temp_send_player_position() });
+
+        call_every!(SERVER_TICK, 20, || { self.server.tick() });
+
     }
 }
