@@ -92,7 +92,7 @@ fn write_faces_z(
     }
 }
 
-fn mesh_chunk_position(chunk_index: u32, target_offset_delta: i32, x: u32, y: u32) {
+fn mesh_chunk_position(chunk_index: u32, x: u32, y: u32) {
     let chunk = chunk_entries[chunk_index];
     var vertex_array: array<Vertex, MAX_VERTICES_PER_THREAD>;
     var index_array: array<Index, MAX_INDICES_PER_THREAD>;
@@ -151,13 +151,10 @@ fn mesh_chunk_position(chunk_index: u32, target_offset_delta: i32, x: u32, y: u3
 
     let offset: u32 = atomicAdd(&staging_write_offset, local_count);
     for (var i = 0u; i < (local_count * 4u); i++) {
-        staging_vertex_buffer[(offset * 4u) + i] = vertex_array[VOID_OFFSET + i];
+        vertex_buffer[(offset * 4u) + i] = vertex_array[VOID_OFFSET + i];
     }
 
-    // adjusting indices from staging to target buffer offsets
-    let adj_offset = u32(i32(offset) + target_offset_delta);
-
     for (var i = 0u; i < (local_count * 6u); i++) {
-        staging_index_buffer[(offset * 6u) + i] = (index_array[VOID_OFFSET + i] + (adj_offset * 4u)) - VOID_OFFSET;
+        index_buffer[(offset * 6u) + i] = (index_array[VOID_OFFSET + i] + (offset * 4u)) - VOID_OFFSET;
     }
 }

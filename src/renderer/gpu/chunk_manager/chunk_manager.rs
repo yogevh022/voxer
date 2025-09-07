@@ -1,25 +1,24 @@
 use super::chunk_compute::ChunkCompute;
 use super::chunk_render::ChunkRender;
 use crate::compute::ds::Slap;
-use crate::renderer::gpu::chunk_manager::{
-    BufferDrawArgs, MeshAllocationRequest, MeshAllocator, StagingBufferMapping,
-};
-use crate::renderer::gpu::{VMallocMultiBuffer, VirtualMalloc};
+use crate::renderer::gpu::chunk_entry::GPUChunkEntryHeader;
+use crate::renderer::gpu::chunk_manager::{BufferDrawArgs, MeshAllocationRequest, MeshAllocator};
+use crate::renderer::gpu::{GPUChunkEntry, VMallocMultiBuffer, VirtualMalloc};
 use crate::renderer::{Index, Renderer, Vertex};
-use crate::world::types::Chunk;
+use crate::world::types::{CHUNK_DIM, Chunk, PACKED_CHUNK_DIM};
 use glam::IVec3;
 use std::array;
 use std::collections::HashMap;
 
-pub struct ChunkManager<const N_BUFF: usize, const N_STAGE_BUFF: usize> {
+pub struct ChunkManager<const N_BUFF: usize> {
     mesh_allocator: MeshAllocator<N_BUFF>,
     chunk_allocations: Slap<IVec3, <MeshAllocator<N_BUFF> as VirtualMalloc>::Allocation>,
     active_draw: BufferDrawArgs<N_BUFF>,
-    compute: ChunkCompute<N_STAGE_BUFF>,
+    compute: ChunkCompute<N_BUFF>,
     render: ChunkRender<N_BUFF>,
 }
 
-impl<const N_BUFF: usize, const N_STAGE_BUFF: usize> ChunkManager<N_BUFF, N_STAGE_BUFF> {
+impl<const N_BUFF: usize> ChunkManager<N_BUFF> {
     pub fn new(
         renderer: &Renderer<'_>,
         vertex_buffer_size: usize,
@@ -28,19 +27,13 @@ impl<const N_BUFF: usize, const N_STAGE_BUFF: usize> ChunkManager<N_BUFF, N_STAG
     ) -> Self {
         let max_mesh_face_count = (vertex_buffer_size / size_of::<Vertex>()) / 4;
         let index_buffer_size = max_mesh_face_count * 6 * size_of::<Index>();
-        let compute = ChunkCompute::<N_STAGE_BUFF>::init(
-            &renderer.device,
-            chunk_buffer_size as u64,
-            vertex_buffer_size as u64,
-            index_buffer_size as u64,
-            mmat_buffer_size as u64,
-        );
         let render = ChunkRender::<N_BUFF>::init(
             renderer,
             vertex_buffer_size as u64,
             index_buffer_size as u64,
             mmat_buffer_size as u64,
         );
+        let compute = ChunkCompute::init(&renderer.device, &render, chunk_buffer_size as u64);
         Self {
             mesh_allocator: VMallocMultiBuffer::new(max_mesh_face_count, 0),
             chunk_allocations: Slap::new(),
@@ -69,36 +62,42 @@ impl<const N_BUFF: usize, const N_STAGE_BUFF: usize> ChunkManager<N_BUFF, N_STAG
         renderer: &Renderer<'_>,
         chunks: &mut impl Iterator<Item = &'a Chunk>,
     ) {
-        let max_faces_per_buffer = self.mesh_allocator.buffer_size();
-        let staging_chunks_slices =
-            chunks_slices_by_max_face_count(chunks, max_faces_per_buffer, N_STAGE_BUFF);
-        for (staging_index, staging_slice) in staging_chunks_slices.into_iter().enumerate() {
-            let mut staging_mapping = init_staging_mapping::<N_BUFF, N_STAGE_BUFF>();
-            for (chunk, &face_count) in staging_slice.0.iter().zip(staging_slice.1.iter()) {
-                if self.chunk_allocations.contains(&chunk.position) {
-                    // remeshing currently rendered chunk, drop first
-                    self.drop(chunk.position);
-                }
-                let target_buffer = self.buffer_index_for(chunk.position);
-                let mesh_alloc = self
-                    .mesh_allocator
-                    .alloc(MeshAllocationRequest {
-                        buffer_index: target_buffer,
-                        size: face_count,
-                    })
-                    .unwrap();
-                staging_mapping[staging_index].push_to(face_count as u64, mesh_alloc);
+        let mut buffer_writes = [const { Vec::new() }; N_BUFF];
+        for chunk in chunks {
+            if self.chunk_allocations.contains(&chunk.position) {
+                // remeshing currently rendered chunk, drop first
+                self.drop(chunk.position);
             }
-            staging_mapping[staging_index].update_buffer_offsets();
-            staging_mapping[staging_index].push_to_staging(&staging_slice.0, &mut self.chunk_allocations);
-            self.compute.write_to_staging(renderer, &staging_mapping);
-            self.compute.dispatch_staging_workgroups(
-                renderer,
-                &self.render,
-                &mut self.active_draw,
-                staging_mapping,
+            let face_count = chunk.face_count.unwrap();
+            let target_buffer = self.buffer_index_for(chunk.position);
+            let mesh_alloc = self
+                .mesh_allocator
+                .alloc(MeshAllocationRequest {
+                    buffer_index: target_buffer,
+                    size: face_count,
+                })
+                .unwrap();
+            let slab_index = self.chunk_allocations.insert(chunk.position, mesh_alloc);
+
+            let header = GPUChunkEntryHeader::new(
+                mesh_alloc.offset as u32,
+                face_count as u32,
+                slab_index as u32,
+                chunk.position,
             );
+
+            // fixme dereferencing from raw ptr could cause ub in the future
+            let adjacent_blocks: [[[u32; PACKED_CHUNK_DIM]; CHUNK_DIM]; 3] = unsafe {
+                *(chunk.adjacent_blocks.as_ptr()
+                    as *const [[[u32; PACKED_CHUNK_DIM]; CHUNK_DIM]; 3])
+            };
+
+            let entry = GPUChunkEntry::new(header, adjacent_blocks, chunk.blocks);
+            buffer_writes[target_buffer].push(entry);
         }
+        self.compute.write_chunks(renderer, &buffer_writes);
+        self.compute
+            .dispatch_staging_workgroups(renderer, &mut self.active_draw, buffer_writes);
     }
 
     fn buffer_index_for(&self, position: IVec3) -> usize {
@@ -126,39 +125,4 @@ impl<const N_BUFF: usize, const N_STAGE_BUFF: usize> ChunkManager<N_BUFF, N_STAG
     pub fn malloc_debug(&self) {
         println!("\x1B[2J\x1B[1;1H{}", self.mesh_allocator); // the blob clears cli
     }
-}
-
-const fn init_staging_mapping<const NUM_BUFFERS: usize, const NUM_STAGING_BUFFERS: usize>()
--> [StagingBufferMapping<NUM_BUFFERS>; NUM_STAGING_BUFFERS] {
-    [const { StagingBufferMapping::<NUM_BUFFERS>::new() }; NUM_STAGING_BUFFERS]
-}
-
-fn chunks_slices_by_max_face_count<'a>(
-    chunks: &mut impl Iterator<Item = &'a Chunk>,
-    max_faces_per_buffer: usize,
-    max_slices: usize,
-) -> Vec<(Vec<&'a Chunk>, Vec<usize>)> {
-    let mut slices = Vec::new();
-    let mut this_slice = Vec::new();
-    let mut face_counts = Vec::new();
-    let mut acc = 0usize;
-    if let Some(chunk) = chunks.next() {
-        let face_count = chunk.face_count.unwrap();
-        if acc + face_count < max_faces_per_buffer {
-            acc += face_count;
-            this_slice.push(chunk);
-            face_counts.push(face_count);
-        } else {
-            slices.push((
-                std::mem::take(&mut this_slice),
-                std::mem::take(&mut face_counts),
-            ));
-            face_counts.push(face_count);
-            if slices.len() == max_slices {
-                return slices;
-            }
-        }
-    }
-    slices.push((this_slice, face_counts));
-    slices
 }

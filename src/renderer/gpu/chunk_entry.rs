@@ -11,16 +11,14 @@ type GPUChunkAdjacentBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DI
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkEntryBufferData {
     pub staging_offset: u32,
-    pub target_offset_delta: i32,
     pub face_count: u32,
-    _padding: u32,
+    _padding: u64,
 }
 
 impl GPUChunkEntryBufferData {
-    pub fn new(face_count: u32, staging_offset: u32, target_offset_delta: i32) -> Self {
+    pub fn new(face_count: u32, staging_offset: u32) -> Self {
         Self {
             staging_offset,
-            target_offset_delta,
             face_count,
             _padding: 0,
         }
@@ -59,13 +57,12 @@ pub struct GPUChunkEntryHeader {
 impl GPUChunkEntryHeader {
     pub fn new(
         staging_offset: u32,
-        target_offset_delta: i32,
         face_count: u32,
         slab_index: u32,
         chunk_position: IVec3,
     ) -> Self {
         let buffer_data =
-            GPUChunkEntryBufferData::new(face_count, staging_offset, target_offset_delta);
+            GPUChunkEntryBufferData::new(face_count, staging_offset);
         Self {
             buffer_data,
             slab_index,
