@@ -35,7 +35,7 @@ impl ClientWorldSession {
         if self
             .last_request_chunk_positions
             .get(&position)
-            .map(|instant| instant.elapsed().as_millis() > 1000)
+            .map(|instant| instant.elapsed().as_millis() > 400)
             .unwrap_or(true)
         {
             self.last_request_chunk_positions.insert(position, Instant::now());

@@ -11,6 +11,5 @@ pub use traits::{NetworkSerializable, NetworkDeserializable, NetworkMessageConfi
 #[derive(Debug)]
 pub enum NetworkingError {
     SocketError,
-    WouldBlock,
     InvalidChecksum,
 }

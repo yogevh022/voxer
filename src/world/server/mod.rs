@@ -1,11 +1,10 @@
 mod types;
 mod world;
 
-use crate::voxer_network::{NetworkSerializable, ReceivedMessage};
 use crate::world::generation::WorldConfig;
 use crate::world::network::{
-    MsgChunkData, MsgChunkDataRequest, NetworkHandle, ServerMessage, ServerMessageTag,
-    process_message,
+    MsgChunkData, MsgChunkDataRequest, MsgSetPositionRequest, NetworkHandle, ServerMessage,
+    ServerMessageTag,
 };
 use crate::world::server::types::{ServerPlayerSession, ServerWorldSession};
 use crate::world::server::world::{Earth, World};
@@ -35,20 +34,7 @@ impl ServerWorld {
             simulation_distance: config.simulation_distance,
         };
         let worlds: Vec<Box<dyn World>> = vec![Box::new(Earth::new(world_config))];
-        let mut session = ServerWorldSession::new(worlds);
-        let player = PlayerSession {
-            id: 0,
-            name: "bill".to_string(),
-            location: PlayerLocation {
-                world: 0,
-                position: Vec3::ZERO,
-            },
-        };
-        let player_session = ServerPlayerSession {
-            player,
-            addr: SocketAddr::from(([0, 0, 0, 0], 3100)),
-        };
-        session.add_player(player_session);
+        let session = ServerWorldSession::new(worlds);
 
         let socket_addr = SocketAddr::from(([0, 0, 0, 0], 3100));
         let mut network = NetworkHandle::bind(socket_addr);
@@ -90,14 +76,39 @@ impl ServerWorld {
                         blocks: chunk.blocks,
                     };
                     self.network
-                        .channel
-                        .lock()
                         .send_to(Box::new(msg), &message.message.src)
                         .unwrap();
                 }
             }
             ServerMessageTag::SetPositionRequest => {
-                todo!()
+                if self.session.player_by_addr(message.message.src).is_none() {
+                    return;
+                }
+                let position_req = MsgSetPositionRequest::deserialize(message.message.data);
+                let player_id = self.session.player_by_addr(message.message.src).unwrap();
+                self.session
+                    .players
+                    .get_mut(&player_id)
+                    .unwrap()
+                    .player
+                    .location
+                    .position = position_req.position;
+            }
+            ServerMessageTag::ConnectRequest => {
+                let (pid, paddr) = (0, message.message.src);
+                let player = PlayerSession {
+                    id: pid,
+                    name: "bill".to_string(),
+                    location: PlayerLocation {
+                        world: 0,
+                        position: Vec3::ZERO,
+                    },
+                };
+                let server_player = ServerPlayerSession {
+                    player,
+                    addr: paddr,
+                };
+                self.session.add_player(server_player);
             }
             ServerMessageTag::Ping => unimplemented!(),
             _ => unimplemented!(),

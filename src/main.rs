@@ -7,14 +7,13 @@ mod renderer;
 mod vtypes;
 mod world;
 
-use std::net::SocketAddr;
 use bytemuck::{Pod, Zeroable};
 use crate::world::{ServerWorld, ServerWorldConfig};
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 use voxer_network;
 
-const SIMULATION_AND_RENDER_DISTANCE: usize = 4; // fixme temp location
+const SIMULATION_AND_RENDER_DISTANCE: usize = 8; // fixme temp location
 
 fn run_app() {
     let mut server = ServerWorld::new(ServerWorldConfig {

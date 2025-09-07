@@ -1,4 +1,4 @@
-mod thread;
+mod handle;
 
 use crate::impl_try_from_uint;
 use crate::voxer_network::{NetworkMessageTag, ReceivedMessage};
@@ -6,7 +6,7 @@ use voxer_macros::network_message;
 use crate::world::types::{ChunkBlocks};
 use bytemuck::{Pod, Zeroable};
 use glam::{IVec3, Vec3};
-pub use thread::NetworkHandle;
+pub use handle::NetworkHandle;
 
 #[derive(Debug)]
 pub struct ServerMessage {
@@ -43,6 +43,13 @@ impl ServerMessageTag {
     pub fn as_tag(&self) -> NetworkMessageTag {
         *self as NetworkMessageTag
     }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[network_message(tag = ServerMessageTag::ConnectRequest.as_tag())]
+pub struct MsgConnectRequest {
+    pub byte: u8,
 }
 
 // todo find a better place for consts like this

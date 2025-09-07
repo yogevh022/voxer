@@ -3,7 +3,6 @@ use super::fragmentation::MsgFragAssembler;
 use crate::traits::NetworkSerializable;
 use crate::types::{DecodedMessage, RawMsg, ReceivedMessage, SerializedMessage};
 use crc32fast::Hasher;
-use std::io::ErrorKind;
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 
 pub struct UdpChannel<const BUFF_SIZE: usize> {
@@ -13,9 +12,8 @@ pub struct UdpChannel<const BUFF_SIZE: usize> {
 }
 
 impl<const BUFF_SIZE: usize> UdpChannel<BUFF_SIZE> {
-    pub fn bind<A: ToSocketAddrs>(addr: A) -> Self {
+    pub fn bind(addr: impl ToSocketAddrs) -> Self {
         let socket = UdpSocket::bind(addr).unwrap();
-        socket.set_nonblocking(true).unwrap();
         Self {
             socket,
             fragment_assembler: MsgFragAssembler::default(),
@@ -23,17 +21,22 @@ impl<const BUFF_SIZE: usize> UdpChannel<BUFF_SIZE> {
         }
     }
 
+    pub fn clone_handle(&self) -> Self {
+        Self {
+            socket: self.socket.try_clone().unwrap(),
+            fragment_assembler: MsgFragAssembler::default(),
+            buffer: [0; BUFF_SIZE],
+        }
+    }
+
     pub fn recv_single(&mut self) -> Option<ReceivedMessage> {
-        let msg = if let Ok((src, raw_message)) = self.try_recv_raw() {
+        let msg = if let Ok((src, raw_message)) = self.recv_raw() {
             match raw_message.consume() {
-                DecodedMessage::Single(data) => {
-                    Some(ReceivedMessage { src, data })
-                }
-                DecodedMessage::Fragment(fragment) => {
-                    self.fragment_assembler
-                        .insert_fragment(src, fragment)
-                        .map(|data| ReceivedMessage { src, data })
-                }
+                DecodedMessage::Single(data) => Some(ReceivedMessage { src, data }),
+                DecodedMessage::Fragment(fragment) => self
+                    .fragment_assembler
+                    .insert_fragment(src, fragment)
+                    .map(|data| ReceivedMessage { src, data }),
             }
         } else {
             None
@@ -42,10 +45,10 @@ impl<const BUFF_SIZE: usize> UdpChannel<BUFF_SIZE> {
         msg
     }
 
-    pub fn send_to<A: ToSocketAddrs>(
+    pub fn send_to(
         &self,
         data: Box<dyn NetworkSerializable>,
-        addr: &A,
+        addr: &impl ToSocketAddrs,
     ) -> Result<(), NetworkingError> {
         match data.serialize() {
             SerializedMessage::Single(single) => {
@@ -60,10 +63,10 @@ impl<const BUFF_SIZE: usize> UdpChannel<BUFF_SIZE> {
         Ok(())
     }
 
-    pub fn send_to_many<A: ToSocketAddrs>(
+    pub fn send_to_many(
         &self,
         data: Box<dyn NetworkSerializable>,
-        addrs: &[&A],
+        addrs: &[&impl ToSocketAddrs],
     ) -> Result<(), NetworkingError> {
         match data.serialize() {
             SerializedMessage::Single(single) => {
@@ -82,10 +85,10 @@ impl<const BUFF_SIZE: usize> UdpChannel<BUFF_SIZE> {
         Ok(())
     }
 
-    fn send_bytes_to<A: ToSocketAddrs>(
+    fn send_bytes_to(
         &self,
         data: Vec<u8>,
-        addr: &A,
+        addr: &impl ToSocketAddrs,
     ) -> Result<(), NetworkingError> {
         let msg_bytes = prepare_message(data);
         self.socket
@@ -95,10 +98,9 @@ impl<const BUFF_SIZE: usize> UdpChannel<BUFF_SIZE> {
         Ok(())
     }
 
-    fn try_recv_raw(&mut self) -> Result<(SocketAddr, RawMsg<'_>), NetworkingError> {
+    fn recv_raw(&mut self) -> Result<(SocketAddr, RawMsg<'_>), NetworkingError> {
         let (n_bytes, src) = match self.socket.recv_from(&mut self.buffer) {
             Ok(result) => result,
-            Err(e) if e.kind() == ErrorKind::WouldBlock => Err(NetworkingError::WouldBlock)?,
             Err(_) => Err(NetworkingError::SocketError)?,
         };
 

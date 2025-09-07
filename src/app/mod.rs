@@ -53,6 +53,8 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                 render_distance: SIMULATION_AND_RENDER_DISTANCE,
             };
             self.client = Some(ClientWorld::new(arc_window, client_config));
+            self.client.as_mut().unwrap().temp_send_req_conn();
+            
             self.debug.last_chunk_pos = IVec3::new(100, 100, 100);
         }
     }
@@ -163,6 +165,9 @@ impl<'a> App<'a> {
         m_client.set_view_frustum(frustum_planes);
         m_client.tick();
 
+        call_every!(CLIENT_POS_SEND, 20, || { m_client.temp_send_player_position() });
+
         call_every!(SERVER_TICK, 20, || { self.server.tick() });
+
     }
 }
