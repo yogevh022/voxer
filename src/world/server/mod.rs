@@ -1,88 +1,105 @@
-mod config;
-mod player;
+mod types;
 mod world;
 
-pub use config::WorldServerConfig;
-use std::net::SocketAddr;
-
-use crate::voxer_network::ReceivedMessage;
+use crate::voxer_network::{NetworkSerializable, ReceivedMessage};
 use crate::world::generation::WorldConfig;
-use crate::world::network::{ServerMessageTag, process_message};
-use crate::world::server::player::Player;
+use crate::world::network::{
+    MsgChunkData, MsgChunkDataRequest, NetworkHandle, ServerMessage, ServerMessageTag,
+    process_message,
+};
+use crate::world::server::types::{ServerPlayerSession, ServerWorldSession};
 use crate::world::server::world::{Earth, World};
+use crate::world::session::{PlayerLocation, PlayerSession};
 use crate::{compute, voxer_network};
-use glam::IVec3;
-use rustc_hash::FxHashMap;
+use glam::Vec3;
+use std::net::SocketAddr;
+use voxer_network::NetworkDeserializable;
 
-pub struct WorldServer {
-    worlds: Vec<Box<dyn World>>,
-    players: FxHashMap<usize, Player>,
-    network: voxer_network::UdpChannel<{ compute::KIB * 16 }>,
-    config: WorldServerConfig,
+#[derive(Debug)]
+pub struct ServerWorldConfig {
+    pub seed: i32,
+    pub simulation_distance: usize,
 }
 
-impl WorldServer {
-    pub fn new(config: WorldServerConfig) -> Self {
+pub struct ServerWorld {
+    config: ServerWorldConfig,
+    network: NetworkHandle<{ compute::KIB * 16 }>,
+    session: ServerWorldSession,
+}
+
+impl ServerWorld {
+    pub fn new(config: ServerWorldConfig) -> Self {
         let world_config = WorldConfig {
             seed: config.seed,
             noise_scale: 0.05,
             simulation_distance: config.simulation_distance,
         };
+        let worlds: Vec<Box<dyn World>> = vec![Box::new(Earth::new(world_config))];
+        let mut session = ServerWorldSession::new(worlds);
+        let player = PlayerSession {
+            id: 0,
+            name: "bill".to_string(),
+            location: PlayerLocation {
+                world: 0,
+                position: Vec3::ZERO,
+            },
+        };
+        let player_session = ServerPlayerSession {
+            player,
+            addr: SocketAddr::from(([0, 0, 0, 0], 3100)),
+        };
+        session.add_player(player_session);
+
         let socket_addr = SocketAddr::from(([0, 0, 0, 0], 3100));
+        let mut network = NetworkHandle::bind(socket_addr);
+        network.listen();
         Self {
-            worlds: vec![Box::new(Earth::new(world_config))],
-            players: FxHashMap::default(),
-            network: voxer_network::UdpChannel::bind(socket_addr),
             config,
+            network,
+            session,
         }
+    }
+
+    pub fn start_session(&mut self) {
+        self.session.start();
     }
 
     pub fn tick(&mut self) {
-        let network_messages = self.network.recv_complete();
-        for message in network_messages {
+        let batch = self
+            .network
+            .try_iter_messages()
+            .take(64)
+            .collect::<Vec<_>>();
+        for message in batch {
             self.handle_network_message(message);
         }
-        
-        let mut world_origins = FxHashMap::<usize, Vec<IVec3>>::default();
-        for player in self.players.values() {
-            world_origins
-                .entry(player.location.world)
-                .or_default()
-                .push(compute::geo::world_to_chunk_pos(player.location.position));
-        }
-        for (world_index, origins) in world_origins {
-            self.worlds[world_index].update_simulated_chunks(&origins);
-        }
-        for world in self.worlds.iter_mut() {
-            world.tick();
-        }
+
+        self.session.tick();
     }
 
-    pub fn start(&mut self) {
-        self.worlds.first_mut().unwrap().start_simulation();
-    }
-
-    fn handle_network_message(&mut self, message: ReceivedMessage) {
-        let server_message = process_message(message);
-        match server_message.tag {
-            ServerMessageTag::Ping => {
-                println!(
-                    "Server: Ping received! {}",
-                    server_message.message.data.get(0).copied().unwrap()
-                );
-            }
+    fn handle_network_message(&mut self, message: ServerMessage) {
+        match message.tag {
             ServerMessageTag::ChunkDataRequest => {
-                todo!()
+                let chunk_req_msg = MsgChunkDataRequest::deserialize(message.message.data);
+                let positions = &chunk_req_msg.positions[0..chunk_req_msg.count as usize];
+                let chunks = self.session.get_chunks(0, positions);
+                for chunk in chunks {
+                    let msg = MsgChunkData {
+                        position: chunk.position,
+                        solid_count: chunk.solid_count as u32,
+                        blocks: chunk.blocks,
+                    };
+                    self.network
+                        .channel
+                        .lock()
+                        .send_to(Box::new(msg), &message.message.src)
+                        .unwrap();
+                }
             }
             ServerMessageTag::SetPositionRequest => {
                 todo!()
             }
-            ServerMessageTag::ChunkData => {
-                todo!()
-            }
-            ServerMessageTag::SetPosition => {
-                todo!()
-            }
+            ServerMessageTag::Ping => unimplemented!(),
             _ => unimplemented!(),
         }
     }

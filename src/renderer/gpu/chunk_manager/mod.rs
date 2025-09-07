@@ -79,7 +79,7 @@ impl<const NUM_BUFFERS: usize> StagingBufferMapping<NUM_BUFFERS> {
 
     pub fn push_to_staging(
         &mut self,
-        chunks: &[Chunk],
+        chunks: &[&Chunk],
         chunk_allocations: &mut Slap<
             IVec3,
             <MeshAllocator<NUM_BUFFERS> as VirtualMalloc>::Allocation,
@@ -99,6 +99,8 @@ impl<const NUM_BUFFERS: usize> StagingBufferMapping<NUM_BUFFERS> {
                 slab_index as u32,
                 chunk.position,
             );
+
+            // fixme dereferencing from raw ptr could cause ub in the future
             let adjacent_blocks: [[[u32; PACKED_CHUNK_DIM]; CHUNK_DIM]; 3] = unsafe {
                 *(chunk.adjacent_blocks.as_ptr()
                     as *const [[[u32; PACKED_CHUNK_DIM]; CHUNK_DIM]; 3])

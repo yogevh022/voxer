@@ -1,8 +1,12 @@
+mod thread;
+
 use crate::impl_try_from_uint;
-use crate::voxer_network::{NetworkMessageConfig, NetworkMessageTag, ReceivedMessage};
-use crate::world::types::{CHUNK_DIM, VoxelBlock};
+use crate::voxer_network::{NetworkMessageTag, ReceivedMessage};
+use voxer_macros::network_message;
+use crate::world::types::{ChunkBlocks};
 use bytemuck::{Pod, Zeroable};
 use glam::{IVec3, Vec3};
+pub use thread::NetworkHandle;
 
 #[derive(Debug)]
 pub struct ServerMessage {
@@ -11,7 +15,7 @@ pub struct ServerMessage {
 }
 
 #[repr(u8)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ServerMessageTag {
     ConnectRequest,
     ConnectDeny,
@@ -35,49 +39,55 @@ pub enum ServerMessageTag {
 }
 impl_try_from_uint!(NetworkMessageTag => ServerMessageTag);
 
-const MAX_CHUNKS_PER_BATCH: usize = 32;
+impl ServerMessageTag {
+    pub fn as_tag(&self) -> NetworkMessageTag {
+        *self as NetworkMessageTag
+    }
+}
+
+// todo find a better place for consts like this
+pub(crate) const MAX_CHUNKS_PER_BATCH: usize = 32;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[network_message(tag = ServerMessageTag::ChunkDataRequest.as_tag())]
 pub struct MsgChunkDataRequest {
     pub count: u8,
     _pad: [u8; 3],
     pub positions: [IVec3; MAX_CHUNKS_PER_BATCH],
 }
 
-impl NetworkMessageConfig for MsgChunkDataRequest {
-    const TAG: NetworkMessageTag = ServerMessageTag::ChunkDataRequest as NetworkMessageTag;
+impl MsgChunkDataRequest {
+    pub fn new(count: u8, positions: [IVec3; MAX_CHUNKS_PER_BATCH]) -> Self {
+        Self {
+            count,
+            _pad: [0; 3],
+            positions,
+        }
+    }
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[network_message(tag = ServerMessageTag::ChunkData.as_tag() frags = 10)]
 pub struct MsgChunkData {
-    pub position: IVec3,                                         // 0..11
-    pub blocks: [VoxelBlock; CHUNK_DIM * CHUNK_DIM * CHUNK_DIM], // 12..8204
-}
-
-impl NetworkMessageConfig for MsgChunkData {
-    const TAG: NetworkMessageTag = ServerMessageTag::ChunkData as NetworkMessageTag;
-    const FRAGMENT_COUNT: usize = 10;
+    pub position: IVec3,     // 0..11
+    pub solid_count: u32,    // 12..15
+    pub blocks: ChunkBlocks, // 16..8208
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[network_message(tag = ServerMessageTag::SetPositionRequest.as_tag())]
 pub struct MsgSetPositionRequest {
     pub position: Vec3,
 }
 
-impl NetworkMessageConfig for MsgSetPositionRequest {
-    const TAG: NetworkMessageTag = ServerMessageTag::SetPositionRequest as NetworkMessageTag;
-}
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[network_message(tag = ServerMessageTag::Ping.as_tag())]
 pub struct MsgPing {
     pub byte: u8,
-}
-
-impl NetworkMessageConfig for MsgPing {
-    const TAG: NetworkMessageTag = ServerMessageTag::Ping as NetworkMessageTag;
 }
 
 fn pop_network_msg_tag(data: &mut Vec<u8>) -> NetworkMessageTag {

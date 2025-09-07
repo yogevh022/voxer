@@ -18,7 +18,7 @@ pub struct AppRenderer<'window, const CHUNK_N_BUFF: usize, const CHUNK_N_STAGE_B
 impl<const CHUNK_N_BUFF: usize, const CHUNK_N_STAGE_BUFF: usize>
     AppRenderer<'_, CHUNK_N_BUFF, CHUNK_N_STAGE_BUFF>
 {
-    pub fn load_chunks(&mut self, chunks: Vec<Chunk>) {
+    pub fn load_chunks<'a>(&mut self, chunks: &mut impl Iterator<Item = &'a Chunk>) {
         self.chunk_manager.write_new(&self.renderer, chunks);
         // self.chunk_manager.malloc_debug();
     }

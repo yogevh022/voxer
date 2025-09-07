@@ -42,11 +42,11 @@ impl World for Earth {
         }
     }
 
-    fn chunks_at(&self, positions: &[IVec3]) -> Vec<Chunk> {
+    fn chunks_at(&self, positions: &[IVec3]) -> Vec<&Chunk> {
         // only returns chunks that are generated
         positions
             .into_iter()
-            .filter_map(|c_pos| self.chunks.get(&c_pos).cloned())
+            .filter_map(|c_pos| self.chunks.get(&c_pos))
             .collect()
     }
 

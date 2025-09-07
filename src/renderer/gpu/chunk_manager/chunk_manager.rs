@@ -19,9 +19,7 @@ pub struct ChunkManager<const N_BUFF: usize, const N_STAGE_BUFF: usize> {
     render: ChunkRender<N_BUFF>,
 }
 
-impl<const N_BUFF: usize, const N_STAGE_BUFF: usize>
-    ChunkManager<N_BUFF, N_STAGE_BUFF>
-{
+impl<const N_BUFF: usize, const N_STAGE_BUFF: usize> ChunkManager<N_BUFF, N_STAGE_BUFF> {
     pub fn new(
         renderer: &Renderer<'_>,
         vertex_buffer_size: usize,
@@ -66,10 +64,14 @@ impl<const N_BUFF: usize, const N_STAGE_BUFF: usize>
             .collect()
     }
 
-    pub fn write_new(&mut self, renderer: &Renderer<'_>, chunks: Vec<Chunk>) {
+    pub fn write_new<'a>(
+        &mut self,
+        renderer: &Renderer<'_>,
+        chunks: &mut impl Iterator<Item = &'a Chunk>,
+    ) {
         let max_faces_per_buffer = self.mesh_allocator.buffer_size();
         let staging_chunks_slices =
-            chunks_slices_by_max_face_count(&chunks, max_faces_per_buffer, N_STAGE_BUFF);
+            chunks_slices_by_max_face_count(chunks, max_faces_per_buffer, N_STAGE_BUFF);
         for (staging_index, staging_slice) in staging_chunks_slices.into_iter().enumerate() {
             let mut staging_mapping = init_staging_mapping::<N_BUFF, N_STAGE_BUFF>();
             for (chunk, &face_count) in staging_slice.0.iter().zip(staging_slice.1.iter()) {
@@ -88,7 +90,7 @@ impl<const N_BUFF: usize, const N_STAGE_BUFF: usize>
                 staging_mapping[staging_index].push_to(face_count as u64, mesh_alloc);
             }
             staging_mapping[staging_index].update_buffer_offsets();
-            staging_mapping[staging_index].push_to_staging(&chunks, &mut self.chunk_allocations);
+            staging_mapping[staging_index].push_to_staging(&staging_slice.0, &mut self.chunk_allocations);
             self.compute.write_to_staging(renderer, &staging_mapping);
             self.compute.dispatch_staging_workgroups(
                 renderer,
@@ -131,34 +133,32 @@ const fn init_staging_mapping<const NUM_BUFFERS: usize, const NUM_STAGING_BUFFER
     [const { StagingBufferMapping::<NUM_BUFFERS>::new() }; NUM_STAGING_BUFFERS]
 }
 
-fn chunks_slices_by_max_face_count(
-    chunks: &Vec<Chunk>,
+fn chunks_slices_by_max_face_count<'a>(
+    chunks: &mut impl Iterator<Item = &'a Chunk>,
     max_faces_per_buffer: usize,
     max_slices: usize,
-) -> Vec<(&[Chunk], Vec<usize>)> {
-    // todo make this readable
+) -> Vec<(Vec<&'a Chunk>, Vec<usize>)> {
     let mut slices = Vec::new();
+    let mut this_slice = Vec::new();
     let mut face_counts = Vec::new();
     let mut acc = 0usize;
-    let mut i = 0usize;
-    let mut j = 0usize;
-    while j < chunks.len() {
-        let face_count = chunks[j].face_count.unwrap();
+    if let Some(chunk) = chunks.next() {
+        let face_count = chunk.face_count.unwrap();
         if acc + face_count < max_faces_per_buffer {
             acc += face_count;
-            j += 1;
+            this_slice.push(chunk);
             face_counts.push(face_count);
         } else {
-            slices.push((&chunks[i..j], std::mem::take(&mut face_counts)));
+            slices.push((
+                std::mem::take(&mut this_slice),
+                std::mem::take(&mut face_counts),
+            ));
             face_counts.push(face_count);
-            acc = face_count;
-            i = j;
-            j += 1;
             if slices.len() == max_slices {
                 return slices;
             }
         }
     }
-    slices.push((&chunks[i..j], face_counts));
+    slices.push((this_slice, face_counts));
     slices
 }
