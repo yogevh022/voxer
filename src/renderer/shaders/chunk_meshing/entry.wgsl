@@ -9,6 +9,8 @@ var<storage, read_write> index_buffer: IndexBuffer;
 var<storage, read_write> mmat_buffer: array<mat4x4<f32>>;
 
 var<workgroup> write_offset: atomic<u32>;
+var<workgroup> workgroup_chunk_blocks: ChunkBlocks;
+var<workgroup> workgroup_chunk_adj_blocks: ChunkAdjacentBlocks;
 
 @compute @workgroup_size(CHUNK_DIM, CHUNK_DIM, 1)
 fn mesh_chunks_entry(
@@ -20,12 +22,13 @@ fn mesh_chunks_entry(
 
     if (lid.x + lid.y == 0u) {
         // first thread initializes workgroup vars
+        workgroup_chunk_blocks = chunk_entries[chunk_index].blocks;
+        workgroup_chunk_adj_blocks = chunk_entries[chunk_index].adjacent_blocks;
         atomicStore(&write_offset, chunk_header.offset);
     }
     workgroupBarrier();
 
     mesh_chunk_position(
-        chunk_index,
         lid.x,
         lid.y,
     );
