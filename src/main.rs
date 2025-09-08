@@ -1,62 +1,50 @@
+extern crate core;
+
 mod app;
-mod input;
-mod mat;
-mod render;
-mod texture;
-mod types;
-mod utils;
+pub mod compute;
+mod macros;
+mod renderer;
+mod vtypes;
+mod world;
 
-use crate::input::Input;
-use glam::Vec3;
-use parking_lot::RwLock;
-use std::sync::Arc;
+use bytemuck::{Pod, Zeroable};
+use crate::world::{ServerWorld, ServerWorldConfig};
+use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
+use voxer_network;
 
-fn main() {
+const SIMULATION_AND_RENDER_DISTANCE: usize = 8; // fixme temp location
+
+fn run_app() {
+    let mut server = ServerWorld::new(ServerWorldConfig {
+        seed: 0,
+        simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
+    });
+    let voxer_engine = vtypes::Voxer::default();
+    let scene = vtypes::Scene {
+        objects: vec![VObject::Camera(CameraController::with_sensitivity(0.01))],
+    };
+
+    server.start_session();
+    let mut app = app::App::new(voxer_engine, server, scene);
+
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
-
-    let atlas = texture::helpers::generate_texture_atlas();
-    _ = atlas.image.save("src/texture/images/atlas.png");
-
-    let mut curr_index = 0u16; // temp, track indices
-
-    let scene = types::Scene {
-        objects: vec![
-            utils::temp::scene_plane(
-                &mut curr_index,
-                &atlas,
-                texture::Texture::Murica,
-                types::Transform::from_vec3(Vec3::new(0.0, 0.0, -5.0)),
-            ),
-            utils::temp::scene_plane(
-                &mut curr_index,
-                &atlas,
-                texture::Texture::Idk,
-                types::Transform::from_vec3(Vec3::new(2.0, 0.0, -5.0)),
-            ),
-            utils::temp::scene_plane(
-                &mut curr_index,
-                &atlas,
-                texture::Texture::Green,
-                types::Transform::from_vec3(Vec3::new(-2.0, 0.0, -5.0)),
-            ),
-        ],
-    };
-    let camera = types::Camera::default();
-    let camera_controller = types::CameraController {
-        sensitivity: 0.002f32,
-        ..Default::default()
-    };
-
-    let mut app = app::App {
-        window: None,
-        renderer_state: None,
-        input: Arc::new(RwLock::new(Input::default())),
-        scene,
-        camera,
-        camera_controller,
-    };
-
     event_loop.run_app(&mut app).unwrap();
+}
+
+fn main() {
+    // tracy_client::set_thread_name!("main");
+    run_app();
+
+    // debug_server();
+    // debug_client();
+}
+
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+struct Test {
+    hello: u64,
+    world: u64,
 }
