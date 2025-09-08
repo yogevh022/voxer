@@ -5,6 +5,7 @@ use glam::{Vec2, Vec3, Vec3A};
 pub struct Vertex {
     pub position: Vec3A,
     pub tex_coords: Vec2,
+    pub ao: f32,
 }
 
 impl Vertex {
@@ -22,6 +23,11 @@ impl Vertex {
                     offset: size_of::<Vec3A>() as wgpu::BufferAddress,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x2,
+                },
+                wgpu::VertexAttribute {
+                    offset: size_of::<Vec3A>() as wgpu::BufferAddress + size_of::<Vec2>() as wgpu::BufferAddress,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32,
                 },
             ],
         }

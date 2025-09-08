@@ -28,10 +28,7 @@ fn mesh_chunks_entry(
     }
     workgroupBarrier();
 
-    mesh_chunk_position(
-        lid.x,
-        lid.y,
-    );
+    mesh_chunk_position(lid.x, lid.y);
 
     let chunk_world_position = chunk_to_world_position(chunk_header.chunk_position);
     mmat_buffer[chunk_header.slab_index] = translation_matrix(chunk_world_position);

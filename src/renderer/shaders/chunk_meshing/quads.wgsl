@@ -18,15 +18,19 @@ fn plus_x_vertices(
 ) {
     (*vertex_array)[vertex_index + 0].position = vec3<f32>(x, y - 1.0, z - 1.0);
     (*vertex_array)[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
+    (*vertex_array)[vertex_index + 0].ao = 1.0;
 
     (*vertex_array)[vertex_index + 1].position = vec3<f32>(x, y - 1.0, z);
     (*vertex_array)[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 1].ao = 1.0;
 
     (*vertex_array)[vertex_index + 2].position = vec3<f32>(x, y, z);
     (*vertex_array)[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 2].ao = 1.0;
 
     (*vertex_array)[vertex_index + 3].position = vec3<f32>(x, y, z - 1.0);
     (*vertex_array)[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y);
+    (*vertex_array)[vertex_index + 3].ao = 1.0;
 }
 
 fn minus_x_vertices(
@@ -39,15 +43,19 @@ fn minus_x_vertices(
 ) {
     (*vertex_array)[vertex_index + 0].position = vec3<f32>(x, y - 1.0, z - 1.0);
     (*vertex_array)[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
+    (*vertex_array)[vertex_index + 0].ao = 1.0;
 
     (*vertex_array)[vertex_index + 1].position = vec3<f32>(x, y, z - 1.0);
     (*vertex_array)[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 1].ao = 1.0;
 
     (*vertex_array)[vertex_index + 2].position = vec3<f32>(x, y, z);
     (*vertex_array)[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 2].ao = 1.0;
 
     (*vertex_array)[vertex_index + 3].position = vec3<f32>(x, y - 1.0, z);
     (*vertex_array)[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 3].ao = 1.0;
 }
 
 fn plus_y_vertices(
@@ -60,15 +68,19 @@ fn plus_y_vertices(
 ) {
     (*vertex_array)[vertex_index + 0].position = vec3<f32>(x - 1.0, y, z - 1.0);
     (*vertex_array)[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
+    (*vertex_array)[vertex_index + 0].ao = 1.0;
 
     (*vertex_array)[vertex_index + 1].position = vec3<f32>(x - 1.0, y, z);
     (*vertex_array)[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 1].ao = 1.0;
 
     (*vertex_array)[vertex_index + 2].position = vec3<f32>(x, y, z);
     (*vertex_array)[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 2].ao = 1.0;
 
     (*vertex_array)[vertex_index + 3].position = vec3<f32>(x, y, z - 1.0);
     (*vertex_array)[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y);
+    (*vertex_array)[vertex_index + 3].ao = 1.0;
 }
 
 fn minus_y_vertices(
@@ -81,15 +93,19 @@ fn minus_y_vertices(
 ) {
     (*vertex_array)[vertex_index + 0].position = vec3<f32>(x - 1.0, y, z - 1.0);
     (*vertex_array)[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
+    (*vertex_array)[vertex_index + 0].ao = 1.0;
 
     (*vertex_array)[vertex_index + 1].position = vec3<f32>(x, y, z - 1.0);
     (*vertex_array)[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y);
+    (*vertex_array)[vertex_index + 1].ao = 1.0;
 
     (*vertex_array)[vertex_index + 2].position = vec3<f32>(x, y, z);
     (*vertex_array)[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 2].ao = 1.0;
 
     (*vertex_array)[vertex_index + 3].position = vec3<f32>(x - 1.0, y, z);
     (*vertex_array)[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 3].ao = 1.0;
 }
 
 fn plus_z_vertices(
@@ -102,15 +118,19 @@ fn plus_z_vertices(
 ) {
     (*vertex_array)[vertex_index + 0].position = vec3<f32>(x - 1.0, y - 1.0, z);
     (*vertex_array)[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
+    (*vertex_array)[vertex_index + 0].ao = 1.0;
 
     (*vertex_array)[vertex_index + 1].position = vec3<f32>(x, y - 1.0, z);
     (*vertex_array)[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y);
+    (*vertex_array)[vertex_index + 1].ao = 1.0;
 
     (*vertex_array)[vertex_index + 2].position = vec3<f32>(x, y, z);
     (*vertex_array)[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 2].ao = 1.0;
 
     (*vertex_array)[vertex_index + 3].position = vec3<f32>(x - 1.0, y, z);
     (*vertex_array)[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 3].ao = 1.0;
 }
 
 fn minus_z_vertices(
@@ -123,13 +143,17 @@ fn minus_z_vertices(
 ) {
     (*vertex_array)[vertex_index + 0].position = vec3<f32>(x - 1.0, y - 1.0, z);
     (*vertex_array)[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
+    (*vertex_array)[vertex_index + 0].ao = 1.0;
 
     (*vertex_array)[vertex_index + 1].position = vec3<f32>(x - 1.0, y, z);
     (*vertex_array)[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 1].ao = 1.0;
 
     (*vertex_array)[vertex_index + 2].position = vec3<f32>(x, y, z);
     (*vertex_array)[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
+    (*vertex_array)[vertex_index + 2].ao = 1.0;
 
     (*vertex_array)[vertex_index + 3].position = vec3<f32>(x, y - 1.0, z);
     (*vertex_array)[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y);
+    (*vertex_array)[vertex_index + 3].ao = 1.0;
 }
