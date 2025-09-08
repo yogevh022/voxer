@@ -1,162 +1,134 @@
 
 fn write_faces_x(
-    packed_faces: u32,
-    packed_dirs: u32,
-    index_array: ptr<function, array<Index, MAX_INDICES_PER_THREAD>>,
-    vertex_array: ptr<function, array<Vertex, MAX_VERTICES_PER_THREAD>>,
-    local_count: ptr<function, u32>,
-    x: u32,
-    y: u32,
-    z: u32,
+    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
+    x: f32,
+    y: f32,
+    z: f32,
 ) {
-    let temp_uv: vec2<f32> = vec2<f32>(0.0, 0.0);
+    let uv: vec2<f32> = vec2<f32>(0.0, 0.0);
 
-    let x_f32 = f32(x);
-    let y_f32 = f32(y);
+    let face_draw = bit_at((*neighbors)[1][1][1] ^ (*neighbors)[2][1][1], 15);
+    let face_dir = bit_at((*neighbors)[1][1][1] & (~(*neighbors)[2][1][1]), 15);
 
-    // logic for both u16s packed into the u32
-    for (var n = 2u; n >= 1u; n--) {
-        let z_f32 = f32(z - n);
-        let bit_index = (16u << (2u - n)) - 1u;
-        let draw_face = (packed_faces >> bit_index) & 1u;
-        let face_dir = (packed_dirs >> bit_index) & 1u;
-        let i_index = draw_face * ((*local_count * 6u) + VOID_OFFSET);
-        let v_index = draw_face * ((*local_count * 4u) + VOID_OFFSET);
+    let v_index = face_draw * ((local_face_count * 4u) + VOID_OFFSET);
+    let i_index = face_draw * ((local_face_count * 6u) + VOID_OFFSET);
 
-        quad_indices(index_array, i_index, v_index);
-        minus_x_vertices(vertex_array, face_dir * v_index, temp_uv ,x_f32 ,y_f32, z_f32);
-        plus_x_vertices(vertex_array, (1u ^ face_dir) * v_index, temp_uv, x_f32, y_f32, z_f32);
-        (*local_count) += 1u * draw_face;
-    }
+    quad_indices(i_index, v_index);
+    minus_x_vertices(face_dir * v_index, uv ,x ,y, z);
+    plus_x_vertices((1u ^ face_dir) * v_index, uv, x, y, z);
+    local_face_count += 1u * face_draw;
 }
 
 fn write_faces_y(
-    packed_faces: u32,
-    packed_dirs: u32,
-    index_array: ptr<function, array<Index, MAX_INDICES_PER_THREAD>>,
-    vertex_array: ptr<function, array<Vertex, MAX_VERTICES_PER_THREAD>>,
-    local_count: ptr<function, u32>,
-    x: u32,
-    y: u32,
-    z: u32,
+    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
+    x: f32,
+    y: f32,
+    z: f32,
 ) {
-    let temp_uv: vec2<f32> = vec2<f32>(0.0, 0.0);
+    let uv: vec2<f32> = vec2<f32>(0.0, 0.0);
 
-    let x_f32 = f32(x);
-    let y_f32 = f32(y);
+    let face_draw = bit_at((*neighbors)[1][1][1] ^ (*neighbors)[1][2][1], 15);
+    let face_dir = bit_at((*neighbors)[1][1][1] & (~(*neighbors)[1][2][1]), 15);
 
-    // logic for both u16s packed into the u32
-    for (var n = 2u; n >= 1u; n--) {
-        let z_f32 = f32(z - n);
-        let bit_index = (16u << (2u - n)) - 1u;
-        let draw_face = (packed_faces >> bit_index) & 1u;
-        let face_dir = (packed_dirs >> bit_index) & 1u;
-        let i_index = draw_face * ((*local_count * 6u) + VOID_OFFSET);
-        let v_index = draw_face * ((*local_count * 4u) + VOID_OFFSET);
+    let v_index = face_draw * ((local_face_count * 4u) + VOID_OFFSET);
+    let i_index = face_draw * ((local_face_count * 6u) + VOID_OFFSET);
 
-        quad_indices(index_array, i_index, v_index);
-        plus_y_vertices(vertex_array, face_dir * v_index, temp_uv ,x_f32 ,y_f32, z_f32);
-        minus_y_vertices(vertex_array, (1u ^ face_dir) * v_index, temp_uv, x_f32, y_f32, z_f32);
-        (*local_count) += 1u * draw_face;
-    }
+    quad_indices(i_index, v_index);
+    plus_y_vertices(face_dir * v_index, uv ,x ,y, z);
+    minus_y_vertices((1u ^ face_dir) * v_index, uv, x, y, z);
+    local_face_count += 1u * face_draw;
 }
 
 fn write_faces_z(
-    packed_faces: u32,
-    packed_dirs: u32,
-    index_array: ptr<function, array<Index, MAX_INDICES_PER_THREAD>>,
-    vertex_array: ptr<function, array<Vertex, MAX_VERTICES_PER_THREAD>>,
-    local_count: ptr<function, u32>,
-    x: u32,
-    y: u32,
-    z: u32,
+    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
+    x: f32,
+    y: f32,
+    z: f32,
 ) {
-    let temp_uv: vec2<f32> = vec2<f32>(0.0, 0.0);
+    let uv: vec2<f32> = vec2<f32>(0.0, 0.0);
 
-    let x_f32 = f32(x);
-    let y_f32 = f32(y);
+    let face_draw = bit_at((*neighbors)[1][1][1] ^ (*neighbors)[1][1][2], 15);
+    let face_dir = bit_at((*neighbors)[1][1][1] & (~(*neighbors)[1][1][2]), 15);
 
-    // logic for both u16s packed into the u32
-    for (var n = 2u; n >= 1u; n--) {
-        let z_f32 = f32(z - n);
-        let bit_index = (16u << (2u - n)) - 1u;
-        let draw_face = (packed_faces >> bit_index) & 1u;
-        let face_dir = (packed_dirs >> bit_index) & 1u;
-        let i_index = draw_face * ((*local_count * 6u) + VOID_OFFSET);
-        let v_index = draw_face * ((*local_count * 4u) + VOID_OFFSET);
+    let v_index = face_draw * ((local_face_count * 4u) + VOID_OFFSET);
+    let i_index = face_draw * ((local_face_count * 6u) + VOID_OFFSET);
 
-        quad_indices(index_array, i_index, v_index);
-        plus_z_vertices(vertex_array, face_dir * v_index, temp_uv ,x_f32 ,y_f32, z_f32);
-        minus_z_vertices(vertex_array, (1u ^ face_dir) * v_index, temp_uv, x_f32, y_f32, z_f32);
-        (*local_count) += 1u * draw_face;
-    }
+    quad_indices(i_index, v_index);
+    plus_z_vertices(face_dir * v_index, uv ,x ,y, z);
+    minus_z_vertices((1u ^ face_dir) * v_index, uv, x, y, z);
+    local_face_count += 1u * face_draw;
 }
 
 fn mesh_chunk_position(x: u32, y: u32) {
-    var vertex_array: array<Vertex, MAX_VERTICES_PER_THREAD>;
-    var index_array: array<Index, MAX_INDICES_PER_THREAD>;
-    var local_count: u32 = 0u;
-    for (var z: u32 = 0u; z < CHUNK_DIM_HALF; z++) {
-        let current: u32 = workgroup_chunk_blocks[x][y][z];
-        let safe_xp = min(x+1, CHUNK_DIM - 1);
-        let next_x: u32 = select(workgroup_chunk_adj_blocks[0u][y][z], workgroup_chunk_blocks[safe_xp][y][z], x < (CHUNK_DIM - 1));
-        let x_faces = current ^ next_x;
-        let x_dirs = current & (~next_x);
-        write_faces_x(
-            x_faces,
-            x_dirs,
-            &index_array,
-            &vertex_array,
-            &local_count,
-            x,
-            y,
-            (z+1u)*2,
-        );
+    let x_f32 = f32(x);
+    let y_f32 = f32(y);
+    for (var z: u32 = 0u; z < CHUNK_DIM; z++) {
+        var neighbors: array<array<array<u32, 3>, 3>, 3>;
+        let packed_z_index = z % 2;
+        neighbors[1][1][1] = get_u16(workgroup_chunk_blocks[x][y][z / 2u], packed_z_index);
+        neighbors[2][1][1] = safe_x(x+1, y, z);
+        neighbors[1][2][1] = safe_y(x, y+1, z);
+        neighbors[1][1][2] = safe_z(x, y, z+1);
 
-        let safe_yp = min(y+1, CHUNK_DIM - 1);
-        let next_y: u32 = select(workgroup_chunk_adj_blocks[1u][x][z], workgroup_chunk_blocks[x][safe_yp][z], y < (CHUNK_DIM - 1));
-        let y_faces = current ^ next_y;
-        let y_dirs = current & (~next_y);
-        write_faces_y(
-            y_faces,
-            y_dirs,
-            &index_array,
-            &vertex_array,
-            &local_count,
-            x,
-            y,
-            (z+1u)*2,
-        );
-
-        let current_z_a = current & 0xFFFFu;
-        let current_z_b = current >> 16u;
-        var z_faces = current_z_a ^ current_z_b;
-        var z_dirs = current_z_a & (~current_z_b);
-
-        let adjacent_z = workgroup_chunk_adj_blocks[2u][x][y / 2u];
-        let save_zp = min(z+1, CHUNK_DIM - 1);
-        let next_z: u32 = select(adjacent_z >> (16 * (y % 2u)), workgroup_chunk_blocks[x][y][save_zp], z < (CHUNK_DIM_HALF - 1));
-        let next_z_a = next_z & 0xFFFFu;
-        z_faces |= ((current_z_b ^ next_z_a) << 16u);
-        z_dirs |= (current_z_b & (~next_z_a)) << 16u;
-        write_faces_z(
-            z_faces,
-            z_dirs,
-            &index_array,
-            &vertex_array,
-            &local_count,
-            x,
-            y,
-            (z+1u)*2,
-        );
+        let z_f32 = f32(z);
+        write_faces_x(&neighbors, x_f32, y_f32, z_f32);
+        write_faces_y(&neighbors, x_f32, y_f32, z_f32);
+        write_faces_z(&neighbors, x_f32, y_f32, z_f32);
     }
 
-    let offset: u32 = atomicAdd(&write_offset, local_count);
-    for (var i = 0u; i < (local_count * 4u); i++) {
-        vertex_buffer[(offset * 4u) + i] = vertex_array[VOID_OFFSET + i];
+    let offset: u32 = atomicAdd(&workgroup_write_offset, local_face_count);
+    for (var i = 0u; i < (local_face_count * 4u); i++) {
+        vertex_buffer[(offset * 4u) + i] = local_vertex_array[VOID_OFFSET + i];
     }
 
-    for (var i = 0u; i < (local_count * 6u); i++) {
-        index_buffer[(offset * 6u) + i] = (index_array[VOID_OFFSET + i] + (offset * 4u)) - VOID_OFFSET;
+    for (var i = 0u; i < (local_face_count * 6u); i++) {
+        index_buffer[(offset * 6u) + i] = (local_index_array[VOID_OFFSET + i] + (offset * 4u)) - VOID_OFFSET;
     }
+}
+
+fn safe_xyz(x: u32, y: u32, z: u32) -> u32 {
+    let safe_px_idx = min(x, CHUNK_DIM - 1);
+    let safe_py_idx = min(y, CHUNK_DIM - 1);
+    let safe_pz_idx = min(z, CHUNK_DIM - 1);
+    return workgroup_chunk_blocks[safe_px_idx][safe_py_idx][safe_pz_idx];
+}
+
+fn safe_x(x: u32, y: u32, z: u32) -> u32 {
+    let half_z = z / 2u;
+    let packed_z_idx = z % 2;
+
+    let safe_x_idx = min(x, CHUNK_DIM - 1);
+    let packed = select(
+        workgroup_chunk_adj_blocks[0u][y][half_z],
+        workgroup_chunk_blocks[safe_x_idx][y][half_z],
+        x < (CHUNK_DIM - 1),
+    );
+    return get_u16(packed, packed_z_idx);
+}
+
+fn safe_y(x: u32, y: u32, z: u32) -> u32 {
+    let half_z = z / 2u;
+    let packed_z_idx = z % 2;
+
+    let safe_y_idx = min(y, CHUNK_DIM - 1);
+    let packed = select(
+        workgroup_chunk_adj_blocks[1u][x][half_z],
+        workgroup_chunk_blocks[x][safe_y_idx][half_z],
+        y < (CHUNK_DIM - 1),
+    );
+    return get_u16(packed, packed_z_idx);
+}
+
+fn safe_z(x: u32, y: u32, z: u32) -> u32 {
+    let safe_pz_idx = min(z, CHUNK_DIM - 1);
+    let safe_half_z = safe_pz_idx / 2;
+    let safe_packed_z_index = safe_pz_idx % 2;
+
+    let adjacent_z = workgroup_chunk_adj_blocks[2u][x][y / 2u];
+    let packed = select(
+        adjacent_z,
+        workgroup_chunk_blocks[x][y][safe_half_z],
+        z < (CHUNK_DIM - 1),
+    );
+    return get_u16(packed, safe_packed_z_index);
 }
