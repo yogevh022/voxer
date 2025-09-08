@@ -1,4 +1,4 @@
-use crate::renderer::{DrawIndexedIndirectArgsA32, Index, Vertex};
+use crate::renderer::DrawIndexedIndirectArgsA32;
 use crate::world::types::{CHUNK_DIM, ChunkBlocks, PACKED_CHUNK_DIM};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
@@ -10,15 +10,15 @@ type GPUChunkAdjacentBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DI
 #[repr(C, align(16))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkEntryBufferData {
-    pub staging_offset: u32,
+    pub offset: u32,
     pub face_count: u32,
     _padding: u64,
 }
 
 impl GPUChunkEntryBufferData {
-    pub fn new(face_count: u32, staging_offset: u32) -> Self {
+    pub fn new(face_count: u32, offset: u32) -> Self {
         Self {
-            staging_offset,
+            offset,
             face_count,
             _padding: 0,
         }
@@ -56,13 +56,13 @@ pub struct GPUChunkEntryHeader {
 
 impl GPUChunkEntryHeader {
     pub fn new(
-        staging_offset: u32,
+        offset: u32,
         face_count: u32,
         slab_index: u32,
         chunk_position: IVec3,
     ) -> Self {
         let buffer_data =
-            GPUChunkEntryBufferData::new(face_count, staging_offset);
+            GPUChunkEntryBufferData::new(face_count, offset);
         Self {
             buffer_data,
             slab_index,
@@ -76,7 +76,7 @@ impl GPUChunkEntryHeader {
         DrawIndexedIndirectArgsA32::new(
             self.buffer_data.face_count * 6,
             1,
-            self.buffer_data.staging_offset * 6,
+            self.buffer_data.offset * 6,
             0, // vertices are indexed from 0, void and chunk offsets are baked into the indices
             self.slab_index,
         )

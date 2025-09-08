@@ -95,7 +95,7 @@ impl<const N_BUFF: usize> ChunkCompute<N_BUFF> {
                     DrawIndexedIndirectArgsA32::new(
                         entry.header.buffer_data.face_count * 6,
                         1,
-                        entry.header.buffer_data.staging_offset * 6,
+                        entry.header.buffer_data.offset * 6,
                         0,
                         entry.header.slab_index,
                     ),
