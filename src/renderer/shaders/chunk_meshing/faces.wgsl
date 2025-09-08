@@ -92,14 +92,14 @@ fn write_faces_z(
     }
 }
 
-fn mesh_chunk_position(chunk_index: u32, target_offset_delta: i32, x: u32, y: u32) {
-    let chunk = chunk_entries[chunk_index];
+fn mesh_chunk_position(x: u32, y: u32) {
     var vertex_array: array<Vertex, MAX_VERTICES_PER_THREAD>;
     var index_array: array<Index, MAX_INDICES_PER_THREAD>;
     var local_count: u32 = 0u;
     for (var z: u32 = 0u; z < CHUNK_DIM_HALF; z++) {
-        let current: u32 = chunk.blocks[x][y][z];
-        let next_x: u32 = select(chunk.adjacent_blocks[0u][y][z], chunk.blocks[x+1u][y][z], x < (CHUNK_DIM - 1));
+        let current: u32 = workgroup_chunk_blocks[x][y][z];
+        let safe_xp = min(x+1, CHUNK_DIM - 1);
+        let next_x: u32 = select(workgroup_chunk_adj_blocks[0u][y][z], workgroup_chunk_blocks[safe_xp][y][z], x < (CHUNK_DIM - 1));
         let x_faces = current ^ next_x;
         let x_dirs = current & (~next_x);
         write_faces_x(
@@ -113,7 +113,8 @@ fn mesh_chunk_position(chunk_index: u32, target_offset_delta: i32, x: u32, y: u3
             (z+1u)*2,
         );
 
-        let next_y: u32 = select(chunk.adjacent_blocks[1u][x][z], chunk.blocks[x][y+1u][z], y < (CHUNK_DIM - 1));
+        let safe_yp = min(y+1, CHUNK_DIM - 1);
+        let next_y: u32 = select(workgroup_chunk_adj_blocks[1u][x][z], workgroup_chunk_blocks[x][safe_yp][z], y < (CHUNK_DIM - 1));
         let y_faces = current ^ next_y;
         let y_dirs = current & (~next_y);
         write_faces_y(
@@ -132,8 +133,9 @@ fn mesh_chunk_position(chunk_index: u32, target_offset_delta: i32, x: u32, y: u3
         var z_faces = current_z_a ^ current_z_b;
         var z_dirs = current_z_a & (~current_z_b);
 
-        let adjacent_z = chunk.adjacent_blocks[2u][x][y / 2u];
-        let next_z: u32 = select(adjacent_z >> (16 * (y % 2u)), chunk.blocks[x][y][z + 1u], z < (CHUNK_DIM_HALF - 1));
+        let adjacent_z = workgroup_chunk_adj_blocks[2u][x][y / 2u];
+        let save_zp = min(z+1, CHUNK_DIM - 1);
+        let next_z: u32 = select(adjacent_z >> (16 * (y % 2u)), workgroup_chunk_blocks[x][y][save_zp], z < (CHUNK_DIM_HALF - 1));
         let next_z_a = next_z & 0xFFFFu;
         z_faces |= ((current_z_b ^ next_z_a) << 16u);
         z_dirs |= (current_z_b & (~next_z_a)) << 16u;
@@ -149,15 +151,12 @@ fn mesh_chunk_position(chunk_index: u32, target_offset_delta: i32, x: u32, y: u3
         );
     }
 
-    let offset: u32 = atomicAdd(&staging_write_offset, local_count);
+    let offset: u32 = atomicAdd(&write_offset, local_count);
     for (var i = 0u; i < (local_count * 4u); i++) {
-        staging_vertex_buffer[(offset * 4u) + i] = vertex_array[VOID_OFFSET + i];
+        vertex_buffer[(offset * 4u) + i] = vertex_array[VOID_OFFSET + i];
     }
 
-    // adjusting indices from staging to target buffer offsets
-    let adj_offset = u32(i32(offset) + target_offset_delta);
-
     for (var i = 0u; i < (local_count * 6u); i++) {
-        staging_index_buffer[(offset * 6u) + i] = (index_array[VOID_OFFSET + i] + (adj_offset * 4u)) - VOID_OFFSET;
+        index_buffer[(offset * 6u) + i] = (index_array[VOID_OFFSET + i] + (offset * 4u)) - VOID_OFFSET;
     }
 }

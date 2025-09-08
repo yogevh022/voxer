@@ -13,10 +13,10 @@ const CHUNK_ENTRY_BYTES: u32 = CHUNK_HEADER_BYTES + CHUNK_BLOCKS_BYTES;
 const MAX_CHUNK_ENTRIES: u32 = 12288u / CHUNK_ENTRY_BYTES;
 
 struct ChunkEntryHeader {
-    staging_offset: u32,
-    target_offset_delta: i32,
+    offset: u32,
     face_count: u32,
-    _pad: u32,
+    _pad0: u32,
+    _pad1: u32,
     slab_index: u32, // 20
     // padded to 32
     chunk_position: vec3<i32>,

@@ -103,7 +103,7 @@ fn vertex_init(device: &wgpu::Device, label: &str, size: wgpu::BufferAddress) ->
         &device,
         label,
         size,
-        wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
     )
 }
 
@@ -112,7 +112,7 @@ fn index_init(device: &wgpu::Device, label: &str, size: wgpu::BufferAddress) -> 
         &device,
         label,
         size,
-        wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+        wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
     )
 }
 
