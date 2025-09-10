@@ -101,7 +101,7 @@ fn safe_x(x: u32, y: u32, z: u32) -> u32 {
     let packed = select(
         workgroup_chunk_adj_blocks[0u][y][half_z],
         workgroup_chunk_blocks[safe_x_idx][y][half_z],
-        x < (CHUNK_DIM - 1),
+        x <= (CHUNK_DIM - 1),
     );
     return get_u16(packed, packed_z_idx);
 }
@@ -114,7 +114,7 @@ fn safe_y(x: u32, y: u32, z: u32) -> u32 {
     let packed = select(
         workgroup_chunk_adj_blocks[1u][x][half_z],
         workgroup_chunk_blocks[x][safe_y_idx][half_z],
-        y < (CHUNK_DIM - 1),
+        y <= (CHUNK_DIM - 1),
     );
     return get_u16(packed, packed_z_idx);
 }
@@ -128,7 +128,7 @@ fn safe_z(x: u32, y: u32, z: u32) -> u32 {
     let packed = select(
         adjacent_z << (16 * safe_packed_z_index),
         workgroup_chunk_blocks[x][y][safe_half_z],
-        z < (CHUNK_DIM - 1),
+        z <= (CHUNK_DIM - 1),
     );
     return get_u16(packed, safe_packed_z_index);
 }
