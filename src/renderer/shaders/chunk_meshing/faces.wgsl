@@ -124,9 +124,9 @@ fn safe_z(x: u32, y: u32, z: u32) -> u32 {
     let safe_half_z = safe_pz_idx / 2;
     let safe_packed_z_index = safe_pz_idx % 2;
 
-    let adjacent_z = workgroup_chunk_adj_blocks[2u][x][y / 2u];
+    let adjacent_z = get_u16(workgroup_chunk_adj_blocks[2u][x][y / 2u], y % 2);
     let packed = select(
-        adjacent_z,
+        adjacent_z << (16 * safe_packed_z_index),
         workgroup_chunk_blocks[x][y][safe_half_z],
         z < (CHUNK_DIM - 1),
     );

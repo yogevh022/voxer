@@ -28,12 +28,12 @@ fn mesh_chunks_entry(
         // first thread initializes workgroup vars
         workgroup_chunk_blocks = chunk_entries[chunk_index].blocks;
         workgroup_chunk_adj_blocks = chunk_entries[chunk_index].adjacent_blocks;
-        atomicStore(&workgroup_write_offset, chunk_header.offset);
+        atomicStore(&workgroup_write_offset, chunk_header.buffer_data.offset);
     }
     workgroupBarrier();
 
     mesh_chunk_position(lid.x, lid.y);
 
-    let chunk_world_position = chunk_to_world_position(chunk_header.chunk_position);
+    let chunk_world_position = chunk_to_world_position(chunk_header.position);
     mmat_buffer[chunk_header.slab_index] = translation_matrix(chunk_world_position);
 }
