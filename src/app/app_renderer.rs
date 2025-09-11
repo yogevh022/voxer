@@ -49,7 +49,7 @@ impl<const CHUNK_N_BUFF: usize>
         render_pass.set_bind_group(0, &self.renderer.bind_groups.texture_atlas, &[]);
         render_pass.set_bind_group(1, &self.renderer.bind_groups.view_projection, &[]);
 
-        let view_proj = camera.get_view_projection();
+        let view_proj = camera.view_projection();
         self.renderer.write_view_projection(view_proj);
 
         self.chunk_manager.draw(&self.renderer, render_pass);

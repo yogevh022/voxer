@@ -1,8 +1,9 @@
 pub mod app_renderer;
 
 use crate::vtypes::{Scene, Voxer, VoxerObject};
+use crate::world::types::CHUNK_DIM;
 use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld};
-use crate::{SIMULATION_AND_RENDER_DISTANCE, compute, vtypes, call_every};
+use crate::{SIMULATION_AND_RENDER_DISTANCE, call_every, compute, vtypes};
 use glam::IVec3;
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -54,7 +55,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             };
             self.client = Some(ClientWorld::new(arc_window, client_config));
             self.client.as_mut().unwrap().temp_send_req_conn();
-            
+
             self.debug.last_chunk_pos = IVec3::new(100, 100, 100);
         }
     }
@@ -160,14 +161,23 @@ impl<'a> App<'a> {
 
         let m_client = self.client.as_mut().unwrap();
         let player_position = self.v.camera.transform.position;
-        let frustum_planes = compute::geo::Frustum::planes(self.v.camera.get_view_projection());
+        let chunk_frustum_planes = compute::geo::Frustum::planes(
+            self.v
+                .camera
+                .chunk_view_projection((m_client.config.render_distance * CHUNK_DIM) as f32),
+        );
         m_client.set_player_position(player_position);
-        m_client.set_view_frustum(frustum_planes);
+        m_client.set_view_frustum(chunk_frustum_planes);
         m_client.tick();
 
-        call_every!(CLIENT_POS_SEND, 20, || { m_client.temp_send_player_position() });
+        call_every!(CLIENT_POS_SEND, 20, || {
+            m_client.temp_send_player_position()
+        });
+
+        call_every!(CLIENT_REQUEST_CHUNKS, 5, || {
+            m_client.request_missing_chunks()
+        });
 
         call_every!(SERVER_TICK, 20, || { self.server.tick() });
-
     }
 }

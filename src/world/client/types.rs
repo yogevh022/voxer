@@ -4,13 +4,14 @@ use crate::compute::geo::Plane;
 use crate::world::session::PlayerSession;
 use crate::world::types::Chunk;
 use glam::IVec3;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::time::Instant;
 
 pub struct ClientWorldSession {
     pub(crate) player: PlayerSession,
     pub(crate) view_frustum: [Plane; 6],
     pub(crate) chunks: FxHashMap<IVec3, Chunk>,
+    pub(crate) missing_chunks: Option<Vec<IVec3>>,
     last_request_chunk_positions: FxHashMap<IVec3, Instant>,
     unprocessed_chunk_positions: Vec<IVec3>,
 }
@@ -21,6 +22,7 @@ impl ClientWorldSession {
             player,
             view_frustum: [Plane::default(); 6],
             chunks: FxHashMap::default(),
+            missing_chunks: None,
             last_request_chunk_positions: FxHashMap::default(),
             unprocessed_chunk_positions: Vec::new(),
         }
@@ -38,16 +40,26 @@ impl ClientWorldSession {
             .map(|instant| instant.elapsed().as_millis() > 400)
             .unwrap_or(true)
         {
-            self.last_request_chunk_positions.insert(position, Instant::now());
+            self.last_request_chunk_positions
+                .insert(position, Instant::now());
             return true;
         }
         false
     }
 
     pub fn tick(&mut self) {
-        for position in std::mem::take(&mut self.unprocessed_chunk_positions) {
+        let positions = std::mem::take(&mut self.unprocessed_chunk_positions);
+        let mut updated = FxHashSet::default();
+        for position in positions
+            .into_iter()
+            .map(|p| extended_with_preceding_positions(p))
+            .flatten()
+        {
+            if updated.contains(&position) {
+                continue;
+            }
+            updated.insert(position);
             self.update_chunk_data(position);
-            self.update_adjacent_chunks_data(position);
         }
     }
 
@@ -58,15 +70,13 @@ impl ClientWorldSession {
             chunk.adjacent_blocks = adjacent_blocks;
         });
     }
+}
 
-    fn update_adjacent_chunks_data(&mut self, origin_position: IVec3) {
-        // fixme fix performance redundancy
-        for chunk_position in [
-            IVec3::new(origin_position.x - 1, origin_position.y, origin_position.z),
-            IVec3::new(origin_position.x, origin_position.y - 1, origin_position.z),
-            IVec3::new(origin_position.x, origin_position.y, origin_position.z - 1),
-        ] {
-            self.update_chunk_data(chunk_position);
-        }
-    }
+fn extended_with_preceding_positions(origin: IVec3) -> [IVec3; 4] {
+    [
+        origin,
+        IVec3::new(origin.x - 1, origin.y, origin.z),
+        IVec3::new(origin.x, origin.y - 1, origin.z),
+        IVec3::new(origin.x, origin.y, origin.z - 1),
+    ]
 }

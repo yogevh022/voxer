@@ -4,7 +4,7 @@ use crate::app::app_renderer;
 use crate::app::app_renderer::AppRenderer;
 use crate::compute;
 use crate::compute::geo;
-use crate::compute::geo::Plane;
+use crate::compute::geo::{Frustum, Plane};
 use crate::world::client::types::ClientWorldSession;
 use crate::world::network::{
     MAX_CHUNKS_PER_BATCH, MsgChunkData, MsgChunkDataRequest, MsgConnectRequest,
@@ -23,8 +23,8 @@ pub struct ClientWorldConfig {
 }
 
 pub struct ClientWorld<'window> {
-    config: ClientWorldConfig,
-    pub(crate) renderer: AppRenderer<'window, 2>,
+    pub config: ClientWorldConfig,
+    pub(crate) renderer: AppRenderer<'window, 4>,
     network: NetworkHandle<{ compute::KIB * 16 }>,
     session: ClientWorldSession,
 }
@@ -95,13 +95,13 @@ impl<'window> ClientWorld<'window> {
                 .iter()
                 .map(|pos| self.session.chunks.get(pos).unwrap()),
         );
-        self.request_chunks(missing_chunks);
+        self.session.missing_chunks = Some(missing_chunks);
     }
 
     fn cull_outside_frustum(&mut self) {
         let unload_chunks = self.renderer.map_rendered_chunk_positions(|c_pos| {
             let chunk_world_pos = geo::chunk_to_world_pos(c_pos);
-            !geo::Frustum::is_aabb_within_frustum(
+            !Frustum::aabb_within_frustum(
                 chunk_world_pos,
                 chunk_world_pos + CHUNK_DIM as f32,
                 &self.session.view_frustum,
@@ -116,31 +116,36 @@ impl<'window> ClientWorld<'window> {
         let mut missing_positions = Vec::new();
         let mut new_render = Vec::new();
 
-        geo::Sphere::discrete_points(
-            geo::world_to_chunk_pos(self.session.player.location.position),
-            self.config.render_distance as isize,
-            |chunk_position| {
-                // todo optimize this
-                if !self.session.chunks.contains_key(&chunk_position) {
-                    missing_positions.push(chunk_position);
-                    return;
-                }
-                let chunk_world_position = geo::chunk_to_world_pos(chunk_position);
-                if geo::Frustum::is_aabb_within_frustum(
-                    chunk_world_position,
-                    chunk_world_position + CHUNK_DIM as f32,
-                    &self.session.view_frustum,
-                ) && !self.renderer.is_chunk_rendered(chunk_position)
-                {
-                    new_render.push(chunk_position);
-                }
-            },
-        );
+        let mut frustum_aabb = Frustum::aabb(&self.session.view_frustum);
+        frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
+        frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
+
+        frustum_aabb.discrete_points(|chunk_position| {
+            const CHUNK_DIM_F: f32 = CHUNK_DIM as f32;
+            let chunk_world_position = geo::chunk_to_world_pos(chunk_position);
+            if !Frustum::aabb_within_frustum(
+                chunk_world_position,
+                chunk_world_position + CHUNK_DIM_F,
+                &self.session.view_frustum,
+            ) {
+                return;
+            }
+            if !self.session.chunks.contains_key(&chunk_position) {
+                missing_positions.push(chunk_position);
+            } else if !self.renderer.is_chunk_rendered(chunk_position) {
+                new_render.push(chunk_position);
+            }
+        });
+
         (missing_positions, new_render)
     }
 
-    fn request_chunks(&mut self, positions: Vec<IVec3>) {
-        let can_request = positions
+    pub fn request_missing_chunks(&mut self) {
+        let can_request = self
+            .session
+            .missing_chunks
+            .take()
+            .unwrap_or_default()
             .into_iter()
             .filter(|&chunk_position| self.session.try_request_permission(chunk_position))
             .take(MAX_CHUNKS_PER_BATCH)
@@ -177,46 +182,4 @@ impl<'window> ClientWorld<'window> {
             _ => unimplemented!(),
         }
     }
-
-    // pub fn chunks_to_mesh(&self, frustum_planes: &[Plane; 6]) -> Vec<IVec3> {
-    //     let mut added_chunks = FxHashSet::default();
-    //     let mut positions = Vec::new();
-    //
-    //     geo::Sphere::discrete_points(
-    //         geo::world_to_chunk_pos(self.player_position),
-    //         self.config.render_distance as isize,
-    //         |chunk_position| {
-    //             // todo optimize this
-    //             let chunk_world_position = geo::chunk_to_world_pos(chunk_position);
-    //
-    //             {
-    //                 added_chunks.insert(chunk_position);
-    //                 positions.push(chunk_position);
-    //                 let mx_chunk_position =
-    //                     IVec3::new(chunk_position.x - 1, chunk_position.y, chunk_position.z);
-    //                 let my_chunk_position =
-    //                     IVec3::new(chunk_position.x, chunk_position.y - 1, chunk_position.z);
-    //                 let mz_chunk_position =
-    //                     IVec3::new(chunk_position.x, chunk_position.y, chunk_position.z - 1);
-    //                 if added_chunks.insert(mx_chunk_position) {
-    //                     positions.push(mx_chunk_position);
-    //                 }
-    //                 if added_chunks.insert(my_chunk_position) {
-    //                     positions.push(my_chunk_position);
-    //                 }
-    //                 if added_chunks.insert(mz_chunk_position) {
-    //                     positions.push(mz_chunk_position);
-    //                 }
-    //             };
-    //         },
-    //     );
-    //     positions
-    // }
-
-    // pub fn ping_server(&self) {
-    //     let server_addr = SocketAddr::from(([127, 0, 0, 1], 3100));
-    //     let ping = network::MsgPing { byte: 62 };
-    //     let ping_res = self.network.send_to(ping, &server_addr);
-    //     println!("Client: {:?} -> {:?}", ping.byte, ping_res);
-    // }
 }
