@@ -92,13 +92,7 @@ impl<const N_BUFF: usize> ChunkCompute<N_BUFF> {
             for entry in entries {
                 active_draw[buffer_i].insert(
                     entry.header.slab_index as usize,
-                    DrawIndexedIndirectArgsA32::new(
-                        entry.header.buffer_data.face_count * 6,
-                        1,
-                        entry.header.buffer_data.offset * 6,
-                        0,
-                        entry.header.slab_index,
-                    ),
+                    entry.header.draw_indexed_indirect_args()
                 );
             }
         }

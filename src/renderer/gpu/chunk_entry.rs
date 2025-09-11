@@ -7,21 +7,41 @@ type GPUPackedBlockPair = u32;
 type GPUChunkBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM];
 type GPUChunkAdjacentBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DIM]; 3];
 
-#[repr(C, align(16))]
+#[repr(C, align(8))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkEntryBufferData {
     pub offset: u32,
     pub face_count: u32,
-    _padding: u64,
 }
 
-impl GPUChunkEntryBufferData {
-    pub fn new(face_count: u32, offset: u32) -> Self {
+#[repr(C, align(16))]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUChunkEntryHeader {
+    pub position: IVec3,                      // 0-11
+    pub slab_index: u32,                      // 12-15
+    pub buffer_data: GPUChunkEntryBufferData, // 16-23
+    _padding: [u32; 2],                       // 23-31
+}
+
+impl GPUChunkEntryHeader {
+    pub fn new(offset: u32, face_count: u32, slab_index: u32, chunk_position: IVec3) -> Self {
+        let buffer_data = GPUChunkEntryBufferData { face_count, offset };
         Self {
-            offset,
-            face_count,
-            _padding: 0,
+            buffer_data,
+            slab_index,
+            position: chunk_position,
+            _padding: [0; 2],
         }
+    }
+
+    pub fn draw_indexed_indirect_args(&self) -> DrawIndexedIndirectArgsA32 {
+        DrawIndexedIndirectArgsA32::new(
+            self.buffer_data.face_count * 6,
+            1,
+            self.buffer_data.offset * 6,
+            0,
+            self.slab_index,
+        )
     }
 }
 
@@ -34,51 +54,16 @@ pub struct GPUChunkEntry {
 }
 
 impl GPUChunkEntry {
-    pub fn new(header: GPUChunkEntryHeader, adjacent_blocks: GPUChunkAdjacentBlocks, blocks: ChunkBlocks) -> Self {
+    pub fn new(
+        header: GPUChunkEntryHeader,
+        adjacent_blocks: GPUChunkAdjacentBlocks,
+        blocks: ChunkBlocks,
+    ) -> Self {
         let gpu_blocks: GPUChunkBlocks = unsafe { std::mem::transmute(blocks) };
         Self {
             header,
             adjacent_blocks,
             blocks: gpu_blocks,
         }
-    }
-}
-
-#[repr(C, align(16))]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct GPUChunkEntryHeader {
-    pub buffer_data: GPUChunkEntryBufferData, // 16
-    pub slab_index: u32,                      // 20
-    _pad0: [u32; 3],                          // pad to 32
-    pub chunk_position: IVec3,                // 44
-    _pad3: u32,                               // pad to 48
-}
-
-impl GPUChunkEntryHeader {
-    pub fn new(
-        offset: u32,
-        face_count: u32,
-        slab_index: u32,
-        chunk_position: IVec3,
-    ) -> Self {
-        let buffer_data =
-            GPUChunkEntryBufferData::new(face_count, offset);
-        Self {
-            buffer_data,
-            slab_index,
-            _pad0: [0; 3],
-            chunk_position,
-            _pad3: 0,
-        }
-    }
-
-    pub fn draw_indexed_indirect_args(&self) -> DrawIndexedIndirectArgsA32 {
-        DrawIndexedIndirectArgsA32::new(
-            self.buffer_data.face_count * 6,
-            1,
-            self.buffer_data.offset * 6,
-            0, // vertices are indexed from 0, void and chunk offsets are baked into the indices
-            self.slab_index,
-        )
     }
 }

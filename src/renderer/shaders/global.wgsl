@@ -5,6 +5,7 @@ const MAX_BUFFER: u32 = 128 * _MIB;
 struct Vertex {
     position: vec3<f32>,
     tex_coords: vec2<f32>,
+    ao: f32,
 }
 
 alias Index = u32;

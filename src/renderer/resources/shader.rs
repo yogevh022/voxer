@@ -35,11 +35,13 @@ include_shaders!(
 include_shaders!(
     F_TRANSFORM => "functions/transform.wgsl",
     F_WORLD => "functions/world.wgsl",
+    F_BITWISE => "functions/bitwise.wgsl",
 );
 
 // meshing
 include_shaders!(
     CHUNK_MESHING_ENTRY => "chunk_meshing/entry.wgsl",
+    CHUNK_MESHING_VAO => "chunk_meshing/vao.wgsl",
     CHUNK_MESHING_QUADS => "chunk_meshing/quads.wgsl",
     CHUNK_MESHING_FACES => "chunk_meshing/faces.wgsl",
     CHUNK_MESHING_TYPES => "chunk_meshing/types.wgsl",
@@ -54,7 +56,9 @@ pub fn chunk_meshing() -> String {
         GLOBAL,
         F_TRANSFORM,
         F_WORLD,
+        F_BITWISE,
         CHUNK_MESHING_TYPES,
+        CHUNK_MESHING_VAO,
         CHUNK_MESHING_ENTRY,
         CHUNK_MESHING_QUADS,
         CHUNK_MESHING_FACES
