@@ -50,19 +50,19 @@ fn quad_vertices_y(
     y: f32,
     z: f32,
 ) {
-    local_vertex_array[vertex_index + 0].position = vec3<f32>(x - 1.0, y, z - 1.0);
+    local_vertex_array[vertex_index + 0].position = vec3<f32>(x, y, z);
     local_vertex_array[vertex_index + 0].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y);
     local_vertex_array[vertex_index + 0].ao = vertices_ao[0];
 
-    local_vertex_array[vertex_index + 1].position = vec3<f32>(x - 1.0, y, z);
+    local_vertex_array[vertex_index + 1].position = vec3<f32>(x, y, z - 1.0);
     local_vertex_array[vertex_index + 1].tex_coords = vec2<f32>(uv_offset.x, uv_offset.y + TILE_DIM);
     local_vertex_array[vertex_index + 1].ao = vertices_ao[1];
 
-    local_vertex_array[vertex_index + 2].position = vec3<f32>(x, y, z);
+    local_vertex_array[vertex_index + 2].position = vec3<f32>(x - 1.0, y, z - 1.0);
     local_vertex_array[vertex_index + 2].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y + TILE_DIM);
     local_vertex_array[vertex_index + 2].ao = vertices_ao[2];
 
-    local_vertex_array[vertex_index + 3].position = vec3<f32>(x, y, z - 1.0);
+    local_vertex_array[vertex_index + 3].position = vec3<f32>(x - 1.0, y, z);
     local_vertex_array[vertex_index + 3].tex_coords = vec2<f32>(uv_offset.x + TILE_DIM, uv_offset.y);
     local_vertex_array[vertex_index + 3].ao = vertices_ao[3];
 }

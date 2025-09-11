@@ -71,32 +71,35 @@ fn mesh_chunk_position(x: u32, y: u32) {
     for (var z: u32 = 0u; z < CHUNK_DIM; z++) {
         var neighbors: array<array<array<u32, 3>, 3>, 3>;
         let packed_z_index = z % 2;
-        neighbors[1][1][1] = bit_at(get_u16(workgroup_chunk_blocks[x][y][z / 2u], packed_z_index), 15);
-        neighbors[2][1][1] = bit_at(safe_x(x+1, y, z), 15);
-        neighbors[1][2][1] = bit_at(safe_y(x, y+1, z), 15);
-        neighbors[1][1][2] = bit_at(safe_z(x, y, z+1), 15);
 
-        neighbors[0][2][1] = bit_at(safe_xyz(x - 1, y + 1, z), 15);
-        neighbors[0][1][2] = bit_at(safe_xyz(x - 1, y, z + 1), 15);
-        neighbors[0][1][1] = bit_at(safe_xyz(x - 1, y, z), 15);
-        neighbors[0][1][0] = bit_at(safe_xyz(x - 1, y, z - 1), 15);
+        neighbors[0][0][0] = bit_at(safe_xyz(x - 1, y - 1, z - 1), 15);
         neighbors[0][0][1] = bit_at(safe_xyz(x - 1, y - 1, z), 15);
+        neighbors[0][0][2] = bit_at(safe_xyz(x - 1, y - 1, z + 1), 15);
+        neighbors[0][1][0] = bit_at(safe_xyz(x - 1, y, z - 1), 15);
+        neighbors[0][1][1] = bit_at(safe_xyz(x - 1, y, z), 15);
+        neighbors[0][1][2] = bit_at(safe_xyz(x - 1, y, z + 1), 15);
+        neighbors[0][2][0] = bit_at(safe_xyz(x - 1, y + 1, z - 1), 15);
+        neighbors[0][2][1] = bit_at(safe_xyz(x - 1, y + 1, z), 15);
+        neighbors[0][2][2] = bit_at(safe_xyz(x - 1, y + 1, z + 1), 15);
 
-        neighbors[1][2][2] = bit_at(safe_xyz(x, y + 1, z + 1), 15);
-        neighbors[1][2][0] = bit_at(safe_xyz(x, y + 1, z - 1), 15);
-        neighbors[1][1][0] = bit_at(safe_xyz(x, y, z - 1), 15);
-        neighbors[1][0][2] = bit_at(safe_xyz(x, y - 1, z + 1), 15);
-        neighbors[1][0][1] = bit_at(safe_xyz(x, y - 1, z), 15);
         neighbors[1][0][0] = bit_at(safe_xyz(x, y - 1, z - 1), 15);
-
-        neighbors[2][2][1] = bit_at(safe_xyz(x + 1, y + 1, z), 15);
-        neighbors[2][1][2] = bit_at(safe_xyz(x + 1, y, z + 1), 15);
-        neighbors[2][1][0] = bit_at(safe_xyz(x + 1, y, z - 1), 15);
-        neighbors[2][0][1] = bit_at(safe_xyz(x + 1, y - 1, z), 15);
+        neighbors[1][0][1] = bit_at(safe_xyz(x, y - 1, z), 15);
+        neighbors[1][0][2] = bit_at(safe_xyz(x, y - 1, z + 1), 15);
+        neighbors[1][1][0] = bit_at(safe_xyz(x, y, z - 1), 15);
+        neighbors[1][1][1] = bit_at(get_u16(workgroup_chunk_blocks[x][y][z / 2u], packed_z_index), 15);
+        neighbors[1][1][2] = bit_at(safe_z(x, y, z + 1), 15);
+        neighbors[1][2][0] = bit_at(safe_xyz(x, y + 1, z - 1), 15);
+        neighbors[1][2][1] = bit_at(safe_y(x, y + 1, z), 15);
+        neighbors[1][2][2] = bit_at(safe_xyz(x, y + 1, z + 1), 15);
 
         neighbors[2][0][0] = bit_at(safe_xyz(x + 1, y - 1, z - 1), 15);
+        neighbors[2][0][1] = bit_at(safe_xyz(x + 1, y - 1, z), 15);
         neighbors[2][0][2] = bit_at(safe_xyz(x + 1, y - 1, z + 1), 15);
+        neighbors[2][1][0] = bit_at(safe_xyz(x + 1, y, z - 1), 15);
+        neighbors[2][1][1] = bit_at(safe_x(x + 1, y, z), 15);
+        neighbors[2][1][2] = bit_at(safe_xyz(x + 1, y, z + 1), 15);
         neighbors[2][2][0] = bit_at(safe_xyz(x + 1, y + 1, z - 1), 15);
+        neighbors[2][2][1] = bit_at(safe_xyz(x + 1, y + 1, z), 15);
         neighbors[2][2][2] = bit_at(safe_xyz(x + 1, y + 1, z + 1), 15);
 
         let z_f32 = f32(z);

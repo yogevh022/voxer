@@ -59,9 +59,7 @@ impl World for Earth {
                 self.config.simulation_distance as isize,
                 |point| {
                     if !self.chunk_registered(point) {
-                        if point == IVec3::new(1, 0, 0) { // FIXME TEMP
-                            generation_requests.push(point);
-                        }
+                        generation_requests.push(point);
                     }
                     self.simulated_chunks.insert(point);
                 },
