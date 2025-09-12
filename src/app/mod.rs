@@ -174,9 +174,9 @@ impl<'a> App<'a> {
             m_client.temp_send_player_position()
         });
 
-        call_every!(CLIENT_REQUEST_CHUNKS, 5, || {
-            m_client.request_missing_chunks()
-        });
+        // call_every!(CLIENT_REQUEST_CHUNKS, 5, || {
+        m_client.request_missing_chunks();
+        // });
 
         call_every!(SERVER_TICK, 20, || { self.server.tick() });
     }

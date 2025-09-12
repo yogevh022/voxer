@@ -4,9 +4,8 @@ const TILE_DIM: f32 = 0.5;
 
 const VAO_FACTOR: f32 = 0.35;
 
-const VOID_OFFSET: u32 = 8u;
-const MAX_VERTICES_PER_THREAD: u32 = ((4u * 3u) * CHUNK_DIM) + VOID_OFFSET;
-const MAX_INDICES_PER_THREAD: u32 = ((6u * 3u) * CHUNK_DIM) + VOID_OFFSET;
+const VOID_OFFSET: u32 = 1u;
+const MAX_FACES_PER_THREAD: u32 = (3u * CHUNK_DIM) + VOID_OFFSET;
 
 const CHUNK_HEADER_BYTES: u32 = 32u;
 const CHUNK_BLOCKS_BYTES: u32 = CHUNK_DIM * CHUNK_DIM * CHUNK_DIM_HALF * 4; // u32
@@ -31,6 +30,17 @@ struct ChunkEntry {
     header: ChunkEntryHeader,
     adjacent_blocks: ChunkAdjacentBlocks,
     blocks: ChunkBlocks,
+}
+
+struct FaceData {
+    position__fid__illum__ao: u32,
+    // position 12b
+    // fid 3b
+    // illum 5b
+    // ao 8b
+    // 4 free
+    voxel_type: u32,
+    // voxel_type 16b
 }
 
 alias ChunkBlocks = array<array<array<u32, CHUNK_DIM_HALF>, CHUNK_DIM>, CHUNK_DIM>;

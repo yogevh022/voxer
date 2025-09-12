@@ -5,9 +5,9 @@ fn neighbor_count_to_vao(count: u32) -> f32 {
 
 // vao_* returns vao values on axis A for <A, +A>
 
-fn vao_x(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<array<f32, 4>, 2> {
-    var vao_front: array<f32, 4>;
-    var vao_back: array<f32, 4>;
+fn vao_x(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u32, 2> {
+    var vao_front: u32;
+    var vao_back: u32;
 
     let px_top = (*neighbors)[2][2][1];
     let px_bottom = (*neighbors)[2][0][1];
@@ -18,10 +18,10 @@ fn vao_x(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<a
     let px_bottom_left = (1 ^ (px_bottom & px_left)) * (*neighbors)[2][0][0];
     let px_bottom_right = (1 ^ (px_bottom & px_right)) * (*neighbors)[2][0][2];
 
-    vao_front[3] = neighbor_count_to_vao(px_top + px_left + px_top_left);
-    vao_front[2] = neighbor_count_to_vao(px_top + px_right + px_top_right);
-    vao_front[1] = neighbor_count_to_vao(px_bottom + px_right + px_bottom_right);
-    vao_front[0] = neighbor_count_to_vao(px_bottom + px_left + px_bottom_left);
+    vao_front = neighbor_count_to_vao(px_top + px_left + px_top_left)
+        | (neighbor_count_to_vao(px_top + px_right + px_top_right) << 2)
+        | (neighbor_count_to_vao(px_bottom + px_right + px_bottom_right) << 4)
+        | (neighbor_count_to_vao(px_bottom + px_left + px_bottom_left) << 6);
 
     let sx_top = (*neighbors)[1][2][1];
     let sx_bottom = (*neighbors)[1][0][1];
@@ -32,12 +32,12 @@ fn vao_x(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<a
     let sx_bottom_left = (1 ^ (sx_bottom & sx_left)) * (*neighbors)[1][0][0];
     let sx_bottom_right = (1 ^ (sx_bottom & sx_right)) * (*neighbors)[1][0][2];
 
-    vao_back[3] = neighbor_count_to_vao(sx_top + sx_left + sx_top_left);
-    vao_back[2] = neighbor_count_to_vao(sx_top + sx_right + sx_top_right);
-    vao_back[1] = neighbor_count_to_vao(sx_bottom + sx_right + sx_bottom_right);
-    vao_back[0] = neighbor_count_to_vao(sx_bottom + sx_left + sx_bottom_left);
+    vao_back = neighbor_count_to_vao(sx_top + sx_left + sx_top_left)
+        | (neighbor_count_to_vao(sx_top + sx_right + sx_top_right) << 2)
+        | (neighbor_count_to_vao(sx_bottom + sx_right + sx_bottom_right) << 4)
+        | (neighbor_count_to_vao(sx_bottom + sx_left + sx_bottom_left) << 6);
 
-    return array<array<f32, 4>, 2>(vao_back, vao_front);
+    return array<u32, 2>(vao_back, vao_front);
 }
 
 fn vao_y(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<array<f32, 4>, 2> {

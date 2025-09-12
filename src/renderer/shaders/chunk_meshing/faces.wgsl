@@ -1,76 +1,84 @@
+const FACE_ID_BASE_X: u32 = 1u;
+const FACE_ID_BASE_Y: u32 = 3u;
+const FACE_ID_BASE_Z: u32 = 5u;
 
 fn write_faces_x(
+    current_voxel: u32,
     neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-    x: f32,
-    y: f32,
-    z: f32,
+    x: u32,
+    y: u32,
+    z: u32,
 ) {
-    let uv: vec2<f32> = vec2<f32>(0.5, 0.0);
+    let face_draw = current_voxel ^ (*neighbors)[2][1][1];
+    let face_dir = current_voxel & (~(*neighbors)[2][1][1]);
 
-    let face_draw = (*neighbors)[1][1][1] ^ (*neighbors)[2][1][1];
-    let face_dir = (*neighbors)[1][1][1] & (~(*neighbors)[2][1][1]);
+    let packed_position = (x * CHUNK_DIM * CHUNK_DIM) + (y * CHUNK_DIM) + z;
+    let fid = FACE_ID_BASE_X - face_dir;
+    let illum = 0u;
+    let ao = vao_x(neighbors)[face_dir];
 
-    let v_index = face_draw * ((local_face_count * 4u) + VOID_OFFSET);
-    let i_index = face_draw * ((local_face_count * 6u) + VOID_OFFSET);
+    // fixme these are low values so unmasked, if for some reason they will exceed exectation this could cause wierdness
+    let packed_face_data = (packed_position & 0xFFF)
+        | (fid << 12)
+        | (illum << 15)
+        | (ao << 20);
 
-    let vertices_ao = vao_x(neighbors)[face_dir];
+    let face_data = FaceData(packed_face_data, current_voxel);
 
-    quad_indices((1u ^ face_dir) * i_index, v_index);
-    quad_indices_inversed(face_dir * i_index, v_index);
-    quad_vertices_x(vertices_ao, v_index, uv ,x ,y, z);
-    local_face_count += 1u * face_draw;
+    let private_face_index = face_draw * (private_face_count + VOID_OFFSET);
+    private_face_data[private_face_index] = face_data;
+    private_face_count += 1u * face_draw;
 }
-
-fn write_faces_y(
-    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
-    let uv: vec2<f32> = vec2<f32>(0.5, 0.0);
-
-    let face_draw = (*neighbors)[1][1][1] ^ (*neighbors)[1][2][1];
-    let face_dir = (*neighbors)[1][1][1] & (~(*neighbors)[1][2][1]);
-
-    let v_index = face_draw * ((local_face_count * 4u) + VOID_OFFSET);
-    let i_index = face_draw * ((local_face_count * 6u) + VOID_OFFSET);
-
-    let vertices_ao = vao_y(neighbors)[face_dir];
-
-    quad_indices(face_dir * i_index, v_index);
-    quad_indices_inversed((1u ^ face_dir) * i_index, v_index);
-    quad_vertices_y(vertices_ao, v_index, uv ,x ,y, z);
-    local_face_count += 1u * face_draw;
-}
-
-fn write_faces_z(
-    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
-    let uv: vec2<f32> = vec2<f32>(0.5, 0.0);
-
-    let face_draw = (*neighbors)[1][1][1] ^ (*neighbors)[1][1][2];
-    let face_dir = (*neighbors)[1][1][1] & (~(*neighbors)[1][1][2]);
-
-    let v_index = face_draw * ((local_face_count * 4u) + VOID_OFFSET);
-    let i_index = face_draw * ((local_face_count * 6u) + VOID_OFFSET);
-
-    var vertices_ao = vao_z(neighbors)[face_dir];
-
-    quad_indices(face_dir * i_index, v_index);
-    quad_indices_inversed((1u ^ face_dir) * i_index, v_index);
-    quad_vertices_z(vertices_ao, v_index, uv ,x ,y, z);
-    local_face_count += 1u * face_draw;
-}
+//
+//fn write_faces_y(
+//    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
+//    x: f32,
+//    y: f32,
+//    z: f32,
+//) {
+//    let uv: vec2<f32> = vec2<f32>(0.5, 0.0);
+//
+//    let face_draw = (*neighbors)[1][1][1] ^ (*neighbors)[1][2][1];
+//    let face_dir = (*neighbors)[1][1][1] & (~(*neighbors)[1][2][1]);
+//
+//    let v_index = face_draw * ((local_face_count * 4u) + VOID_OFFSET);
+//    let i_index = face_draw * ((local_face_count * 6u) + VOID_OFFSET);
+//
+//    let vertices_ao = vao_y(neighbors)[face_dir];
+//
+//    quad_indices(face_dir * i_index, v_index);
+//    quad_indices_inversed((1u ^ face_dir) * i_index, v_index);
+//    quad_vertices_y(vertices_ao, v_index, uv ,x ,y, z);
+//    local_face_count += 1u * face_draw;
+//}
+//
+//fn write_faces_z(
+//    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
+//    x: f32,
+//    y: f32,
+//    z: f32,
+//) {
+//    let uv: vec2<f32> = vec2<f32>(0.5, 0.0);
+//
+//    let face_draw = (*neighbors)[1][1][1] ^ (*neighbors)[1][1][2];
+//    let face_dir = (*neighbors)[1][1][1] & (~(*neighbors)[1][1][2]);
+//
+//    let v_index = face_draw * ((local_face_count * 4u) + VOID_OFFSET);
+//    let i_index = face_draw * ((local_face_count * 6u) + VOID_OFFSET);
+//
+//    var vertices_ao = vao_z(neighbors)[face_dir];
+//
+//    quad_indices(face_dir * i_index, v_index);
+//    quad_indices_inversed((1u ^ face_dir) * i_index, v_index);
+//    quad_vertices_z(vertices_ao, v_index, uv ,x ,y, z);
+//    local_face_count += 1u * face_draw;
+//}
 
 fn mesh_chunk_position(x: u32, y: u32) {
     let x_f32 = f32(x);
     let y_f32 = f32(y);
     for (var z: u32 = 0u; z < CHUNK_DIM; z++) {
         var neighbors: array<array<array<u32, 3>, 3>, 3>;
-        let packed_z_index = z % 2;
 
         neighbors[0][0][0] = bit_at(safe_xyz(x - 1, y - 1, z - 1), 15);
         neighbors[0][0][1] = bit_at(safe_xyz(x - 1, y - 1, z), 15);
@@ -86,7 +94,7 @@ fn mesh_chunk_position(x: u32, y: u32) {
         neighbors[1][0][1] = bit_at(safe_xyz(x, y - 1, z), 15);
         neighbors[1][0][2] = bit_at(safe_xyz(x, y - 1, z + 1), 15);
         neighbors[1][1][0] = bit_at(safe_xyz(x, y, z - 1), 15);
-        neighbors[1][1][1] = bit_at(get_u16(workgroup_chunk_blocks[x][y][z / 2u], packed_z_index), 15);
+//        neighbors[1][1][1] = current_voxel;
         neighbors[1][1][2] = bit_at(safe_z(x, y, z + 1), 15);
         neighbors[1][2][0] = bit_at(safe_xyz(x, y + 1, z - 1), 15);
         neighbors[1][2][1] = bit_at(safe_y(x, y + 1, z), 15);
@@ -102,19 +110,18 @@ fn mesh_chunk_position(x: u32, y: u32) {
         neighbors[2][2][1] = bit_at(safe_xyz(x + 1, y + 1, z), 15);
         neighbors[2][2][2] = bit_at(safe_xyz(x + 1, y + 1, z + 1), 15);
 
+        let packed_z_index = z % 2;
+        let current_voxel = bit_at(get_u16(workgroup_chunk_blocks[x][y][z / 2u], packed_z_index), 15);
+
         let z_f32 = f32(z);
-        write_faces_x(&neighbors, x_f32, y_f32, z_f32);
-        write_faces_y(&neighbors, x_f32, y_f32, z_f32);
-        write_faces_z(&neighbors, x_f32, y_f32, z_f32);
+        write_faces_x(current_voxel, &neighbors, x_f32, y_f32, z_f32);
+//        write_faces_y(&neighbors, x_f32, y_f32, z_f32);
+//        write_faces_z(&neighbors, x_f32, y_f32, z_f32);
     }
 
-    let offset: u32 = atomicAdd(&workgroup_write_offset, local_face_count);
-    for (var i = 0u; i < (local_face_count * 4u); i++) {
-        vertex_buffer[(offset * 4u) + i] = local_vertex_array[VOID_OFFSET + i];
-    }
-
-    for (var i = 0u; i < (local_face_count * 6u); i++) {
-        index_buffer[(offset * 6u) + i] = (local_index_array[VOID_OFFSET + i] + (offset * 4u)) - VOID_OFFSET;
+    let offset: u32 = atomicAdd(&workgroup_buffer_write_offset, private_face_count);
+    for (var i = 0u; i < private_face_count; i++) {
+        face_data_buffer[offset + i] = private_face_data[VOID_OFFSET + i];
     }
 }
 
