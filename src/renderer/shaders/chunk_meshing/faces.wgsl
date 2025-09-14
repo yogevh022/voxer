@@ -1,82 +1,78 @@
-const FACE_ID_BASE_X: u32 = 1u;
+const FACE_ID_BASE_X: u32 = 0u;
 const FACE_ID_BASE_Y: u32 = 3u;
 const FACE_ID_BASE_Z: u32 = 5u;
+
+fn pack_face_data(current_voxel: u32, packed_position: u32, fid: u32, illum: u32, ao: u32) -> FaceData {
+    let packed_face_data = (packed_position & 0xFFF)
+            | (fid << 12)
+            | (illum << 15)
+            | (ao << 20);
+    return FaceData(packed_face_data, current_voxel);
+}
 
 fn write_faces_x(
     current_voxel: u32,
     neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-    x: u32,
-    y: u32,
-    z: u32,
+    packed_position: u32,
 ) {
     let face_draw = current_voxel ^ (*neighbors)[2][1][1];
     let face_dir = current_voxel & (~(*neighbors)[2][1][1]);
 
-    let packed_position = (x * CHUNK_DIM * CHUNK_DIM) + (y * CHUNK_DIM) + z;
-    let fid = FACE_ID_BASE_X - face_dir;
+    // fixme these are low values so unmasked, if for some reason they will exceed exectation this could cause wierdness
+    let fid = FACE_ID_BASE_X + face_dir; // + instead of - because x is inversed
     let illum = 0u;
     let ao = vao_x(neighbors)[face_dir];
 
-    // fixme these are low values so unmasked, if for some reason they will exceed exectation this could cause wierdness
-    let packed_face_data = (packed_position & 0xFFF)
-        | (fid << 12)
-        | (illum << 15)
-        | (ao << 20);
-
-    let face_data = FaceData(packed_face_data, current_voxel);
+    let face_data = pack_face_data(current_voxel, packed_position, fid, illum, ao);
 
     let private_face_index = face_draw * (private_face_count + VOID_OFFSET);
     private_face_data[private_face_index] = face_data;
     private_face_count += 1u * face_draw;
 }
-//
-//fn write_faces_y(
-//    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-//    x: f32,
-//    y: f32,
-//    z: f32,
-//) {
-//    let uv: vec2<f32> = vec2<f32>(0.5, 0.0);
-//
-//    let face_draw = (*neighbors)[1][1][1] ^ (*neighbors)[1][2][1];
-//    let face_dir = (*neighbors)[1][1][1] & (~(*neighbors)[1][2][1]);
-//
-//    let v_index = face_draw * ((local_face_count * 4u) + VOID_OFFSET);
-//    let i_index = face_draw * ((local_face_count * 6u) + VOID_OFFSET);
-//
-//    let vertices_ao = vao_y(neighbors)[face_dir];
-//
-//    quad_indices(face_dir * i_index, v_index);
-//    quad_indices_inversed((1u ^ face_dir) * i_index, v_index);
-//    quad_vertices_y(vertices_ao, v_index, uv ,x ,y, z);
-//    local_face_count += 1u * face_draw;
-//}
-//
-//fn write_faces_z(
-//    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-//    x: f32,
-//    y: f32,
-//    z: f32,
-//) {
-//    let uv: vec2<f32> = vec2<f32>(0.5, 0.0);
-//
-//    let face_draw = (*neighbors)[1][1][1] ^ (*neighbors)[1][1][2];
-//    let face_dir = (*neighbors)[1][1][1] & (~(*neighbors)[1][1][2]);
-//
-//    let v_index = face_draw * ((local_face_count * 4u) + VOID_OFFSET);
-//    let i_index = face_draw * ((local_face_count * 6u) + VOID_OFFSET);
-//
-//    var vertices_ao = vao_z(neighbors)[face_dir];
-//
-//    quad_indices(face_dir * i_index, v_index);
-//    quad_indices_inversed((1u ^ face_dir) * i_index, v_index);
-//    quad_vertices_z(vertices_ao, v_index, uv ,x ,y, z);
-//    local_face_count += 1u * face_draw;
-//}
+
+fn write_faces_y(
+    current_voxel: u32,
+    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
+    packed_position: u32,
+) {
+    let face_draw = current_voxel ^ (*neighbors)[1][2][1];
+    let face_dir = current_voxel & (~(*neighbors)[1][2][1]);
+
+    // fixme these are low values so unmasked, if for some reason they will exceed exectation this could cause wierdness
+    let fid = FACE_ID_BASE_Y - face_dir;
+    let illum = 0u;
+    let ao = vao_y(neighbors)[face_dir];
+
+    let face_data = pack_face_data(current_voxel, packed_position, fid, illum, ao);
+
+    let private_face_index = face_draw * (private_face_count + VOID_OFFSET);
+    private_face_data[private_face_index] = face_data;
+    private_face_count += 1u * face_draw;
+}
+
+fn write_faces_z(
+    current_voxel: u32,
+    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
+    packed_position: u32,
+) {
+    let uv: vec2<f32> = vec2<f32>(0.5, 0.0);
+
+    let face_draw = current_voxel ^ (*neighbors)[1][1][2];
+    let face_dir = current_voxel & (~(*neighbors)[1][1][2]);
+
+    // fixme these are low values so unmasked, if for some reason they will exceed exectation this could cause wierdness
+    let fid = FACE_ID_BASE_Z - face_dir;
+    let illum = 0u;
+    let ao = vao_z(neighbors)[face_dir];
+
+    let face_data = pack_face_data(current_voxel, packed_position, fid, illum, ao);
+
+    let private_face_index = face_draw * (private_face_count + VOID_OFFSET);
+    private_face_data[private_face_index] = face_data;
+    private_face_count += 1u * face_draw;
+}
 
 fn mesh_chunk_position(x: u32, y: u32) {
-    let x_f32 = f32(x);
-    let y_f32 = f32(y);
     for (var z: u32 = 0u; z < CHUNK_DIM; z++) {
         var neighbors: array<array<array<u32, 3>, 3>, 3>;
 
@@ -113,10 +109,10 @@ fn mesh_chunk_position(x: u32, y: u32) {
         let packed_z_index = z % 2;
         let current_voxel = bit_at(get_u16(workgroup_chunk_blocks[x][y][z / 2u], packed_z_index), 15);
 
-        let z_f32 = f32(z);
-        write_faces_x(current_voxel, &neighbors, x_f32, y_f32, z_f32);
-//        write_faces_y(&neighbors, x_f32, y_f32, z_f32);
-//        write_faces_z(&neighbors, x_f32, y_f32, z_f32);
+        let packed_position = (x << 8) | (y << 4) | z;
+        write_faces_x(current_voxel, &neighbors, packed_position);
+        write_faces_y(current_voxel, &neighbors, packed_position);
+        write_faces_z(current_voxel, &neighbors, packed_position);
     }
 
     let offset: u32 = atomicAdd(&workgroup_buffer_write_offset, private_face_count);

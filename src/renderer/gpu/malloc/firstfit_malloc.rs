@@ -5,7 +5,7 @@ use crate::renderer::gpu::malloc::virtual_malloc::{
     MallocError, SimpleAllocation, SimpleAllocationRequest,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VMallocFirstFit {
     pub arena_size: usize,
     pub arena_offset: usize,

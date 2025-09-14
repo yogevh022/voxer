@@ -2,8 +2,6 @@ const CHUNK_DIM: u32 = 16u;
 const CHUNK_DIM_HALF: u32 = 8u;
 const TILE_DIM: f32 = 0.5;
 
-const VAO_FACTOR: f32 = 0.35;
-
 const VOID_OFFSET: u32 = 1u;
 const MAX_FACES_PER_THREAD: u32 = (3u * CHUNK_DIM) + VOID_OFFSET;
 

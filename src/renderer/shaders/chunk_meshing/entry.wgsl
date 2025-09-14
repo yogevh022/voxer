@@ -4,7 +4,7 @@ var<storage, read> chunk_entries_buffer: ChunkEntryBuffer;
 @group(0) @binding(1)
 var<storage, read_write> face_data_buffer: array<FaceData>;
 @group(0) @binding(2)
-var<storage, read_write> mmat_buffer: array<vec3<f32>>;
+var<storage, read_write> chunk_translations_buffer: array<vec3<f32>>;
 
 var<workgroup> workgroup_buffer_write_offset: atomic<u32>;
 var<workgroup> workgroup_chunk_blocks: ChunkBlocks;
@@ -32,5 +32,5 @@ fn mesh_chunks_entry(
     mesh_chunk_position(lid.x, lid.y);
 
     let chunk_world_position = chunk_to_world_position(chunk_header.position);
-    mmat_buffer[chunk_header.slab_index] = chunk_world_position;
+    chunk_translations_buffer[chunk_header.slab_index] = chunk_world_position;
 }

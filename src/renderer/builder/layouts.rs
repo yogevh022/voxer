@@ -53,3 +53,19 @@ pub fn create_texture_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         ],
     })
 }
+
+pub fn create_face_data_layout(device: &wgpu::Device, min_binding_size: wgpu::BufferSize) -> wgpu::BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("face_data_bind_group_layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: Some(min_binding_size),
+            },
+            count: None,
+        }],
+    })
+}

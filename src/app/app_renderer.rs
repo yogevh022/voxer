@@ -1,23 +1,23 @@
+use crate::compute;
+use crate::renderer::builder::create_face_data_layout;
 use crate::renderer::gpu::GPUChunkEntry;
 use crate::renderer::gpu::chunk_manager::ChunkManager;
 use crate::renderer::resources;
 use crate::renderer::{Renderer, RendererBuilder};
+use crate::vtypes::Camera;
 use crate::world::types::Chunk;
-use crate::compute;
-use glam::{IVec3, Mat4};
+use glam::{IVec3, Mat4, Vec4};
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use winit::window::Window;
-use crate::vtypes::Camera;
 
-pub struct AppRenderer<'window, const CHUNK_N_BUFF: usize> {
+pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
-    chunk_manager: ChunkManager<CHUNK_N_BUFF>,
+    chunk_manager: ChunkManager,
     pub render_pipeline: wgpu::RenderPipeline,
 }
 
-impl<const CHUNK_N_BUFF: usize>
-    AppRenderer<'_, CHUNK_N_BUFF>
-{
+impl AppRenderer<'_> {
     pub fn load_chunks<'a>(&mut self, chunks: &mut impl Iterator<Item = &'a Chunk>) {
         self.chunk_manager.write_new(&self.renderer, chunks);
         // self.chunk_manager.malloc_debug();
@@ -40,11 +40,7 @@ impl<const CHUNK_N_BUFF: usize>
         self.chunk_manager.map_rendered_chunk_positions(func)
     }
 
-    fn render_chunks(
-        &mut self,
-        render_pass: &mut wgpu::RenderPass,
-        camera: &Camera,
-    ) {
+    fn render_chunks(&mut self, render_pass: &mut wgpu::RenderPass, camera: &Camera) {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.renderer.bind_groups.texture_atlas, &[]);
         render_pass.set_bind_group(1, &self.renderer.bind_groups.view_projection, &[]);
@@ -62,7 +58,8 @@ impl<const CHUNK_N_BUFF: usize>
             .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self.renderer.create_encoder("render_encoder");
         {
-            let mut render_pass = begin_render_pass(&mut encoder, &view, &self.renderer.depth_texture_view);
+            let mut render_pass =
+                begin_render_pass(&mut encoder, &view, &self.renderer.depth_texture_view);
             self.render_chunks(&mut render_pass, camera);
         }
 
@@ -73,13 +70,26 @@ impl<const CHUNK_N_BUFF: usize>
     }
 }
 
-pub fn make_app_renderer<'a, const CHUNK_N_BUFF: usize>(
-    window: Arc<Window>,
-) -> AppRenderer<'a, CHUNK_N_BUFF> {
+pub fn make_app_renderer<'a>(window: Arc<Window>) -> AppRenderer<'a> {
     let renderer_builder = RendererBuilder::new(window);
 
     let surface_format = renderer_builder.surface_format.unwrap();
     let renderer = renderer_builder.build();
+
+
+    let face_data_buffer_size = compute::MIB * 128;
+    let face_data_bgl = create_face_data_layout(
+        &renderer.device,
+        NonZeroU64::new(face_data_buffer_size as u64).unwrap(),
+    );
+
+    let chunk_manager = ChunkManager::new(
+        &renderer,
+        face_data_buffer_size as wgpu::BufferAddress,
+        12_288 * size_of::<GPUChunkEntry>() as wgpu::BufferAddress, // fixme this is overkill
+        12_288 * size_of::<Vec4>() as wgpu::BufferAddress,
+        &face_data_bgl,
+    );
 
     let render_pipeline = RendererBuilder::make_render_pipeline(
         &renderer.device,
@@ -89,15 +99,8 @@ pub fn make_app_renderer<'a, const CHUNK_N_BUFF: usize>(
             &renderer.layouts.texture_atlas,   // 0
             &renderer.layouts.view_projection, // 1
             &renderer.layouts.mmat,            // 2
+            &face_data_bgl,                    // 3
         ],
-    );
-
-    let max_buffer_size = compute::MIB * 128;
-    let chunk_manager = ChunkManager::<CHUNK_N_BUFF>::new(
-        &renderer,
-        max_buffer_size,
-        12_288 * size_of::<GPUChunkEntry>(), // fixme this is overkill
-        12_288 * size_of::<Mat4>(),
     );
 
     AppRenderer {

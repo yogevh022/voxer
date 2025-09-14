@@ -11,6 +11,7 @@ use crate::compute;
 use crate::renderer::builder::layouts::{
     create_mmat_layout, create_texture_layout, create_view_projection_layout,
 };
+pub use layouts::create_face_data_layout;
 use crate::renderer::resources::texture::get_atlas_image;
 
 const DXC_DLL_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/renderer/resources/dxc/bin/x64/dxcompiler.dll");
@@ -90,7 +91,7 @@ impl<'window> RendererBuilder<'window> {
             &device,
             "indirect_buffer",
             256 * compute::KIB as u64,
-            wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
+            wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         );
 
         let uniform_buffer_size = device
