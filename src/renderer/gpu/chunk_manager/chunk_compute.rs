@@ -1,15 +1,14 @@
 use super::chunk_render::ChunkRender;
-use crate::const_labels;
 use crate::renderer::gpu::GPUChunkEntry;
 use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
-use crate::renderer::{DrawIndexedIndirectArgsA32, Renderer, RendererBuilder, resources};
-use std::array;
+use crate::renderer::{Renderer, resources};
 use std::num::NonZeroU64;
+use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
 
 pub struct ChunkCompute {
     pipeline: wgpu::ComputePipeline,
     bind_group: wgpu::BindGroup,
-    chunks_buffer: wgpu::Buffer,
+    chunks_buffer: VgBufferResource,
 }
 
 impl ChunkCompute {
@@ -20,14 +19,12 @@ impl ChunkCompute {
     ) -> Self {
         let min_chunk = NonZeroU64::new(chunks_buffer_size).unwrap();
         let min_face_data = NonZeroU64::new(chunk_render.face_data_buffer.size()).unwrap();
-        let min_chunk_translations =
-            NonZeroU64::new(chunk_render.chunk_translations_buffer.size()).unwrap();
 
         let layout =
-            chunk_bind_group_layout(device, min_chunk, min_face_data, min_chunk_translations);
+            chunk_bind_group_layout(device, min_chunk, min_face_data);
         let pipeline = create_chunk_compute_pipeline(device, &[&layout]);
 
-        let chunks_buffer = RendererBuilder::make_buffer(
+        let chunks_buffer = VgBufferResource::new(
             &device,
             "chunks_buffer",
             chunks_buffer_size,
@@ -36,10 +33,9 @@ impl ChunkCompute {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("chunk_compute_bind_group"),
             layout: &layout,
-            entries: &resources::utils::index_based_entries([
+            entries: &resources::utils::bind_entries([
                 chunks_buffer.as_entire_binding(),
                 chunk_render.face_data_buffer.as_entire_binding(),
-                chunk_render.chunk_translations_buffer.as_entire_binding(),
             ]),
         });
         Self {
@@ -94,7 +90,6 @@ pub fn chunk_bind_group_layout(
     device: &wgpu::Device,
     chunk_buffer_size: wgpu::BufferSize,
     face_data_buffer_size: wgpu::BufferSize,
-    chunk_translations_buffer_size: wgpu::BufferSize,
 ) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("chunk_compute_bind_group_layout"),
@@ -118,17 +113,7 @@ pub fn chunk_bind_group_layout(
                     min_binding_size: Some(face_data_buffer_size),
                 },
                 count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 2, // chunk translations buffer
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(chunk_translations_buffer_size),
-                },
-                count: None,
-            },
+            }
         ],
     })
 }

@@ -1,4 +1,4 @@
-pub fn index_based_entries<const N: usize>(
+pub fn bind_entries<const N: usize>(
     resources: [wgpu::BindingResource; N],
 ) -> [wgpu::BindGroupEntry; N] {
     // the index of the resource in the resources array is the index of the binding

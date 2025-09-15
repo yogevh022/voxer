@@ -1,7 +1,10 @@
+// occlusion_count_* returns occlusion count on axis A for <A, +A>
 
-// vao_* returns vao values on axis A for <A, +A>
+fn occlusion_count_to_ao(ocl_count: u32) -> f32 {
+    return 1.0 - (f32(ocl_count) * CFG_VAO_FACTOR);
+}
 
-fn vao_x(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u32, 2> {
+fn occlusion_count_x(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u32, 2> {
     var vao_front: u32;
     var vao_back: u32;
 
@@ -36,7 +39,7 @@ fn vao_x(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u
     return array<u32, 2>(vao_back, vao_front);
 }
 
-fn vao_y(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u32, 2> {
+fn occlusion_count_y(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u32, 2> {
     var vao_front: u32;
     var vao_back: u32;
 
@@ -71,7 +74,7 @@ fn vao_y(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u
     return array<u32, 2>(vao_back, vao_front);
 }
 
-fn vao_z(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u32, 2> {
+fn occlusion_count_z(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u32, 2> {
     var vao_front: u32;
     var vao_back: u32;
 

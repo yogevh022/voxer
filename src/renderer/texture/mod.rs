@@ -1,10 +1,12 @@
 mod atlas;
-mod uv;
-pub use atlas::TextureAtlas;
+
+
+const TEXTURE_DIM: u32 = 16;
+const TEXTURE_COUNT: usize = TextureKind::__Count as usize;
 
 #[repr(usize)]
 #[derive(Debug, Copy, Clone)]
-pub enum Texture {
+pub enum TextureKind {
     Yellow,
     Green,
     Idk,
@@ -12,29 +14,26 @@ pub enum Texture {
     __Count,
 }
 
-pub struct TextureData {
-    pub(crate) kind: Texture,
+struct TextureData {
+    pub(crate) kind: TextureKind,
     pub(crate) source: &'static str,
 }
 
-pub const TEXTURE_DIM: u32 = 16;
-pub const TEXTURE_COUNT: usize = Texture::__Count as usize;
-
-pub static TEXTURES: &[TextureData] = &[
+static TEXTURES: &[TextureData] = &[
     TextureData {
-        kind: Texture::Yellow,
+        kind: TextureKind::Yellow,
         source: "yellow.png",
     },
     TextureData {
-        kind: Texture::Green,
+        kind: TextureKind::Green,
         source: "green.png",
     },
     TextureData {
-        kind: Texture::Idk,
+        kind: TextureKind::Idk,
         source: "idk.png",
     },
     TextureData {
-        kind: Texture::Murica,
+        kind: TextureKind::Murica,
         source: "murica.png",
     },
 ];

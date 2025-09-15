@@ -33,35 +33,39 @@ include_shaders!(
 
 // functions
 include_shaders!(
-    F_TRANSFORM => "functions/transform.wgsl",
     F_WORLD => "functions/world.wgsl",
     F_BITWISE => "functions/bitwise.wgsl",
 );
 
-// meshing
+// voxel
 include_shaders!(
-    CHUNK_MESHING_ENTRY => "chunk_meshing/entry.wgsl",
-    CHUNK_MESHING_VAO => "chunk_meshing/vao.wgsl",
-    // CHUNK_MESHING_QUADS => "chunk_meshing/quads.wgsl",
-    CHUNK_MESHING_FACES => "chunk_meshing/faces.wgsl",
-    CHUNK_MESHING_TYPES => "chunk_meshing/types.wgsl",
+    VOXEL_TYPES => "voxel/types.wgsl",
+    VOXEL_CONST => "voxel/const.wgsl",
+    VOXEL_CHUNK_MESH_ENTRY => "voxel/chunk_mesh_entry.wgsl",
+    VOXEL_CHUNK_MESH_FACES => "voxel/chunk_mesh_faces.wgsl",
+    VOXEL_CHUNK_MESH_VAO => "voxel/chunk_mesh_vao.wgsl",
 );
 
 pub fn main_shader() -> String {
-    concat_shaders!(VERTEX_SHADER_ENTRY, FRAGMENT_SHADER_ENTRY)
+    concat_shaders!(
+        VOXEL_TYPES,
+        VOXEL_CONST,
+        VOXEL_CHUNK_MESH_VAO,
+        VERTEX_SHADER_ENTRY,
+        FRAGMENT_SHADER_ENTRY,
+        F_WORLD,
+    )
 }
 
 pub fn chunk_meshing() -> String {
     concat_shaders!(
         GLOBAL,
-        F_TRANSFORM,
+        VOXEL_TYPES,
+        VOXEL_CHUNK_MESH_ENTRY,
+        VOXEL_CHUNK_MESH_FACES,
+        VOXEL_CHUNK_MESH_VAO,
         F_WORLD,
         F_BITWISE,
-        CHUNK_MESHING_TYPES,
-        CHUNK_MESHING_VAO,
-        CHUNK_MESHING_ENTRY,
-        // CHUNK_MESHING_QUADS,
-        CHUNK_MESHING_FACES
     )
 }
 

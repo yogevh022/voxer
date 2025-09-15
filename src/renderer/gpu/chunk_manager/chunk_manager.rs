@@ -3,12 +3,12 @@ use super::chunk_render::ChunkRender;
 use crate::compute::ds::Slap;
 use crate::renderer::gpu::chunk_entry::GPUChunkEntryHeader;
 use crate::renderer::gpu::chunk_manager::{BufferDrawArgs, MeshAllocationRequest};
-use crate::renderer::gpu::{GPUChunkEntry, VMallocFirstFit, VMallocMultiBuffer, VirtualMalloc};
-use crate::renderer::{Index, Renderer, Vertex};
+use crate::renderer::gpu::{GPUChunkEntry, VMallocFirstFit, VirtualMalloc};
+use crate::renderer::Renderer;
 use crate::world::types::{CHUNK_DIM, Chunk, PACKED_CHUNK_DIM};
 use glam::IVec3;
-use std::array;
 use std::collections::HashMap;
+use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
 
 pub struct ChunkManager {
     mesh_allocator: VMallocFirstFit,
@@ -21,18 +21,20 @@ pub struct ChunkManager {
 impl ChunkManager {
     pub fn new(
         renderer: &Renderer<'_>,
+        view_projection_buffer: &VgBufferResource,
         face_data_buffer_size: wgpu::BufferAddress,
         chunks_buffer_size: wgpu::BufferAddress,
-        chunk_translations_buffer_size: wgpu::BufferAddress,
-        fd_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let render = ChunkRender::init(
-            renderer,
+            &renderer.device,
+            view_projection_buffer,
             face_data_buffer_size,
-            chunk_translations_buffer_size,
-            fd_layout
         );
-        let compute = ChunkCompute::init(&renderer.device, &render, chunks_buffer_size);
+        let compute = ChunkCompute::init(
+            &renderer.device,
+            &render,
+            chunks_buffer_size,
+        );
         Self {
             mesh_allocator: VMallocFirstFit::new(face_data_buffer_size as usize, 0),
             chunk_allocations: Slap::new(),
@@ -98,7 +100,8 @@ impl ChunkManager {
     pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut wgpu::RenderPass) {
         self.render
             .write_args_to_indirect_buffer(renderer, &self.active_draw);
-        self.render.draw(renderer, render_pass, self.active_draw.len() as u32);
+        self.render
+            .draw(renderer, render_pass, self.active_draw.len() as u32);
     }
 
     pub fn drop(&mut self, position: IVec3) {

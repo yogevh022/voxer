@@ -1,20 +1,24 @@
 use crate::compute;
-use crate::renderer::builder::create_face_data_layout;
+use crate::renderer::Renderer;
+use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
 use crate::renderer::gpu::GPUChunkEntry;
 use crate::renderer::gpu::chunk_manager::ChunkManager;
 use crate::renderer::resources;
-use crate::renderer::{Renderer, RendererBuilder};
+use crate::renderer::resources::texture::get_atlas_image;
 use crate::vtypes::Camera;
 use crate::world::types::Chunk;
-use glam::{IVec3, Mat4, Vec4};
-use std::num::NonZeroU64;
+use glam::{IVec3, Mat4};
+use std::borrow::Cow;
 use std::sync::Arc;
+use wgpu::BindGroup;
 use winit::window::Window;
 
 pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
     chunk_manager: ChunkManager,
-    pub render_pipeline: wgpu::RenderPipeline,
+    render_pipeline: wgpu::RenderPipeline,
+    atlas_bind_group: BindGroup,
+    view_projection_buffer: VgBufferResource,
 }
 
 impl AppRenderer<'_> {
@@ -42,24 +46,26 @@ impl AppRenderer<'_> {
 
     fn render_chunks(&mut self, render_pass: &mut wgpu::RenderPass, camera: &Camera) {
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &self.renderer.bind_groups.texture_atlas, &[]);
-        render_pass.set_bind_group(1, &self.renderer.bind_groups.view_projection, &[]);
+        render_pass.set_bind_group(0, &self.atlas_bind_group, &[]);
 
         let view_proj = camera.view_projection();
-        self.renderer.write_view_projection(view_proj);
+        self.renderer.write_buffer(
+            &self.view_projection_buffer,
+            0,
+            bytemuck::cast_slice(&view_proj.to_cols_array()),
+        );
 
         self.chunk_manager.draw(&self.renderer, render_pass);
     }
 
     pub fn render(&mut self, camera: &Camera) -> Result<(), wgpu::SurfaceError> {
         let frame = self.renderer.surface.get_current_texture()?;
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let view = frame.texture.create_view(&Default::default());
         let mut encoder = self.renderer.create_encoder("render_encoder");
         {
             let mut render_pass =
-                begin_render_pass(&mut encoder, &view, &self.renderer.depth_texture_view);
+                self.renderer
+                    .begin_render_pass(&mut encoder, "Main Render Pass", &view);
             self.render_chunks(&mut render_pass, camera);
         }
 
@@ -71,35 +77,32 @@ impl AppRenderer<'_> {
 }
 
 pub fn make_app_renderer<'a>(window: Arc<Window>) -> AppRenderer<'a> {
-    let renderer_builder = RendererBuilder::new(window);
+    let renderer = Renderer::new(window);
 
-    let surface_format = renderer_builder.surface_format.unwrap();
-    let renderer = renderer_builder.build();
-
+    let view_projection_buffer = VgBufferResource::new(
+        &renderer.device,
+        "View Projection Buffer",
+        size_of::<Mat4>(),
+        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    );
 
     let face_data_buffer_size = compute::MIB * 128;
-    let face_data_bgl = create_face_data_layout(
-        &renderer.device,
-        NonZeroU64::new(face_data_buffer_size as u64).unwrap(),
-    );
-
     let chunk_manager = ChunkManager::new(
         &renderer,
+        &view_projection_buffer,
         face_data_buffer_size as wgpu::BufferAddress,
         12_288 * size_of::<GPUChunkEntry>() as wgpu::BufferAddress, // fixme this is overkill
-        12_288 * size_of::<Vec4>() as wgpu::BufferAddress,
-        &face_data_bgl,
     );
 
-    let render_pipeline = RendererBuilder::make_render_pipeline(
-        &renderer.device,
-        surface_format,
+    let (atlas_layout, atlas_bind_group) =
+        renderer.texture_sampler("Texture Sampler Atlas", get_atlas_image());
+
+    let render_pipeline = make_render_pipeline(
+        &renderer,
         resources::shader::main_shader().into(),
         &[
-            &renderer.layouts.texture_atlas,   // 0
-            &renderer.layouts.view_projection, // 1
-            &renderer.layouts.mmat,            // 2
-            &face_data_bgl,                    // 3
+            &atlas_layout,                           // 0
+            &chunk_manager.render.bind_group_layout, // 1
         ],
     );
 
@@ -107,34 +110,62 @@ pub fn make_app_renderer<'a>(window: Arc<Window>) -> AppRenderer<'a> {
         renderer,
         chunk_manager,
         render_pipeline,
+        atlas_bind_group,
+        view_projection_buffer,
     }
 }
 
-fn begin_render_pass<'a>(
-    encoder: &'a mut wgpu::CommandEncoder,
-    frame_view: &wgpu::TextureView,
-    depth_view: &wgpu::TextureView,
-) -> wgpu::RenderPass<'a> {
-    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: Some("render_pass"),
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: frame_view,
-            depth_slice: None,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                store: wgpu::StoreOp::Store,
+pub fn make_render_pipeline(
+    renderer: &Renderer<'_>,
+    shader_source: Cow<str>,
+    bind_group_layouts: &[&wgpu::BindGroupLayout],
+) -> wgpu::RenderPipeline {
+    let shader = resources::shader::create(&renderer.device, shader_source);
+    let render_pipeline_layout =
+        &renderer
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("render_pipeline_layout"),
+                bind_group_layouts,
+                push_constant_ranges: &[],
+            });
+
+    renderer
+        .device
+        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("render_pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[],
             },
-        })],
-        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-            view: depth_view,
-            depth_ops: Some(wgpu::Operations {
-                load: wgpu::LoadOp::Clear(1.0),
-                store: wgpu::StoreOp::Store,
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: renderer.surface_format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
             }),
-            stencil_ops: None,
-        }),
-        timestamp_writes: None,
-        occlusion_query_set: None,
-    })
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        })
 }

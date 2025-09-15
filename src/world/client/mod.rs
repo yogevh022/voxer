@@ -131,13 +131,13 @@ impl<'window> ClientWorld<'window> {
                 return;
             }
             if !self.session.chunks.contains_key(&chunk_position) {
-                if !(chunk_position == IVec3::new(0, 0, 0)
-                    || chunk_position == IVec3::new(1, 0, 0)
-                    || chunk_position == IVec3::new(0, 0, 1)
-                    || chunk_position == IVec3::new(1, 0, 1))
-                {
-                    return;
-                }
+                // if !(chunk_position == IVec3::new(0, 0, 0)
+                //     || chunk_position == IVec3::new(1, 0, 0)
+                //     || chunk_position == IVec3::new(0, 0, 1)
+                //     || chunk_position == IVec3::new(1, 0, 1))
+                // {
+                //     return;
+                // }
                 missing_positions.push(chunk_position);
             } else if !self.renderer.is_chunk_rendered(chunk_position) {
                 new_render.push(chunk_position);

@@ -1,57 +1,34 @@
-use crate::renderer::gpu::chunk_manager::{BufferDrawArgs, MultiDrawInstruction};
-use crate::renderer::{DrawIndexedIndirectArgsA32, Renderer, RendererBuilder, resources};
+use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
+use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
+use crate::renderer::{Renderer, resources};
+use wgpu::{BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, Device, ShaderStages};
 
 pub struct ChunkRender {
-    pub face_data_buffer: wgpu::Buffer,
-    pub chunk_translations_buffer: wgpu::Buffer,
-    face_data_bind_group: wgpu::BindGroup,
-    chunk_translations_bind_group: wgpu::BindGroup,
+    pub face_data_buffer: VgBufferResource,
+    pub bind_group_layout: BindGroupLayout,
+    bind_group: BindGroup,
 }
 
 impl ChunkRender {
     pub fn init(
-        renderer: &Renderer<'_>,
+        device: &Device,
+        view_projection_buffer: &VgBufferResource,
         face_data_buffer_size: wgpu::BufferAddress,
-        chunk_translations_buffer_size: wgpu::BufferAddress,
-        fd_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let face_data_buffer = RendererBuilder::make_buffer(
-            &renderer.device,
-            "face_data_buffer",
+        let face_data_buffer = VgBufferResource::new(
+            &device,
+            "Chunk Face Data Buffer",
             face_data_buffer_size,
             wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
         );
-        let face_data_bind_group = renderer
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("face_data_bind_group"),
-                layout: fd_layout,
-                entries: &resources::utils::index_based_entries([
-                    face_data_buffer.as_entire_binding(), // 0
-                ]),
-            });
-        let chunk_translations_buffer = RendererBuilder::make_buffer(
-            &renderer.device,
-            "chunk_translations_buffer",
-            chunk_translations_buffer_size,
-            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
-        );
-        let chunk_translations_bind_group =
-            renderer
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("chunk_translations_bind_group"),
-                    layout: &renderer.layouts.mmat, // fixme rename, even move away from renderer
-                    entries: &resources::utils::index_based_entries([
-                        chunk_translations_buffer.as_entire_binding(), // 0
-                    ]),
-                });
+
+        let (layout, bind_group) =
+            chunk_render_bind_group(&device, view_projection_buffer, &face_data_buffer);
 
         Self {
             face_data_buffer,
-            chunk_translations_buffer,
-            face_data_bind_group,
-            chunk_translations_bind_group,
+            bind_group,
+            bind_group_layout: layout,
         }
     }
 
@@ -69,10 +46,33 @@ impl ChunkRender {
     }
 
     pub fn draw(&self, renderer: &Renderer<'_>, render_pass: &mut wgpu::RenderPass, count: u32) {
-        render_pass.set_bind_group(2, &self.chunk_translations_bind_group, &[]);
-        render_pass.set_bind_group(3, &self.face_data_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.bind_group, &[]);
         if count != 0 {
             render_pass.multi_draw_indirect(&renderer.indirect_buffer, 0, count);
         }
     }
+}
+
+fn chunk_render_bind_group(
+    device: &Device,
+    view_projection_buffer: &VgBufferResource,
+    face_data_buffer: &VgBufferResource,
+) -> (BindGroupLayout, BindGroup) {
+    let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        label: Some("Chunk Render Bind Group Layout"),
+        entries: &[
+            view_projection_buffer.bind_layout_entry(0, false, ShaderStages::VERTEX),
+            face_data_buffer.bind_layout_entry(1, true, ShaderStages::VERTEX),
+        ],
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Chunk Render Bind Group"),
+        layout: &layout,
+        entries: &resources::utils::bind_entries([
+            view_projection_buffer.as_entire_binding(),
+            face_data_buffer.as_entire_binding(),
+        ]),
+    });
+    (layout, bind_group)
 }

@@ -1,3 +1,33 @@
+use image::RgbaImage;
+use wgpu::{BindGroup, BindGroupLayout};
+use crate::renderer::{resources, Renderer};
+
+impl Renderer<'_> {
+    pub fn texture_sampler(
+        &self,
+        label: &str,
+        rgba_image: RgbaImage,
+    ) -> (BindGroupLayout, BindGroup) {
+        let texture = create_diffuse(&self.device, &self.queue, &rgba_image);
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = diffuse_sampler(&self.device);
+        let bind_group_entries = resources::utils::bind_entries([
+            wgpu::BindingResource::TextureView(&texture_view),
+            wgpu::BindingResource::Sampler(&sampler),
+        ]);
+
+        let texture_sampler_layout = texture_sampler_bind_layout(&self.device);
+
+        let texture_sampler_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(label),
+            layout: &texture_sampler_layout,
+            entries: &bind_group_entries,
+        });
+        (texture_sampler_layout, texture_sampler_bind_group)
+    }
+}
+
+
 pub fn create_diffuse(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -39,7 +69,7 @@ pub fn create_depth(
     surface_config: &wgpu::SurfaceConfiguration,
 ) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("depth_texture"),
+        label: Some("Depth Texture"),
         size: wgpu::Extent3d {
             width: surface_config.width,
             height: surface_config.height,
@@ -64,6 +94,30 @@ pub fn diffuse_sampler(device: &wgpu::Device) -> wgpu::Sampler {
         min_filter: wgpu::FilterMode::Nearest,
         mipmap_filter: wgpu::FilterMode::Nearest,
         ..Default::default()
+    })
+}
+
+fn texture_sampler_bind_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Texture Sampler Bind Group Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
     })
 }
 

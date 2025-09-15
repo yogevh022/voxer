@@ -1,9 +1,8 @@
 use bytemuck::{Pod, Zeroable};
 
-// DrawIndexedIndirectArgs, aligned to 32 bytes for cross-backend compatibility
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
-pub struct DrawIndexedIndirectArgsA32 {
+pub struct DrawIndexedIndirectArgsDX12 {
     /// The number of indices to draw.
     pub index_count: u32,
     /// The number of instances to draw.
@@ -17,7 +16,7 @@ pub struct DrawIndexedIndirectArgsA32 {
     _padding: [u32; 3],
 }
 
-impl DrawIndexedIndirectArgsA32 {
+impl DrawIndexedIndirectArgsDX12 {
     pub fn new(
         index_count: u32,
         instance_count: u32,
@@ -38,7 +37,7 @@ impl DrawIndexedIndirectArgsA32 {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
-pub struct DrawIndirectArgsA32 { // fixme
+pub struct DrawIndirectArgsDX12 {
     /// The number of vertices to draw.
     pub vertex_count: u32,
     /// The number of instances to draw.
@@ -50,7 +49,7 @@ pub struct DrawIndirectArgsA32 { // fixme
     _padding: [u32; 3],
 }
 
-impl DrawIndirectArgsA32 {
+impl DrawIndirectArgsDX12 {
     pub fn new(
         vertex_count: u32,
         instance_count: u32,
