@@ -94,7 +94,7 @@ impl ChunkManager {
         }
         self.compute.write_chunks(renderer, &buffer_writes);
         self.compute
-            .dispatch_staging_workgroups(renderer, &mut self.active_draw, buffer_writes);
+            .dispatch_meshing_workgroups(renderer, &mut self.active_draw, buffer_writes);
     }
 
     pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut wgpu::RenderPass) {

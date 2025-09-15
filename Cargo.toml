@@ -29,4 +29,4 @@ debug = true
 strip = false
 debug = true
 lto = "fat"
-opt-level = 1 # change to 3 when building for real
+opt-level = 3 # change to 3 when building for real

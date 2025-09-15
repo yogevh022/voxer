@@ -15,6 +15,7 @@ use crate::world::types::{CHUNK_DIM, Chunk};
 use glam::{IVec3, Vec3};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 use voxer_network::NetworkDeserializable;
 use winit::window::Window;
 
@@ -112,13 +113,15 @@ impl<'window> ClientWorld<'window> {
         }
     }
 
-    fn nearby_chunks_pass(&self) -> (Vec<IVec3>, Vec<IVec3>) {
-        let mut missing_positions = Vec::new();
+    fn nearby_chunks_pass(&mut self) -> (Vec<IVec3>, Vec<IVec3>) {
+        let mut missing_positions = Vec::with_capacity(MAX_CHUNKS_PER_BATCH);
         let mut new_render = Vec::new();
 
         let mut frustum_aabb = Frustum::aabb(&self.session.view_frustum);
         frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
         frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
+
+        let now = Instant::now();
 
         frustum_aabb.discrete_points(|chunk_position| {
             const CHUNK_DIM_F: f32 = CHUNK_DIM as f32;
@@ -131,14 +134,11 @@ impl<'window> ClientWorld<'window> {
                 return;
             }
             if !self.session.chunks.contains_key(&chunk_position) {
-                // if !(chunk_position == IVec3::new(0, 0, 0)
-                //     || chunk_position == IVec3::new(1, 0, 0)
-                //     || chunk_position == IVec3::new(0, 0, 1)
-                //     || chunk_position == IVec3::new(1, 0, 1))
-                // {
-                //     return;
-                // }
-                missing_positions.push(chunk_position);
+                if missing_positions.len() < MAX_CHUNKS_PER_BATCH
+                    && self.session.try_request_permission(now, chunk_position)
+                {
+                    missing_positions.push(chunk_position);
+                }
             } else if !self.renderer.is_chunk_rendered(chunk_position) {
                 new_render.push(chunk_position);
             }
@@ -148,15 +148,7 @@ impl<'window> ClientWorld<'window> {
     }
 
     pub fn request_missing_chunks(&mut self) {
-        let can_request = self
-            .session
-            .missing_chunks
-            .take()
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|&chunk_position| self.session.try_request_permission(chunk_position))
-            .take(MAX_CHUNKS_PER_BATCH)
-            .collect::<Vec<_>>();
+        let can_request = self.session.missing_chunks.take().unwrap_or_default();
         if can_request.is_empty() {
             return;
         }

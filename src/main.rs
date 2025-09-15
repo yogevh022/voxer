@@ -14,7 +14,7 @@ use winit::event_loop::ControlFlow;
 use voxer_network;
 use crate::world::generation::generate_chunk;
 
-const SIMULATION_AND_RENDER_DISTANCE: usize = 4; // fixme temp location
+const SIMULATION_AND_RENDER_DISTANCE: usize = 16; // fixme temp location
 
 fn run_app() {
     let mut server = ServerWorld::new(ServerWorldConfig {
@@ -82,48 +82,35 @@ fn debug() {
 
     let mut hmap: FxHashMap<IVec3, usize> = FxHashMap::default();
 
+    let mut pos_count = 0;
+
     let rend = 64;
-    let count = 1000;
+    let count = 10000;
     let cam = Camera::default();
     let cvp = cam.chunk_view_projection(rend as f32);
     let vf = Frustum::planes(cvp);
 
     let new_start = Instant::now();
-
     for i in 0..count {
         let mut frustum_aabb = Frustum::aabb(&vf);
         frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
         frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
+        hmap.clear();
+
         frustum_aabb.discrete_points(|chunk_position| {
-            const CHUNK_RADIUS_APPROX: f32 = 0.5 * 1.7320508f32 * CHUNK_DIM as f32; // sqrt(3) const
-            let chunk_world_position = geo::chunk_to_world_pos(chunk_position);
-            if !Frustum::sphere_within_frustum(chunk_world_position, CHUNK_RADIUS_APPROX, &vf) {
-                hmap.insert(chunk_position, i);
+            pos_count += 1;
+            if !hmap.contains_key(&chunk_position) {
+                // hmap.insert(chunk_position, i);
+                // missing_positions.push(chunk_position);
+            } else if !hmap.contains_key(&chunk_position) {
+                // new_render.push(chunk_position);
             }
         });
     }
     let new_end = new_start.elapsed();
+    let new_pos = pos_count;
+    hmap.clear();
 
 
-    let old_start = Instant::now();
-    for i in 0..count {
-        let mut frustum_aabb = Frustum::aabb(&vf);
-        frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
-        frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
-        frustum_aabb.discrete_points(|chunk_position| {
-            const CHUNK_RADIUS_APPROX: f32 = 0.5 * 1.7320508f32 * CHUNK_DIM as f32; // sqrt(3) const
-            let chunk_world_position = geo::chunk_to_world_pos(chunk_position);
-            if !Frustum::aabb_within_frustum(
-                chunk_world_position,
-                chunk_world_position + CHUNK_DIM as f32,
-                &vf,
-            ) {
-                hmap.insert(chunk_position, i);
-            }
-        });
-    }
-    let old_end = old_start.elapsed();
-
-    println!("old {:?}", old_end);
-    println!("new {:?}", new_end);
+    println!("new {:?} {}", new_end, new_pos);
 }

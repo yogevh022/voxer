@@ -8,6 +8,16 @@ struct Vertex {
     ao: f32,
 }
 
+struct Plane {
+    normal: vec3<f32>,
+    distance: f32,
+}
+
+struct UniformCameraView {
+    view_projection: mat4x4<f32>,
+    frustum_planes: array<Plane, 6>,
+}
+
 alias Index = u32;
 alias IndexBuffer = array<Index>;
 alias VertexBuffer = array<Vertex>;

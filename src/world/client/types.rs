@@ -5,7 +5,7 @@ use crate::world::session::PlayerSession;
 use crate::world::types::Chunk;
 use glam::IVec3;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub struct ClientWorldSession {
     pub(crate) player: PlayerSession,
@@ -33,18 +33,22 @@ impl ClientWorldSession {
         self.chunks.insert(chunk.position, chunk);
     }
 
-    pub fn try_request_permission(&mut self, position: IVec3) -> bool {
-        if self
-            .last_request_chunk_positions
-            .get(&position)
-            .map(|instant| instant.elapsed().as_millis() > 200)
-            .unwrap_or(true)
-        {
-            self.last_request_chunk_positions
-                .insert(position, Instant::now());
-            return true;
+    pub fn try_request_permission(&mut self, now: Instant, position: IVec3) -> bool {
+        const REQUEST_THROTTLE: Duration = Duration::from_millis(200);
+        match self.last_request_chunk_positions.entry(position) {
+            std::collections::hash_map::Entry::Occupied(mut e) => {
+                if now.duration_since(*e.get()) > REQUEST_THROTTLE {
+                    e.insert(now);
+                    true
+                } else {
+                    false
+                }
+            },
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(now);
+                true
+            }
         }
-        false
     }
 
     pub fn tick(&mut self) {

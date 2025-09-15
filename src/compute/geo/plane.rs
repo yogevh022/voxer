@@ -1,6 +1,8 @@
+use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 
-#[derive(Default, Debug, Clone, Copy)]
+#[repr(C, align(16))]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Plane {
     pub normal: Vec3,
     pub distance: f32,

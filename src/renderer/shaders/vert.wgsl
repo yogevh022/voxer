@@ -1,6 +1,6 @@
 
 @group(1) @binding(0)
-var<uniform> view_projection: mat4x4<f32>;
+var<uniform> camera_view: UniformCameraView;
 @group(1) @binding(1)
 var<storage, read> face_data_buffer: array<VoxelFaceData>;
 
@@ -42,7 +42,7 @@ fn vs_main(
     let vertex_position = voxel_position + quad[vertex_index];
     let chunk_translation = chunk_to_world_position(face_data.chunk_translation);
 
-    out.position = view_projection * vec4<f32>(chunk_translation + vertex_position, 1.0);
+    out.position = camera_view.view_projection * vec4<f32>(chunk_translation + vertex_position, 1.0);
     out.tex_coords = TEX_COORDS[vertex_index];
     out.ao = occlusion_count_to_ao(ao[vertex_index]);
 

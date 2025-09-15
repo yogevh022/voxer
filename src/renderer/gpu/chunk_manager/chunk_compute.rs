@@ -26,7 +26,7 @@ impl ChunkCompute {
 
         let chunks_buffer = VgBufferResource::new(
             &device,
-            "chunks_buffer",
+            "Chunks Buffer",
             chunks_buffer_size,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         );
@@ -60,16 +60,16 @@ impl ChunkCompute {
         );
     }
 
-    pub fn dispatch_staging_workgroups(
+    pub fn dispatch_meshing_workgroups(
         &mut self,
         renderer: &Renderer<'_>,
         active_draw: &mut BufferDrawArgs,
         buffer_writes: Vec<GPUChunkEntry>,
     ) {
-        let mut encoder = renderer.create_encoder("chunk_mesh_compute_encoder");
+        let mut encoder = renderer.create_encoder("Chunk Meshing Compute Encoder");
         {
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("chunk_meshing_compute_pass"),
+                label: Some("Chunk Meshing Compute Pass"),
                 timestamp_writes: None,
             });
             compute_pass.set_pipeline(&self.pipeline);
@@ -92,7 +92,7 @@ pub fn chunk_bind_group_layout(
     face_data_buffer_size: wgpu::BufferSize,
 ) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("chunk_compute_bind_group_layout"),
+        label: Some("Chunk Compute Bind Group Layout"),
         entries: &[
             wgpu::BindGroupLayoutEntry {
                 binding: 0, // chunk entry data

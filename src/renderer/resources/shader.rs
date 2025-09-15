@@ -48,6 +48,7 @@ include_shaders!(
 
 pub fn main_shader() -> String {
     concat_shaders!(
+        GLOBAL,
         VOXEL_TYPES,
         VOXEL_CONST,
         VOXEL_CHUNK_MESH_VAO,

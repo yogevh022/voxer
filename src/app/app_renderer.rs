@@ -1,17 +1,26 @@
 use crate::compute;
+use crate::compute::geo::{Frustum, Plane};
 use crate::renderer::Renderer;
-use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
 use crate::renderer::gpu::GPUChunkEntry;
 use crate::renderer::gpu::chunk_manager::ChunkManager;
 use crate::renderer::resources;
 use crate::renderer::resources::texture::get_atlas_image;
+use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
 use crate::vtypes::Camera;
 use crate::world::types::Chunk;
-use glam::{IVec3, Mat4};
+use bytemuck::{Pod, Zeroable};
+use glam::IVec3;
 use std::borrow::Cow;
 use std::sync::Arc;
 use wgpu::BindGroup;
 use winit::window::Window;
+
+#[repr(C, align(16))]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+struct UniformCameraView {
+    view_proj: [f32; 16],
+    frustum_planes: [Plane; 6],
+}
 
 pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
@@ -48,13 +57,6 @@ impl AppRenderer<'_> {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.atlas_bind_group, &[]);
 
-        let view_proj = camera.view_projection();
-        self.renderer.write_buffer(
-            &self.view_projection_buffer,
-            0,
-            bytemuck::cast_slice(&view_proj.to_cols_array()),
-        );
-
         self.chunk_manager.draw(&self.renderer, render_pass);
     }
 
@@ -62,6 +64,19 @@ impl AppRenderer<'_> {
         let frame = self.renderer.surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
         let mut encoder = self.renderer.create_encoder("render_encoder");
+
+        let vp = camera.view_projection();
+        let cam_view = UniformCameraView {
+            view_proj: vp.to_cols_array(),
+            frustum_planes: Frustum::planes(vp),
+        };
+
+        self.renderer.write_buffer(
+            &self.view_projection_buffer,
+            0,
+            bytemuck::bytes_of(&cam_view),
+        );
+
         {
             let mut render_pass =
                 self.renderer
@@ -82,7 +97,7 @@ pub fn make_app_renderer<'a>(window: Arc<Window>) -> AppRenderer<'a> {
     let view_projection_buffer = VgBufferResource::new(
         &renderer.device,
         "View Projection Buffer",
-        size_of::<Mat4>(),
+        size_of::<UniformCameraView>(),
         wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
     );
 

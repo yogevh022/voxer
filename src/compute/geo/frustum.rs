@@ -85,37 +85,4 @@ impl Frustum {
         }
         true
     }
-
-    // pub fn frustum_corners_world(vp: Mat4) -> [Vec3; 4] {
-    //     let inv_vp = vp.inverse();
-    //     let ndc = [
-    //         Vec4::new(-1.0,  1.0, 0.0, 1.0), // near tl
-    //         Vec4::new( 1.0, -1.0, 0.0, 1.0), // near br
-    //         Vec4::new(-1.0,  1.0, 1.0, 1.0), // far tl
-    //         Vec4::new( 1.0, -1.0, 1.0, 1.0), // far br
-    //     ];
-    //
-    //     let mut corners = [Vec3::ZERO; 4];
-    //     for (i, &c) in ndc.iter().enumerate() {
-    //         let world = inv_vp * c;
-    //         corners[i] = world.xyz() / world.w;
-    //     }
-    //     corners
-    // }
-
-    // pub fn map_points_to_depth<F>(depth: usize, vp: Mat4)
-    // {
-    //     let mut points = Vec::new(); // todo preallocate with capacity
-    //     let world_corners = Frustum::frustum_corners_world(vp);
-    //     for z in 0..=depth {
-    //         let depth_lerp = z as f32 / depth as f32;
-    //         let corners = [
-    //             world_corners[0].lerp(world_corners[2], depth_lerp), // tl
-    //             world_corners[1].lerp(world_corners[3], depth_lerp), // br
-    //         ];
-    //         Rect::map_points_within_rect(corners[0], corners[1], |point| {
-    //             points.push(point.extend(z as i32));
-    //         });
-    //     }
-    // }
 }
