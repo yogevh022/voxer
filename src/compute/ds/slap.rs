@@ -2,6 +2,7 @@ use slab::Slab;
 use rustc_hash::FxHashMap;
 use std::hash::Hash;
 
+#[derive(Debug)]
 pub struct Slap<K, V>
 where
     K: Hash + Eq,
@@ -47,6 +48,14 @@ where
     
     pub fn contains(&self, key: &K) -> bool {
         self.map.contains_key(key)
+    }
+
+    pub fn slab(&self) -> &Slab<V> {
+        &self.slab
+    }
+
+    pub fn hmap(&self) -> &FxHashMap<K, usize> {
+        &self.map
     }
 
     pub fn iget(&self, key: usize) -> Option<&V> {
