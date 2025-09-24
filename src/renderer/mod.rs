@@ -92,7 +92,6 @@ impl<'window> Renderer<'window> {
         let instance = Renderer::instance(Backends::DX12);
         let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = Renderer::high_perf_adapter(&instance, &surface);
-
         let (device, queue) = Renderer::request_device(
             &adapter,
             Features::VERTEX_WRITABLE_STORAGE
@@ -138,6 +137,11 @@ impl<'window> Renderer<'window> {
     pub fn create_encoder(&self, label: &str) -> wgpu::CommandEncoder {
         self.device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
+    }
+
+    #[inline]
+    pub fn adapter_info(&self) -> wgpu::AdapterInfo {
+        self.adapter.get_info()
     }
 
     pub fn begin_render_pass<'e>(

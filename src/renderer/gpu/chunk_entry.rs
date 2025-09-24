@@ -1,7 +1,7 @@
-use crate::renderer::DrawIndirectArgsDX12;
 use crate::world::types::{CHUNK_DIM, ChunkBlocks, PACKED_CHUNK_DIM};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
+use wgpu::wgt::DrawIndirectArgs;
 
 type GPUPackedBlockPair = u32;
 type GPUChunkBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM];
@@ -34,13 +34,13 @@ impl GPUChunkEntryHeader {
         }
     }
 
-    pub fn draw_indirect_args(&self) -> DrawIndirectArgsDX12 {
-        DrawIndirectArgsDX12::new(
-            self.buffer_data.face_count * 6,
-            1,
-            self.buffer_data.offset * 6,
-            self.slab_index,
-        )
+    pub fn draw_indirect_args(&self) -> DrawIndirectArgs {
+        DrawIndirectArgs {
+            vertex_count: self.buffer_data.face_count * 6,
+            instance_count: 1,
+            first_vertex: self.buffer_data.offset * 6,
+            first_instance: self.slab_index,
+        }
     }
 }
 

@@ -95,7 +95,7 @@ impl ChunkManager {
     pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut wgpu::RenderPass) {
         self.mem_debug_throttled();
         self.render
-            .write_args_to_indirect_buffer(renderer, &self.active_draw);
+            .write_indirect_draw_args(renderer, &self.active_draw);
         self.render
             .draw(renderer, render_pass, self.active_draw.len() as u32);
     }

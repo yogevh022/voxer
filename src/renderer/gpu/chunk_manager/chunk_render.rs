@@ -1,6 +1,6 @@
 use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
 use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
-use crate::renderer::{Renderer, resources};
+use crate::renderer::{Renderer, resources, VxDrawIndirectBatch};
 use wgpu::{BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, Device, ShaderStages};
 
 pub struct ChunkRender {
@@ -32,16 +32,17 @@ impl ChunkRender {
         }
     }
 
-    pub fn write_args_to_indirect_buffer(
+    pub fn write_indirect_draw_args(
         &self,
         renderer: &Renderer<'_>,
         buffer_draw_args: &BufferDrawArgs,
     ) {
-        let flat_draw_args = buffer_draw_args.values().cloned().collect::<Vec<_>>();
+        // todo encode batch on first iter?
+        let draw_indirect_batch = VxDrawIndirectBatch::from_iter(buffer_draw_args.values());
         renderer.write_buffer(
             &renderer.indirect_buffer,
             0,
-            bytemuck::cast_slice(&flat_draw_args),
+            bytemuck::cast_slice(&draw_indirect_batch.encode(renderer.adapter_info().backend)),
         );
     }
 
