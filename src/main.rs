@@ -12,8 +12,6 @@ use crate::world::{ServerWorld, ServerWorldConfig};
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 use voxer_network;
-use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkBufferData, GPUVoxelChunkHeader};
-use crate::renderer::resources::shader::{test2, ShaderType};
 use crate::world::generation::generate_chunk;
 
 const SIMULATION_AND_RENDER_DISTANCE: usize = 8; // fixme temp location
@@ -37,14 +35,15 @@ fn run_app() {
 }
 
 fn main() {
-    // run_app();
-    debug3();
+    run_app();
+
+    // debug3();
     // debug();
     // debug2();
 }
 
 fn debug3() {
-    test2();
+
 }
 
 fn debug2() {

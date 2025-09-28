@@ -4,10 +4,6 @@ use glam::IVec3;
 use voxer_macros::ShaderType;
 use wgpu::wgt::DrawIndirectArgs;
 
-// type GPUPackedBlockPair = u32;
-// type GPUVoxelChunkBlocks = [[[GPUPackedBlockPair; CHUNK_DIM_HALF]; CHUNK_DIM]; CHUNK_DIM];
-// type GPUVoxelChunkAdjBlocks = [[[GPUPackedBlockPair; CHUNK_DIM_HALF]; CHUNK_DIM]; 3];
-
 #[repr(C, align(8))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkContent {
@@ -22,9 +18,15 @@ pub struct GPUVoxelChunkAdjContent {
 
 #[repr(C, align(8))]
 #[derive(ShaderType)]
-pub struct GPUVoxelChunkFaceData { // fixme todo
-    a: u32,
-    b: u32,
+pub struct GPUVoxelFaceData {
+    position_fid_illum_ocl: u32,
+    // position 12b
+    // face id 3b
+    // illumination 5b
+    // occlusion count 8b
+    // 4 free
+    voxel_type: u32,
+    // voxel_type 16b
 }
 
 #[repr(C, align(8))]
@@ -68,8 +70,8 @@ impl GPUVoxelChunkHeader {
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunk {
     pub header: GPUVoxelChunkHeader,
-    pub adjacent_blocks: GPUVoxelChunkAdjContent,
-    pub blocks: GPUVoxelChunkContent,
+    pub adj_content: GPUVoxelChunkAdjContent,
+    pub content: GPUVoxelChunkContent,
 }
 
 impl GPUVoxelChunk {
@@ -78,11 +80,11 @@ impl GPUVoxelChunk {
         adjacent_blocks: GPUVoxelChunkAdjContent,
         blocks: ChunkBlocks,
     ) -> Self {
-        let gpu_blocks: GPUVoxelChunkContent = unsafe { std::mem::transmute(blocks) };
+        let gpu_chunk_content: GPUVoxelChunkContent = unsafe { std::mem::transmute(blocks) };
         Self {
             header,
-            adjacent_blocks,
-            blocks: gpu_blocks,
+            adj_content: adjacent_blocks,
+            content: gpu_chunk_content,
         }
     }
 }

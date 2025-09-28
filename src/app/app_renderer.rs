@@ -102,7 +102,7 @@ pub fn make_app_renderer<'a>(window: Arc<Window>) -> AppRenderer<'a> {
     );
 
     let max_face_count = compute::MIB * 16;
-    let max_chunk_count = 12_288 * size_of::<GPUVoxelChunk>(); // fixme this is overkill
+    let max_chunk_count = 12_288; // fixme arbitrary number
     let chunk_manager = ChunkManager::new(
         &renderer,
         &view_projection_buffer,

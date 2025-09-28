@@ -2,7 +2,7 @@
 @group(1) @binding(0)
 var<uniform> camera_view: UniformCameraView;
 @group(1) @binding(1)
-var<storage, read> face_data_buffer: array<VoxelFaceData>;
+var<storage, read> face_data_buffer: array<GPUVoxelFaceData>;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -20,7 +20,7 @@ fn vs_main(
     let vertex_index = QUAD_INDICES[vid % 6];
 
     let face_data = face_data_buffer[face_index];
-    let pfio = face_data.position__fid__illum__ocl;
+    let pfio = face_data.position_fid_illum_ocl;
 
     let voxel_x: u32 = (pfio >> 8) & 0xF;
     let voxel_y: u32 = (pfio >> 4) & 0xF;
@@ -40,7 +40,7 @@ fn vs_main(
     let voxel_position = vec3<f32>(f32(voxel_x), f32(voxel_y), f32(voxel_z));
     let quad = QUAD_VERTICES[face_id];
     let vertex_position = voxel_position + quad[vertex_index];
-    let chunk_translation = chunk_to_world_position(face_data.chunk_translation);
+    let chunk_translation = vec3<f32>(0.0, 0.0, 0.0); // fixme temp
 
     out.position = camera_view.view_projection * vec4<f32>(chunk_translation + vertex_position, 1.0);
     out.tex_coords = TEX_COORDS[vertex_index];

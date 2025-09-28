@@ -21,10 +21,10 @@ impl VxBuffer {
     ) -> Self {
         let buffer_size = match buffer_usages {
             BufferUsages::UNIFORM => std::cmp::max(
-                len,
+                len * stride,
                 device.limits().min_uniform_buffer_offset_alignment as usize,
             ),
-            _ => len,
+            _ => len * stride,
         };
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(label),

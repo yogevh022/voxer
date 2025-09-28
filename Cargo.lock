@@ -2188,7 +2188,7 @@ checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 [[package]]
 name = "suballoc"
 version = "0.1.4"
-source = "git+https://github.com/yogevh022/suballoc-rs?branch=master#6db3cb1afc3fdd574accefda1ba49b8af40acb11"
+source = "git+https://github.com/yogevh022/suballoc-rs?branch=master#b9133bf86652343cd7c5180eebf3be936de4c1ef"
 
 [[package]]
 name = "syn"

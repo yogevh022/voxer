@@ -117,13 +117,13 @@ pub fn create_chunk_compute_pipeline(
 ) -> wgpu::ComputePipeline {
     let shader = resources::shader::create(device, resources::shader::chunk_meshing().into());
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("chunk_compute_pipeline_layout"),
+        label: Some("Chunk Compute Pipeline Layout"),
         bind_group_layouts,
         push_constant_ranges: &[],
     });
 
     device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: Some("chunk_compute_pipeline"),
+        label: Some("Chunk Compute Pipeline"),
         layout: Some(&pipeline_layout),
         module: &shader,
         entry_point: Some("mesh_chunks_entry"),
