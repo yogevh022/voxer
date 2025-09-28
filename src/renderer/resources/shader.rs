@@ -1,4 +1,8 @@
 use std::borrow::Cow;
+use wgpu::ShaderSource;
+use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkBufferData, GPUVoxelChunkContent, GPUVoxelChunkFaceData, GPUVoxelChunkHeader};
+use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF};
+
 macro_rules! include_shaders {
     ($($name:ident => $file:literal), * $(,)?) => (
         $(
@@ -20,6 +24,38 @@ macro_rules! concat_shaders {
                 result.push('\n');
             )*
             result
+        }
+    };
+}
+
+macro_rules! include_shader_types {
+    ($($shader_type:ty),* $(,)?) => {
+        {
+            let mut shader_types = String::new();
+            $(
+                let shader_src: &'static str = <$shader_type>::SHADER_SOURCE;
+                shader_types.push_str(shader_src);
+                shader_types.push('\n');
+            )*
+            shader_types
+        }
+    }
+}
+
+macro_rules! include_shader_consts {
+    ( $( $name:ident: $ty:ty = $value:expr );* $(;)? ) => {
+        {
+            let mut shader_consts = String::new();
+            $(
+                shader_consts.push_str(stringify!($name));
+                shader_consts.push_str(": ");
+                shader_consts.push_str(stringify!($ty));
+                shader_consts.push_str(" = ");
+                let value_str = $value.to_string();
+                shader_consts.push_str(&value_str);
+                shader_consts.push_str(";\n");
+            )*
+            shader_consts
         }
     };
 }
@@ -59,6 +95,19 @@ pub fn main_shader() -> String {
 }
 
 pub fn chunk_meshing() -> String {
+    let consts = include_shader_consts!(
+        CHUNK_DIM: u32 = CHUNK_DIM;
+        CHUNK_DIM_HALF: u32 = CHUNK_DIM_HALF;
+        CFG_VAO_FACTOR: f32 = 0.35;
+    );
+    let types = include_shader_types!(
+        GPUVoxelChunkContent,
+        GPUVoxelChunkAdjContent,
+        GPUVoxelChunk,
+        GPUVoxelChunkHeader,
+        GPUVoxelChunkBufferData,
+        GPUVoxelChunkFaceData,
+    );
     concat_shaders!(
         GLOBAL,
         VOXEL_TYPES,
@@ -73,6 +122,34 @@ pub fn chunk_meshing() -> String {
 pub fn create(device: &wgpu::Device, source: Cow<str>) -> wgpu::ShaderModule {
     device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("main_shader"),
-        source: wgpu::ShaderSource::Wgsl(source),
+        source: ShaderSource::Wgsl(source),
     })
+}
+
+pub fn test2() {
+    let consts = include_shader_consts!(
+        CHUNK_DIM: u32 = CHUNK_DIM;
+        CHUNK_DIM_HALF: u32 = CHUNK_DIM_HALF;
+        CFG_VAO_FACTOR: f32 = 0.35;
+    );
+    let types = include_shader_types!(
+        GPUVoxelChunkContent,
+        GPUVoxelChunkAdjContent,
+        GPUVoxelChunk,
+        GPUVoxelChunkHeader,
+        GPUVoxelChunkBufferData,
+        GPUVoxelChunkFaceData,
+    );
+    println!("consts:\n{}", consts);
+    println!("types:\n{}", types);
+}
+
+pub struct VxShaderTypeData {
+    pub(crate) name: &'static str,
+    pub(crate) stride: usize,
+}
+
+pub trait ShaderType {
+    const SHADER_SOURCE: &'static str;
+    const SHADER_TYPE_DATA: VxShaderTypeData;
 }
