@@ -1,5 +1,5 @@
-use slab::Slab;
 use rustc_hash::FxHashMap;
+use slab::Slab;
 use std::hash::Hash;
 
 #[derive(Debug)]
@@ -36,6 +36,17 @@ where
             .and_then(|index| Some((index, self.slab.remove(index))))
     }
 
+    pub fn retain(&mut self, mut f: impl FnMut(&K) -> bool) {
+        self.map.retain(|key, index| {
+            if f(key) {
+                false
+            } else {
+                self.slab.remove(*index);
+                true
+            }
+        });
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
         self.map
             .iter()
@@ -45,7 +56,7 @@ where
     pub fn get(&self, key: &K) -> Option<&V> {
         self.map.get(key).and_then(|&index| self.slab.get(index))
     }
-    
+
     pub fn contains(&self, key: &K) -> bool {
         self.map.contains_key(key)
     }

@@ -36,21 +36,15 @@ impl AppRenderer<'_> {
         // self.chunk_manager.malloc_debug();
     }
 
-    pub fn unload_chunks(&mut self, positions: &Vec<IVec3>) {
-        for &position in positions {
-            self.chunk_manager.drop(position);
-        }
-    }
-
     pub fn is_chunk_rendered(&self, position: IVec3) -> bool {
         self.chunk_manager.is_rendered(position)
     }
 
-    pub fn map_rendered_chunk_positions<F>(&self, func: F) -> Vec<IVec3>
+    pub fn retain_chunk_positions<F>(&mut self, func: F)
     where
-        F: FnMut(IVec3) -> bool,
+        F: FnMut(&IVec3) -> bool,
     {
-        self.chunk_manager.map_rendered_chunk_positions(func)
+        self.chunk_manager.retain_chunk_positions(func);
     }
 
     fn render_chunks(&mut self, render_pass: &mut wgpu::RenderPass, camera: &Camera) {

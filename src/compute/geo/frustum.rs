@@ -1,8 +1,6 @@
 use super::Plane;
-use glam::{IVec3, Mat4, Vec3};
-use crate::compute::geo;
+use glam::{Mat4, Vec3};
 use crate::compute::geo::aabb::AABB;
-use crate::world::types::CHUNK_DIM;
 
 pub struct Frustum;
 
@@ -44,17 +42,26 @@ impl Frustum {
     }
 
     pub fn aabb(planes: &[Plane; 6]) -> AABB {
-        let mut aabb = AABB::inf();
+        let corners = [
+            // near plane
+            Plane::intersection(planes[0], planes[2], planes[4]),
+            Plane::intersection(planes[0], planes[2], planes[5]),
+            Plane::intersection(planes[0], planes[3], planes[4]),
+            Plane::intersection(planes[0], planes[3], planes[5]),
 
-        for i in 0..6 {
-            for j in i..6 {
-                for k in j..6 {
-                    if let Some(intersection) = Plane::intersection(planes[i], planes[j], planes[k])
-                        && Frustum::point_within_frustum(intersection, planes)
-                    {
-                        aabb.min = aabb.min.min(intersection);
-                        aabb.max = aabb.max.max(intersection);
-                    }
+            // far plane
+            Plane::intersection(planes[1], planes[2], planes[4]),
+            Plane::intersection(planes[1], planes[2], planes[5]),
+            Plane::intersection(planes[1], planes[3], planes[4]),
+            Plane::intersection(planes[1], planes[3], planes[5]),
+        ];
+
+        let mut aabb = AABB::inf();
+        for corner in corners {
+            if let Some(point) = corner {
+                if Frustum::point_within_frustum(point, planes) {
+                    aabb.min = aabb.min.min(point);
+                    aabb.max = aabb.max.max(point);
                 }
             }
         }

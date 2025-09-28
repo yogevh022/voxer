@@ -3,8 +3,7 @@ mod types;
 use crate::app::app_renderer;
 use crate::app::app_renderer::AppRenderer;
 use crate::compute;
-use crate::compute::geo;
-use crate::compute::geo::{Frustum, Plane};
+use crate::compute::geo::{Frustum, Plane, AABB};
 use crate::world::client::types::ClientWorldSession;
 use crate::world::network::{
     MAX_CHUNKS_PER_BATCH, MsgChunkData, MsgChunkDataRequest, MsgConnectRequest,
@@ -100,17 +99,16 @@ impl<'window> ClientWorld<'window> {
     }
 
     fn cull_outside_frustum(&mut self) {
-        let unload_chunks = self.renderer.map_rendered_chunk_positions(|c_pos| {
-            let chunk_world_pos = geo::chunk_to_world_pos(c_pos);
-            !Frustum::aabb_within_frustum(
-                chunk_world_pos,
-                chunk_world_pos + CHUNK_DIM as f32,
-                &self.session.view_frustum,
-            )
+        let mut frustum_aabb = Frustum::aabb(&self.session.view_frustum);
+        frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
+        frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
+
+        self.renderer.retain_chunk_positions(|c_pos| {
+            let min = c_pos.as_vec3();
+            let max = min + 1f32;
+            let c_aabb = AABB { min, max };
+            AABB::within_aabb(c_aabb, frustum_aabb)
         });
-        if !unload_chunks.is_empty() {
-            self.renderer.unload_chunks(&unload_chunks);
-        }
     }
 
     fn nearby_chunks_pass(&mut self) -> (Vec<IVec3>, Vec<IVec3>) {
@@ -124,15 +122,6 @@ impl<'window> ClientWorld<'window> {
         let now = Instant::now();
 
         frustum_aabb.discrete_points(|chunk_position| {
-            const CHUNK_DIM_F: f32 = CHUNK_DIM as f32;
-            let chunk_world_position = geo::chunk_to_world_pos(chunk_position);
-            if !Frustum::aabb_within_frustum(
-                chunk_world_position,
-                chunk_world_position + CHUNK_DIM_F,
-                &self.session.view_frustum,
-            ) {
-                return;
-            }
             if !self.session.chunks.contains_key(&chunk_position) {
                 if missing_positions.len() < MAX_CHUNKS_PER_BATCH
                     && self.session.try_request_permission(now, chunk_position)

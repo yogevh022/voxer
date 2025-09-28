@@ -46,14 +46,18 @@ impl ChunkManager {
         self.suballocs.contains(&position)
     }
 
-    pub fn map_rendered_chunk_positions<F>(&self, mut func: F) -> Vec<IVec3>
+    pub fn retain_chunk_positions<F>(&mut self, mut func: F)
     where
-        F: FnMut(IVec3) -> bool,
+        F: FnMut(&IVec3) -> bool,
     {
-        self.suballocs
+        let to_drop = self
+            .suballocs
             .iter()
-            .filter_map(|(&chunk_position, _)| func(chunk_position).then_some(chunk_position))
-            .collect()
+            .filter_map(|(p, _)| func(p).then_some(p).cloned())
+            .collect::<Vec<_>>();
+        for p in to_drop {
+            self.drop(p);
+        }
     }
 
     pub fn write_new<'a>(
@@ -115,8 +119,7 @@ impl ChunkManager {
         let free_percent = (self.suballocator.free() as f32 / capacity as f32) * 100.0;
         call_every!(ALLOC_DBG, 50, || println!(
             "\x1B[2J\x1B[1;1Hfree: {:>3.1}% capacity: {}",
-            free_percent,
-            capacity,
+            free_percent, capacity,
         ));
     }
 }

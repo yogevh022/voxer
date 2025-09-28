@@ -10,3 +10,4 @@ pub use circle::Circle;
 pub use sphere::Sphere;
 pub use frustum::Frustum;
 pub use plane::Plane;
+pub use aabb::AABB;

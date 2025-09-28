@@ -1,5 +1,5 @@
-use glam::{IVec3, Vec3};
 use crate::compute::geo;
+use glam::{IVec3, Vec3};
 
 #[derive(Debug, Clone, Copy)]
 pub struct AABB {
@@ -13,6 +13,15 @@ impl AABB {
             min: Vec3::splat(f32::INFINITY),
             max: Vec3::splat(f32::NEG_INFINITY),
         }
+    }
+
+    pub fn within_aabb(a: AABB, b: AABB) -> bool {
+        a.min.x <= b.max.x
+            && a.max.x >= b.min.x
+            && a.min.y <= b.max.y
+            && a.max.y >= b.min.y
+            && a.min.z <= b.max.z
+            && a.max.z >= b.min.z
     }
 
     pub fn discrete_points<F>(&self, mut func: F)
