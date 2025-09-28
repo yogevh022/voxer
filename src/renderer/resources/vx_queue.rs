@@ -4,14 +4,12 @@ use wgpu::Queue;
 
 pub struct VxQueue {
     queue: Queue,
-    staging_buffer: VxBuffer,
 }
 
 impl VxQueue {
-    pub(crate) fn new(queue: Queue, staging_buffer: VxBuffer) -> Self {
+    pub(crate) fn new(queue: Queue) -> Self {
         Self {
             queue,
-            staging_buffer,
         }
     }
 }
