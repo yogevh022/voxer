@@ -24,9 +24,10 @@ pub struct GPUVoxelFaceData {
     // face id 3b
     // illumination 5b
     // occlusion count 8b
-    // 4 free
+    // 4b free
     voxel_type: u32,
     // voxel_type 16b
+    // 16b free
 }
 
 #[repr(C, align(8))]

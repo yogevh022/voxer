@@ -39,6 +39,10 @@ impl VxBuffer {
         }
     }
 
+    pub fn stride(&self) -> usize {
+        self.stride
+    }
+    
     pub fn bind_layout_entry(
         &self,
         binding: u32,

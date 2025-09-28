@@ -2,9 +2,11 @@ const FACE_DATA_VOID_OFFSET: u32 = 1u;
 const MAX_FACES_PER_THREAD: u32 = (3u * CHUNK_DIM) + FACE_DATA_VOID_OFFSET;
 
 @group(0) @binding(0)
-var<storage, read> chunk_entries_buffer: array<GPUVoxelChunk>;
+var<storage, read_write> chunks_buffer: array<GPUVoxelChunk>;
 @group(0) @binding(1)
 var<storage, read_write> face_data_buffer: array<GPUVoxelFaceData>;
+@group(0) @binding(2)
+var<storage, read> chunks_staging_buffer: array<GPUVoxelChunk>;
 
 var<workgroup> workgroup_buffer_write_offset: atomic<u32>;
 var<workgroup> workgroup_chunk_content: GPUVoxelChunkContent;
@@ -19,12 +21,12 @@ fn mesh_chunks_entry(
     @builtin(local_invocation_id) lid: vec3<u32>,
 ) {
     let chunk_index = wid.x;
-    let chunk_header = chunk_entries_buffer[chunk_index].header;
+    let chunk_header = chunks_buffer[chunk_index].header;
 
     if (lid.x + lid.y == 0u) {
         // first thread initializes workgroup vars
-        workgroup_chunk_content = chunk_entries_buffer[chunk_index].content;
-        workgroup_chunk_adj_content = chunk_entries_buffer[chunk_index].adj_content;
+        workgroup_chunk_content = chunks_buffer[chunk_index].content;
+        workgroup_chunk_adj_content = chunks_buffer[chunk_index].adj_content;
 
         atomicStore(&workgroup_buffer_write_offset, chunk_header.buffer_data.offset);
     }

@@ -80,6 +80,7 @@ include_shaders!(
     VOXEL_CHUNK_MESH_ENTRY => "voxel/chunk_mesh_entry.wgsl",
     VOXEL_CHUNK_MESH_FACES => "voxel/chunk_mesh_faces.wgsl",
     VOXEL_CHUNK_MESH_VAO => "voxel/chunk_mesh_vao.wgsl",
+    VOXEL_CHUNK_WRITE_SCATTERED => "voxel/chunk_write_scattered.wgsl",
 );
 
 fn voxel_common() -> (String, String) {
@@ -123,6 +124,18 @@ pub fn chunk_meshing() -> String {
         VOXEL_CHUNK_MESH_VAO,
         F_WORLD,
         F_BITWISE,
+    )
+}
+
+pub fn chunk_write_scattered() -> String {
+    let consts = include_shader_consts!(
+        WORKGROUP_SIZE: u32 = 256;
+    );
+    let (_, types) = voxel_common();
+    concat_shaders!(
+        &consts,
+        &types,
+        VOXEL_CHUNK_WRITE_SCATTERED
     )
 }
 
