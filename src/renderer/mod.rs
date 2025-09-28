@@ -4,7 +4,7 @@ mod texture;
 mod types;
 
 use crate::compute;
-use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
+use crate::renderer::resources::vx_buffer::VxBuffer;
 use std::sync::Arc;
 pub use types::*;
 use wgpu::{
@@ -19,7 +19,7 @@ pub(crate) struct Renderer<'window> {
     pub(crate) adapter: Adapter,
     pub(crate) device: Device,
     pub(crate) queue: Queue,
-    pub(crate) indirect_buffer: VgBufferResource,
+    pub(crate) indirect_buffer: VxBuffer,
     pub(crate) surface_format: wgpu::TextureFormat,
     depth_texture_view: TextureView,
 }
@@ -107,7 +107,7 @@ impl<'window> Renderer<'window> {
         let surface_config = Renderer::surface_config(&surface_capabilities, size);
         surface.configure(&device, &surface_config);
 
-        let indirect_buffer = VgBufferResource::new(
+        let indirect_buffer = VxBuffer::new(
             &device,
             "Indirect Buffer",
             256 * compute::KIB as u64,

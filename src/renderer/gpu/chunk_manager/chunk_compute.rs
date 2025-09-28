@@ -3,12 +3,12 @@ use crate::renderer::gpu::GPUChunkEntry;
 use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
 use crate::renderer::{Renderer, resources};
 use std::num::NonZeroU64;
-use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
+use crate::renderer::resources::vx_buffer::VxBuffer;
 
 pub struct ChunkCompute {
     pipeline: wgpu::ComputePipeline,
     bind_group: wgpu::BindGroup,
-    chunks_buffer: VgBufferResource,
+    chunks_buffer: VxBuffer,
 }
 
 impl ChunkCompute {
@@ -24,7 +24,7 @@ impl ChunkCompute {
             chunk_bind_group_layout(device, min_chunk, min_face_data);
         let pipeline = create_chunk_compute_pipeline(device, &[&layout]);
 
-        let chunks_buffer = VgBufferResource::new(
+        let chunks_buffer = VxBuffer::new(
             &device,
             "Chunks Buffer",
             chunks_buffer_size,

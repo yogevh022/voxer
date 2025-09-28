@@ -6,7 +6,7 @@ use crate::renderer::Renderer;
 use crate::renderer::gpu::GPUChunkEntry;
 use crate::renderer::gpu::chunk_entry::GPUChunkEntryHeader;
 use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
-use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
+use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::world::types::{CHUNK_DIM, Chunk, PACKED_CHUNK_DIM};
 use glam::IVec3;
 use std::collections::HashMap;
@@ -23,7 +23,7 @@ pub struct ChunkManager {
 impl ChunkManager {
     pub fn new(
         renderer: &Renderer<'_>,
-        view_projection_buffer: &VgBufferResource,
+        view_projection_buffer: &VxBuffer,
         face_data_buffer_size: wgpu::BufferAddress,
         chunks_buffer_size: wgpu::BufferAddress,
     ) -> Self {
@@ -64,6 +64,7 @@ impl ChunkManager {
         let mut buffer_writes = Vec::new();
         for chunk in chunks {
             if self.suballocs.contains(&chunk.position) {
+                // fixme this branch is not active
                 // remeshing currently rendered chunk, drop first
                 self.drop(chunk.position);
             }
@@ -93,7 +94,7 @@ impl ChunkManager {
     }
 
     pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut wgpu::RenderPass) {
-        self.mem_debug_throttled();
+        // self.mem_debug_throttled();
         self.render
             .write_indirect_draw_args(renderer, &self.active_draw);
         self.render

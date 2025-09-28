@@ -1,10 +1,10 @@
-use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
+use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
 use crate::renderer::{Renderer, resources, VxDrawIndirectBatch};
 use wgpu::{BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, Device, ShaderStages};
 
 pub struct ChunkRender {
-    pub face_data_buffer: VgBufferResource,
+    pub face_data_buffer: VxBuffer,
     pub bind_group_layout: BindGroupLayout,
     bind_group: BindGroup,
 }
@@ -12,10 +12,10 @@ pub struct ChunkRender {
 impl ChunkRender {
     pub fn init(
         device: &Device,
-        view_projection_buffer: &VgBufferResource,
+        view_projection_buffer: &VxBuffer,
         face_data_buffer_size: wgpu::BufferAddress,
     ) -> Self {
-        let face_data_buffer = VgBufferResource::new(
+        let face_data_buffer = VxBuffer::new(
             &device,
             "Chunk Face Data Buffer",
             face_data_buffer_size,
@@ -56,8 +56,8 @@ impl ChunkRender {
 
 fn chunk_render_bind_group(
     device: &Device,
-    view_projection_buffer: &VgBufferResource,
-    face_data_buffer: &VgBufferResource,
+    view_projection_buffer: &VxBuffer,
+    face_data_buffer: &VxBuffer,
 ) -> (BindGroupLayout, BindGroup) {
     let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
         label: Some("Chunk Render Bind Group Layout"),

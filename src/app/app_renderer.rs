@@ -5,7 +5,7 @@ use crate::renderer::gpu::GPUChunkEntry;
 use crate::renderer::gpu::chunk_manager::ChunkManager;
 use crate::renderer::resources;
 use crate::renderer::resources::texture::get_atlas_image;
-use crate::renderer::resources::vg_buffer_resource::VgBufferResource;
+use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::vtypes::Camera;
 use crate::world::types::Chunk;
 use bytemuck::{Pod, Zeroable};
@@ -27,7 +27,7 @@ pub struct AppRenderer<'window> {
     chunk_manager: ChunkManager,
     render_pipeline: wgpu::RenderPipeline,
     atlas_bind_group: BindGroup,
-    view_projection_buffer: VgBufferResource,
+    view_projection_buffer: VxBuffer,
 }
 
 impl AppRenderer<'_> {
@@ -94,7 +94,7 @@ impl AppRenderer<'_> {
 pub fn make_app_renderer<'a>(window: Arc<Window>) -> AppRenderer<'a> {
     let renderer = Renderer::new(window);
 
-    let view_projection_buffer = VgBufferResource::new(
+    let view_projection_buffer = VxBuffer::new(
         &renderer.device,
         "View Projection Buffer",
         size_of::<UniformCameraView>(),

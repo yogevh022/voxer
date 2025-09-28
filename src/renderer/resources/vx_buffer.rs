@@ -3,11 +3,11 @@ use wgpu::{
     BindGroupLayoutEntry, BufferAddress, BufferBindingType, BufferSize, BufferUsages, ShaderStages,
 };
 
-pub struct VgBufferResource {
+pub struct VxBuffer {
     buffer: wgpu::Buffer,
 }
 
-impl VgBufferResource {
+impl VxBuffer {
     pub fn new<S>(device: &wgpu::Device, label: &str, size: S, buffer_usages: BufferUsages) -> Self
     where
         S: TryInto<usize>,
@@ -56,7 +56,7 @@ impl VgBufferResource {
     }
 }
 
-impl Deref for VgBufferResource {
+impl Deref for VxBuffer {
     type Target = wgpu::Buffer;
     fn deref(&self) -> &Self::Target {
         &self.buffer
