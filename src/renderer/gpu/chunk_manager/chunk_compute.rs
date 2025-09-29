@@ -1,9 +1,10 @@
 use super::chunk_render::ChunkRender;
-use crate::renderer::gpu::GPUChunkEntry;
+use crate::renderer::gpu::GPUVoxelChunk;
 use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
+use crate::renderer::resources::vx_buffer::VxBuffer;
+use crate::renderer::resources::vx_device::VxDevice;
 use crate::renderer::{Renderer, resources};
 use std::num::NonZeroU64;
-use crate::renderer::resources::vx_buffer::VxBuffer;
 
 pub struct ChunkCompute {
     pipeline: wgpu::ComputePipeline,
@@ -12,20 +13,14 @@ pub struct ChunkCompute {
 }
 
 impl ChunkCompute {
-    pub fn init(
-        device: &wgpu::Device,
-        chunk_render: &ChunkRender,
-        chunks_buffer_size: wgpu::BufferAddress,
-    ) -> Self {
-        let min_chunk = NonZeroU64::new(chunks_buffer_size).unwrap();
+    pub fn init(device: &VxDevice, chunk_render: &ChunkRender, chunks_buffer_size: usize) -> Self {
+        let min_chunk = NonZeroU64::new(chunks_buffer_size as u64).unwrap();
         let min_face_data = NonZeroU64::new(chunk_render.face_data_buffer.size()).unwrap();
 
-        let layout =
-            chunk_bind_group_layout(device, min_chunk, min_face_data);
+        let layout = chunk_bind_group_layout(device, min_chunk, min_face_data);
         let pipeline = create_chunk_compute_pipeline(device, &[&layout]);
 
-        let chunks_buffer = VxBuffer::new(
-            &device,
+        let chunks_buffer = device.create_vx_buffer::<GPUVoxelChunk>(
             "Chunks Buffer",
             chunks_buffer_size,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -45,26 +40,18 @@ impl ChunkCompute {
         }
     }
 
-    pub fn write_chunks(
-        &self,
-        renderer: &Renderer<'_>,
-        buffer_writes: &[GPUChunkEntry],
-    ) {
+    pub fn write_chunks(&self, renderer: &Renderer<'_>, buffer_writes: &[GPUVoxelChunk]) {
         if buffer_writes.is_empty() {
             return;
         }
-        renderer.write_buffer(
-            &self.chunks_buffer,
-            0,
-            bytemuck::cast_slice(buffer_writes),
-        );
+        renderer.write_buffer(&self.chunks_buffer, 0, bytemuck::cast_slice(buffer_writes));
     }
 
     pub fn dispatch_meshing_workgroups(
         &mut self,
         renderer: &Renderer<'_>,
         active_draw: &mut BufferDrawArgs,
-        buffer_writes: Vec<GPUChunkEntry>,
+        buffer_writes: Vec<GPUVoxelChunk>,
     ) {
         let mut encoder = renderer.create_encoder("Chunk Meshing Compute Encoder");
         {
@@ -113,7 +100,7 @@ pub fn chunk_bind_group_layout(
                     min_binding_size: Some(face_data_buffer_size),
                 },
                 count: None,
-            }
+            },
         ],
     })
 }

@@ -2,11 +2,9 @@ const FACE_DATA_VOID_OFFSET: u32 = 1u;
 const MAX_FACES_PER_THREAD: u32 = (3u * CHUNK_DIM) + FACE_DATA_VOID_OFFSET;
 
 @group(0) @binding(0)
-var<storage, read_write> chunks_buffer: array<GPUVoxelChunk>;
+var<storage, read> chunks_buffer: array<GPUVoxelChunk>;
 @group(0) @binding(1)
 var<storage, read_write> face_data_buffer: array<GPUVoxelFaceData>;
-@group(0) @binding(2)
-var<storage, read> chunks_staging_buffer: array<GPUVoxelChunk>;
 
 var<workgroup> workgroup_buffer_write_offset: atomic<u32>;
 var<workgroup> workgroup_chunk_content: GPUVoxelChunkContent;

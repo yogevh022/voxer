@@ -7,7 +7,7 @@ use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent};
 use crate::renderer::gpu::chunk_entry::GPUVoxelChunkHeader;
 use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
 use crate::renderer::resources::vx_buffer::VxBuffer;
-use crate::world::types::{CHUNK_DIM, Chunk, CHUNK_DIM_HALF};
+use crate::world::types::Chunk;
 use glam::IVec3;
 use std::collections::HashMap;
 use suballoc::SubAllocator;
