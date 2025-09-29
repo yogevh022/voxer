@@ -9,6 +9,7 @@ var<storage, read_write> face_data_buffer: array<GPUVoxelFaceData>;
 var<workgroup> workgroup_buffer_write_offset: atomic<u32>;
 var<workgroup> workgroup_chunk_content: GPUVoxelChunkContent;
 var<workgroup> workgroup_chunk_adj_content: GPUVoxelChunkAdjContent;
+var<workgroup> workgroup_chunk_y_i16_low: i32;
 
 var<private> private_face_data: array<GPUVoxelFaceData, MAX_FACES_PER_THREAD>;
 var<private> private_face_count: u32 = 0u;
@@ -25,6 +26,7 @@ fn mesh_chunks_entry(
         // first thread initializes workgroup vars
         workgroup_chunk_content = chunks_buffer[chunk_index].content;
         workgroup_chunk_adj_content = chunks_buffer[chunk_index].adj_content;
+        workgroup_chunk_y_i16_low = chunk_header.position.y & 0xFFFF;
 
         atomicStore(&workgroup_buffer_write_offset, chunk_header.buffer_data.offset);
     }

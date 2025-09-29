@@ -25,9 +25,9 @@ pub struct GPUVoxelFaceData {
     // illumination 5b
     // occlusion count 8b
     // 4b free
-    voxel_type: u32,
+    ypos_voxel: u32,
+    // y pos i16 16b
     // voxel_type 16b
-    // 16b free
 }
 
 #[repr(C, align(8))]
@@ -58,11 +58,12 @@ impl GPUVoxelChunkHeader {
     }
 
     pub fn draw_indirect_args(&self) -> DrawIndirectArgs {
+        let packed_xz = self.position.x as i16 as u32 | ((self.position.z as i16 as u32) << 16);
         DrawIndirectArgs {
             vertex_count: self.buffer_data.face_count * 6,
             instance_count: 1,
             first_vertex: self.buffer_data.offset * 6,
-            first_instance: self.slab_index,
+            first_instance: packed_xz,
         }
     }
 }

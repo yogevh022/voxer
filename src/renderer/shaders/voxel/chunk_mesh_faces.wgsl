@@ -7,7 +7,8 @@ fn pack_face_data(current_voxel: u32, packed_position: u32, fid: u32, illum: u32
             | (fid << 12)
             | (illum << 15)
             | (ocl_count << 20);
-    return GPUVoxelFaceData(packed_face_data, current_voxel);
+    let packed_voxel_ypos = (current_voxel << 16) | bitcast<u32>(workgroup_chunk_y_i16_low);
+    return GPUVoxelFaceData(packed_face_data, packed_voxel_ypos);
 }
 
 fn write_faces_x(

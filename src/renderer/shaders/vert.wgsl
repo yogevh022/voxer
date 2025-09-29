@@ -13,7 +13,7 @@ struct VertexOutput {
 @vertex
 fn vs_main(
     @builtin(vertex_index) vid: u32,
-    @builtin(instance_index) inst_id: u32,
+    @builtin(instance_index) packed_xz: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
     let face_index = vid / 6;
@@ -21,6 +21,10 @@ fn vs_main(
 
     let face_data = face_data_buffer[face_index];
     let pfio = face_data.position_fid_illum_ocl;
+    let unpacked_xz: vec2<i32> = unpack_i16s(packed_xz);
+    let unpacked_y: i32 = unpack_i16_low(face_data.ypos_voxel);
+
+    let chunk_translation = f32(CHUNK_DIM) * vec3<f32>(f32(unpacked_xz.x), f32(unpacked_y), f32(unpacked_xz.y));
 
     let voxel_x: u32 = (pfio >> 8) & 0xF;
     let voxel_y: u32 = (pfio >> 4) & 0xF;
@@ -40,7 +44,6 @@ fn vs_main(
     let voxel_position = vec3<f32>(f32(voxel_x), f32(voxel_y), f32(voxel_z));
     let quad = QUAD_VERTICES[face_id];
     let vertex_position = voxel_position + quad[vertex_index];
-    let chunk_translation = vec3<f32>(0.0, 0.0, 0.0); // fixme temp
 
     out.position = camera_view.view_projection * vec4<f32>(chunk_translation + vertex_position, 1.0);
     out.tex_coords = TEX_COORDS[vertex_index];

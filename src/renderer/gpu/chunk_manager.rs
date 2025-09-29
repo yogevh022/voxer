@@ -8,6 +8,7 @@ use crate::world::types::Chunk;
 use glam::IVec3;
 use std::collections::HashMap;
 use std::num::NonZeroU64;
+use rustc_hash::FxHashMap;
 use suballoc::SubAllocator;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor,
@@ -17,12 +18,14 @@ use wgpu::{
 };
 use wgpu::wgt::DrawIndirectArgs;
 
-type BufferDrawArgs = HashMap<usize, DrawIndirectArgs>;
+type BufferDrawArgs = FxHashMap<usize, DrawIndirectArgs>;
 
 pub struct ChunkManager {
     suballocator: SubAllocator,
     suballocs: Slap<IVec3, u32>,
-    active_draw: BufferDrawArgs,
+
+    gpu_active_draw: BufferDrawArgs,
+    gpu_chunk_writes: Vec<GPUVoxelChunk>,
 
     chunks_buffer: VxBuffer,
     faces_buffer: VxBuffer,
@@ -71,7 +74,8 @@ impl ChunkManager {
         Self {
             suballocator: SubAllocator::new(max_face_count as u32),
             suballocs: Slap::new(),
-            active_draw: HashMap::new(),
+            gpu_active_draw: FxHashMap::default(),
+            gpu_chunk_writes: Vec::new(),
             chunks_buffer: voxel_chunk_buffer,
             faces_buffer: voxel_face_buffer,
             meshing_pipeline,
@@ -87,7 +91,7 @@ impl ChunkManager {
         encoder: &mut CommandEncoder,
         chunks: &[&'a Chunk],
     ) {
-        let mut gpu_chunk_writes = Vec::new();
+        self.gpu_chunk_writes.clear();
         for chunk in chunks {
             if self.suballocs.contains(&chunk.position) {
                 // fixme this branch is not active
@@ -95,15 +99,15 @@ impl ChunkManager {
                 self.drop_chunk_positions(chunk.position);
             }
             let gpu_chunk = self.allocate_chunk(chunk);
-            gpu_chunk_writes.push(gpu_chunk);
+            self.gpu_chunk_writes.push(gpu_chunk);
         }
-        self.encode_meshing_pass(renderer, encoder, &gpu_chunk_writes);
+        self.encode_meshing_pass(renderer, encoder);
     }
 
     pub fn drop_chunk_positions(&mut self, position: IVec3) {
         let slap_entry_opt = self.suballocs.remove(&position);
         let (slab_index, alloc_start) = slap_entry_opt.unwrap();
-        self.active_draw.remove(&slab_index).unwrap();
+        self.gpu_active_draw.remove(&slab_index).unwrap();
         self.suballocator.deallocate(alloc_start).unwrap();
     }
 
@@ -119,8 +123,8 @@ impl ChunkManager {
     }
 
     pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut wgpu::RenderPass) {
-        self.write_indirect_draw_args(renderer, &self.active_draw);
-        let render_count = self.active_draw.len() as u32;
+        self.write_indirect_draw_args(renderer, &self.gpu_active_draw);
+        let render_count = self.gpu_active_draw.len() as u32;
         if render_count != 0 {
             render_pass.set_bind_group(1, &self.render_bind_group, &[]);
             render_pass.multi_draw_indirect(&renderer.indirect_buffer, 0, render_count);
@@ -153,12 +157,11 @@ impl ChunkManager {
         &mut self,
         renderer: &Renderer<'_>,
         encoder: &mut CommandEncoder,
-        gpu_chunks: &[GPUVoxelChunk],
     ) {
-        if gpu_chunks.is_empty() {
+        if self.gpu_chunk_writes.is_empty() {
             return;
         }
-        renderer.write_buffer(&self.chunks_buffer, 0, bytemuck::cast_slice(gpu_chunks));
+        renderer.write_buffer(&self.chunks_buffer, 0, bytemuck::cast_slice(&self.gpu_chunk_writes));
         {
             let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
                 label: Some("Chunk Meshing Compute Pass"),
@@ -166,10 +169,10 @@ impl ChunkManager {
             });
             compute_pass.set_pipeline(&self.meshing_pipeline);
             compute_pass.set_bind_group(0, &self.meshing_bind_group, &[]);
-            compute_pass.dispatch_workgroups(gpu_chunks.len() as u32, 1, 1);
+            compute_pass.dispatch_workgroups(self.gpu_chunk_writes.len() as u32, 1, 1);
         }
-        for entry in gpu_chunks {
-            self.active_draw.insert(
+        for entry in self.gpu_chunk_writes.iter() {
+            self.gpu_active_draw.insert(
                 entry.header.slab_index as usize,
                 entry.header.draw_indirect_args(),
             );

@@ -110,6 +110,7 @@ pub fn main_shader() -> String {
         VOXEL_CHUNK_MESH_VAO,
         VERTEX_SHADER_ENTRY,
         FRAGMENT_SHADER_ENTRY,
+        F_BITWISE,
     )
 }
 
