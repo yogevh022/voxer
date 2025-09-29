@@ -1,7 +1,6 @@
 use crate::compute;
 use crate::compute::geo::{Frustum, Plane};
 use crate::renderer::Renderer;
-use crate::renderer::gpu::GPUVoxelChunk;
 use crate::renderer::gpu::chunk_manager::ChunkManager;
 use crate::renderer::resources;
 use crate::renderer::resources::texture::get_atlas_image;
@@ -41,10 +40,7 @@ impl AppRenderer<'_> {
         self.chunk_manager.is_rendered(position)
     }
 
-    pub fn retain_chunk_positions<F>(&mut self, func: F)
-    where
-        F: FnMut(&IVec3) -> bool,
-    {
+    pub fn retain_chunk_positions<F: FnMut(&IVec3) -> bool>(&mut self, func: F) {
         self.chunk_manager.retain_chunk_positions(func);
     }
 
