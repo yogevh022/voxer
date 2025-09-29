@@ -3,7 +3,7 @@ mod types;
 use crate::app::app_renderer;
 use crate::app::app_renderer::AppRenderer;
 use crate::compute;
-use crate::compute::geo::{Frustum, Plane, AABB};
+use crate::compute::geo::{AABB, Frustum, Plane};
 use crate::world::client::types::ClientWorldSession;
 use crate::world::network::{
     MAX_CHUNKS_PER_BATCH, MsgChunkData, MsgChunkDataRequest, MsgConnectRequest,
@@ -86,16 +86,18 @@ impl<'window> ClientWorld<'window> {
             self.handle_network_message(message);
         }
         self.session.tick();
+    }
 
+    pub fn encode_render_tick(&mut self, encoder: &mut wgpu::CommandEncoder) {
         // render
         self.cull_outside_frustum();
-        let (missing_chunks, new_renders) = self.nearby_chunks_pass();
-        self.renderer.load_chunks(
-            &mut new_renders
-                .iter()
-                .map(|pos| self.session.chunks.get(pos).unwrap()),
-        );
-        self.session.missing_chunks = Some(missing_chunks);
+        let (missing_chunks, new_renders_positions) = self.nearby_chunks_pass();
+        self.session.missing_chunks = Some(missing_chunks); // fixme
+        let new_renders = new_renders_positions
+            .iter()
+            .map(|pos| self.session.chunks.get(pos).unwrap())
+            .collect::<Vec<_>>();
+        self.renderer.load_chunks(encoder, &new_renders);
     }
 
     fn cull_outside_frustum(&mut self) {

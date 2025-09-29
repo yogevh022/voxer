@@ -12,7 +12,7 @@ use glam::IVec3;
 use std::borrow::Cow;
 use std::sync::Arc;
 use voxer_macros::ShaderType;
-use wgpu::{BindGroup, BufferUsages};
+use wgpu::{BindGroup, BufferUsages, CommandEncoder};
 use winit::window::Window;
 
 #[repr(C, align(16))]
@@ -31,9 +31,9 @@ pub struct AppRenderer<'window> {
 }
 
 impl AppRenderer<'_> {
-    pub fn load_chunks<'a>(&mut self, chunks: &mut impl Iterator<Item = &'a Chunk>) {
-        self.chunk_manager.write_new(&self.renderer, chunks);
-        // self.chunk_manager.malloc_debug();
+    pub fn load_chunks<'a>(&mut self, encoder: &mut CommandEncoder, chunks: &[&'a Chunk]) {
+        self.chunk_manager
+            .encode_new_chunks(&self.renderer, encoder, chunks);
     }
 
     pub fn is_chunk_rendered(&self, position: IVec3) -> bool {
@@ -51,10 +51,13 @@ impl AppRenderer<'_> {
         self.chunk_manager.draw(&self.renderer, render_pass);
     }
 
-    pub fn render(&mut self, camera: &Camera) -> Result<(), wgpu::SurfaceError> {
+    pub fn submit_render_pass(
+        &mut self,
+        mut encoder: CommandEncoder,
+        camera: &Camera,
+    ) -> Result<(), wgpu::SurfaceError> {
         let frame = self.renderer.surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
-        let mut encoder = self.renderer.create_encoder("render_encoder");
 
         let vp = camera.view_projection();
         let cam_view = UniformCameraView {
@@ -108,7 +111,7 @@ pub fn make_app_renderer<'a>(window: Arc<Window>) -> AppRenderer<'a> {
         resources::shader::main_shader().into(),
         &[
             &atlas_layout,                           // 0
-            &chunk_manager.render.bind_group_layout, // 1
+            &chunk_manager.render_bind_group_layout, // 1
         ],
     );
 

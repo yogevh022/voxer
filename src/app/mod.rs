@@ -86,7 +86,10 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                             ));
                         }
 
-                        if let Err(e) = client.renderer.render(&self.v.camera) {
+                        let mut encoder = client.renderer.renderer.create_encoder("Main Encoder");
+                        client.encode_render_tick(&mut encoder);
+                        if let Err(e) = client.renderer.submit_render_pass(encoder, &self.v.camera)
+                        {
                             println!("{:?}", e);
                         }
                     }
