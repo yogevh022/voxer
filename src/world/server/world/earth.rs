@@ -1,10 +1,9 @@
-use glam::IVec3;
-use rustc_hash::{FxHashMap, FxHashSet};
 use crate::compute::geo;
 use crate::world::generation::{WorldConfig, WorldGenHandle, WorldGenRequest};
 use crate::world::server::world::r#trait::World;
 use crate::world::types::Chunk;
-
+use glam::IVec3;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 pub struct Earth {
     chunks: FxHashMap<IVec3, Chunk>,
@@ -22,7 +21,7 @@ impl Earth {
             config,
         }
     }
-    
+
     fn request_generation(&mut self, chunk_positions: Vec<IVec3>) {
         let request = WorldGenRequest::new(chunk_positions);
         self.generation_handle
@@ -58,16 +57,17 @@ impl World for Earth {
                 *origin,
                 self.config.simulation_distance as isize,
                 |point| {
-                    if !self.chunk_registered(point) {
+                    if self.chunk_registered(point) {
+                        self.simulated_chunks.insert(point);
+                    } else {
                         generation_requests.push(point);
                     }
-                    self.simulated_chunks.insert(point);
                 },
             );
         }
         self.request_generation(generation_requests);
     }
-    
+
     fn start_simulation(&mut self) {
         self.generation_handle.start_thread();
     }

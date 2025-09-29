@@ -10,12 +10,7 @@ use std::collections::HashMap;
 use std::num::NonZeroU64;
 use rustc_hash::FxHashMap;
 use suballoc::SubAllocator;
-use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, BufferUsages, CommandEncoder,
-    ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device,
-    PipelineLayoutDescriptor, ShaderStages,
-};
+use wgpu::{BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, BufferUsages, CommandEncoder, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, PipelineLayoutDescriptor, RenderPass, ShaderStages};
 use wgpu::wgt::DrawIndirectArgs;
 
 type BufferDrawArgs = FxHashMap<usize, DrawIndirectArgs>;
@@ -110,14 +105,14 @@ impl ChunkManager {
         let to_drop = self
             .suballocs
             .iter()
-            .filter_map(|(p, _)| func(p).then_some(p).cloned())
+            .filter_map(|(p, _)| (!func(p)).then_some(p).cloned())
             .collect::<Vec<_>>();
         for p in to_drop {
             self.drop_chunk_positions(p);
         }
     }
 
-    pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut wgpu::RenderPass) {
+    pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut RenderPass) {
         self.write_indirect_draw_args(renderer, &self.gpu_active_draw);
         let render_count = self.gpu_active_draw.len() as u32;
         if render_count != 0 {

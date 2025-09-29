@@ -53,7 +53,7 @@ pub struct MsgConnectRequest {
 }
 
 // todo find a better place for consts like this
-pub(crate) const MAX_CHUNKS_PER_BATCH: usize = 64;
+pub(crate) const MAX_CHUNKS_PER_BATCH: usize = 32;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
