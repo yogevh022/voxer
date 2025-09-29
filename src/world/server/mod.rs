@@ -13,6 +13,7 @@ use crate::{compute, voxer_network};
 use glam::Vec3;
 use std::net::SocketAddr;
 use voxer_network::NetworkDeserializable;
+use crate::compute::MIB;
 
 #[derive(Debug)]
 pub struct ServerWorldConfig {
@@ -22,7 +23,7 @@ pub struct ServerWorldConfig {
 
 pub struct ServerWorld {
     config: ServerWorldConfig,
-    network: NetworkHandle<{ compute::KIB * 16 }>,
+    network: NetworkHandle,
     session: ServerWorldSession,
 }
 
@@ -37,7 +38,7 @@ impl ServerWorld {
         let session = ServerWorldSession::new(worlds);
 
         let socket_addr = SocketAddr::from(([0, 0, 0, 0], 3100));
-        let mut network = NetworkHandle::bind(socket_addr);
+        let mut network = NetworkHandle::bind(socket_addr, MIB);
         network.listen();
         Self {
             config,
@@ -51,15 +52,9 @@ impl ServerWorld {
     }
 
     pub fn tick(&mut self) {
-        let batch = self
-            .network
-            .try_iter_messages()
-            .take(64)
-            .collect::<Vec<_>>();
-        for message in batch {
+        for message in self.network.take_messages(64) {
             self.handle_network_message(message);
         }
-
         self.session.tick();
     }
 

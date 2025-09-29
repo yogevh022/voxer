@@ -11,7 +11,6 @@ pub struct ClientWorldSession {
     pub(crate) player: PlayerSession,
     pub(crate) view_frustum: [Plane; 6],
     pub(crate) chunks: FxHashMap<IVec3, Chunk>,
-    pub(crate) missing_chunks: Option<Vec<IVec3>>,
     last_request_chunk_positions: FxHashMap<IVec3, Instant>,
     unprocessed_chunk_positions: Vec<IVec3>,
 }
@@ -22,7 +21,6 @@ impl ClientWorldSession {
             player,
             view_frustum: [Plane::default(); 6],
             chunks: FxHashMap::default(),
-            missing_chunks: None,
             last_request_chunk_positions: FxHashMap::default(),
             unprocessed_chunk_positions: Vec::new(),
         }

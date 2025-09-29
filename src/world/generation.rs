@@ -116,7 +116,7 @@ pub fn world_generation_task(
         if world_gen_request.sig_kill {
             break;
         }
-        let generated_chunks = world_gen_request
+        let generated_chunks: WorldGenResponse = world_gen_request
             .positions
             .into_par_iter()
             .map(|chunk_pos| (chunk_pos, generate_chunk(config, chunk_pos)))

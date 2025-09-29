@@ -47,18 +47,18 @@ pub struct GPUVoxelChunkHeader {
 }
 
 impl GPUVoxelChunkHeader {
-    pub fn new(offset: u32, face_count: u32, slab_index: u32, chunk_position: IVec3) -> Self {
+    pub fn new(offset: u32, face_count: u32, slab_index: u32, position: IVec3) -> Self {
         let buffer_data = GPUVoxelChunkBufferData { face_count, offset };
         Self {
             buffer_data,
             slab_index,
-            position: chunk_position,
+            position,
             _padding: [0; 2],
         }
     }
 
     pub fn draw_indirect_args(&self) -> DrawIndirectArgs {
-        let packed_xz = self.position.x as i16 as u32 | ((self.position.z as i16 as u32) << 16);
+        let packed_xz = self.position.x as u16 as u32 | ((self.position.z as u16 as u32) << 16);
         DrawIndirectArgs {
             vertex_count: self.buffer_data.face_count * 6,
             instance_count: 1,

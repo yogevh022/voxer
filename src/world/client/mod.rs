@@ -2,7 +2,6 @@ mod types;
 
 use crate::app::app_renderer;
 use crate::app::app_renderer::AppRenderer;
-use crate::compute;
 use crate::compute::geo::{AABB, Frustum, Plane};
 use crate::world::client::types::ClientWorldSession;
 use crate::world::network::{
@@ -14,9 +13,9 @@ use crate::world::types::{CHUNK_DIM, Chunk};
 use glam::{IVec3, Vec3};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
 use voxer_network::NetworkDeserializable;
 use winit::window::Window;
+use crate::compute::MIB;
 
 pub struct ClientWorldConfig {
     pub render_distance: usize,
@@ -25,7 +24,7 @@ pub struct ClientWorldConfig {
 pub struct ClientWorld<'window> {
     pub config: ClientWorldConfig,
     pub(crate) renderer: AppRenderer<'window>,
-    network: NetworkHandle<{ compute::KIB * 16 }>,
+    network: NetworkHandle,
     session: ClientWorldSession,
 }
 
@@ -40,7 +39,7 @@ impl<'window> ClientWorld<'window> {
                 position: Vec3::ZERO,
             },
         };
-        let mut network = NetworkHandle::<{ compute::KIB * 16 }>::bind(socket_addr);
+        let mut network = NetworkHandle::bind(socket_addr, MIB);
         network.listen();
         Self {
             config,
@@ -50,7 +49,7 @@ impl<'window> ClientWorld<'window> {
         }
     }
 
-    pub fn set_player_position(&mut self, position: Vec3) {
+    pub fn temp_set_player_position(&mut self, position: Vec3) {
         self.session.player.location.position = position;
     }
 
@@ -77,27 +76,17 @@ impl<'window> ClientWorld<'window> {
     }
 
     pub fn tick(&mut self) {
-        let batch = self
-            .network
-            .try_iter_messages()
-            .take(64)
-            .collect::<Vec<_>>();
-        for message in batch {
+        for message in self.network.take_messages(64) {
             self.handle_network_message(message);
         }
         self.session.tick();
     }
 
     pub fn encode_render_tick(&mut self, encoder: &mut wgpu::CommandEncoder) {
-        // render
         self.cull_outside_frustum();
-        let (missing_chunks, new_renders_positions) = self.nearby_chunks_pass();
-        self.session.missing_chunks = Some(missing_chunks); // fixme
-        let new_renders = new_renders_positions
-            .iter()
-            .map(|pos| self.session.chunks.get(pos).unwrap())
-            .collect::<Vec<_>>();
-        self.renderer.load_chunks(encoder, &new_renders);
+        let (missing_chunks, new_renders) = self.nearby_chunks_pass();
+        self.renderer.load_chunks(encoder, new_renders);
+        self.request_chunks(&missing_chunks);
     }
 
     fn cull_outside_frustum(&mut self) {
@@ -107,45 +96,41 @@ impl<'window> ClientWorld<'window> {
 
         self.renderer.retain_chunk_positions(|c_pos| {
             let min = c_pos.as_vec3();
-            let max = min + 1f32;
-            let c_aabb = AABB { min, max };
-            AABB::within_aabb(c_aabb, frustum_aabb)
+            let chunk_aabb = AABB { min, max: min + 1.0 };
+            AABB::within_aabb(chunk_aabb, frustum_aabb)
         });
     }
 
-    fn nearby_chunks_pass(&mut self) -> (Vec<IVec3>, Vec<IVec3>) {
+    fn nearby_chunks_pass(&self) -> (Vec<IVec3>, Vec<Chunk>) {
         let mut missing_positions = Vec::with_capacity(MAX_CHUNKS_PER_BATCH);
-        let mut new_render = Vec::new();
+        let mut new_render = Vec::with_capacity(1024); // fixme arbitrary number
 
         let mut frustum_aabb = Frustum::aabb(&self.session.view_frustum);
         frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
         frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
 
-        let now = Instant::now();
-
         frustum_aabb.discrete_points(|chunk_position| {
-            if !self.session.chunks.contains_key(&chunk_position) {
-                if missing_positions.len() < MAX_CHUNKS_PER_BATCH
-                    && self.session.try_request_permission(now, chunk_position)
-                {
-                    missing_positions.push(chunk_position);
+            match self.session.chunks.get(&chunk_position) {
+                Some(chunk) if !self.renderer.is_chunk_rendered(chunk_position) => {
+                    new_render.push(chunk.clone())
                 }
-            } else if !self.renderer.is_chunk_rendered(chunk_position) {
-                new_render.push(chunk_position);
+                None if missing_positions.len() < MAX_CHUNKS_PER_BATCH => {
+                    missing_positions.push(chunk_position)
+                }
+                _ => {}
             }
         });
 
         (missing_positions, new_render)
     }
 
-    pub fn request_missing_chunks(&mut self) {
-        let can_request = self.session.missing_chunks.take().unwrap_or_default();
-        if can_request.is_empty() {
+    fn request_chunks(&mut self, positions: &[IVec3]) {
+        if positions.is_empty() {
             return;
         }
         let temp_server_addr = SocketAddr::from(([127, 0, 0, 1], 3100)); // temp
         let mut arr = [IVec3::ZERO; MAX_CHUNKS_PER_BATCH];
-        let positions_capped = &can_request[0..can_request.len()];
+        let positions_capped = &positions[0..positions.len()];
         arr[0..positions_capped.len()].copy_from_slice(positions_capped);
         let msg = MsgChunkDataRequest::new(positions_capped.len() as u8, arr);
 

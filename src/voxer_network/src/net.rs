@@ -5,19 +5,19 @@ use crate::types::{DecodedMessage, RawMsg, ReceivedMessage, SerializedMessage};
 use crc32fast::Hasher;
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 
-pub struct UdpChannel<const BUFF_SIZE: usize> {
+pub struct UdpChannel {
     socket: UdpSocket,
     fragment_assembler: MsgFragAssembler,
-    buffer: [u8; BUFF_SIZE],
+    buffer: Box<[u8]>,
 }
 
-impl<const BUFF_SIZE: usize> UdpChannel<BUFF_SIZE> {
-    pub fn bind(addr: impl ToSocketAddrs) -> Self {
+impl UdpChannel {
+    pub fn bind(addr: impl ToSocketAddrs, buffer_size: usize) -> Self {
         let socket = UdpSocket::bind(addr).unwrap();
         Self {
             socket,
             fragment_assembler: MsgFragAssembler::default(),
-            buffer: [0; BUFF_SIZE],
+            buffer: vec![0; buffer_size].into_boxed_slice(),
         }
     }
 
@@ -25,7 +25,7 @@ impl<const BUFF_SIZE: usize> UdpChannel<BUFF_SIZE> {
         Self {
             socket: self.socket.try_clone().unwrap(),
             fragment_assembler: MsgFragAssembler::default(),
-            buffer: [0; BUFF_SIZE],
+            buffer: vec![0; self.buffer.len()].into_boxed_slice(),
         }
     }
 

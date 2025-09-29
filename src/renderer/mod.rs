@@ -7,6 +7,7 @@ use crate::compute;
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::resources::vx_device::VxDevice;
 use std::sync::Arc;
+use glam::Mat4;
 use voxer_macros::ShaderType;
 pub use types::*;
 use wgpu::{
@@ -18,8 +19,8 @@ use winit::window::Window;
 use crate::renderer::resources::vx_queue::VxQueue;
 
 #[derive(ShaderType)]
-struct TestShaderTyped {
-    name: u32,
+struct Shader20Bytes {
+    bytes: [u8; 20],
 }
 
 pub(crate) struct Renderer<'window> {
@@ -56,7 +57,7 @@ impl<'window> Renderer<'window> {
         })
     }
 
-    fn high_perf_adapter(instance: &Instance, surface: &Surface) -> wgpu::Adapter {
+    fn high_perf_adapter(instance: &Instance, surface: &Surface) -> Adapter {
         pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             force_fallback_adapter: false,
@@ -106,19 +107,20 @@ impl<'window> Renderer<'window> {
                 | Features::INDIRECT_FIRST_INSTANCE
                 | Features::MULTI_DRAW_INDIRECT,
             Limits {
-                max_storage_buffer_binding_size: (1 << 31) - 1, // 2GB~,
+                max_storage_buffer_binding_size: (compute::GIB * 2) as u32 - 1,
+                max_buffer_size: (compute::GIB as u64 * 2) - 1,
                 ..Default::default()
             },
         );
         let vx_device = VxDevice::new(device);
         let vx_queue = VxQueue::new(queue);
-
+        
         let size = window.inner_size();
         let surface_capabilities = surface.get_capabilities(&adapter);
         let surface_config = Renderer::surface_config(&surface_capabilities, size);
         surface.configure(&vx_device, &surface_config);
 
-        let indirect_buffer = vx_device.create_vx_buffer::<TestShaderTyped>( // fixme proper type here
+        let indirect_buffer = vx_device.create_vx_buffer::<Shader20Bytes>(
             "Indirect Buffer",
             (256 * compute::KIB as u64).try_into().unwrap(),
             BufferUsages::INDIRECT | BufferUsages::STORAGE | BufferUsages::COPY_DST,

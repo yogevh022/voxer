@@ -87,6 +87,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                         }
 
                         let mut encoder = client.renderer.renderer.create_encoder("Main Encoder");
+                        client.tick();
                         client.encode_render_tick(&mut encoder);
                         if let Err(e) = client.renderer.submit_render_pass(encoder, &self.v.camera)
                         {
@@ -167,19 +168,15 @@ impl<'a> App<'a> {
         let chunk_frustum_planes = compute::geo::Frustum::planes(
             self.v
                 .camera
-                .chunk_view_projection((m_client.config.render_distance * CHUNK_DIM) as f32),
+                .chunk_view_projection(((m_client.config.render_distance - 1) * CHUNK_DIM) as f32),
         );
-        m_client.set_player_position(player_position);
+        m_client.temp_set_player_position(player_position);
         m_client.set_view_frustum(chunk_frustum_planes);
-        m_client.tick();
 
         call_every!(CLIENT_POS_SEND, 20, || {
             m_client.temp_send_player_position()
         });
 
-        // call_every!(CLIENT_REQUEST_CHUNKS, 5, || {
-        m_client.request_missing_chunks();
-        // });
 
         call_every!(SERVER_TICK, 20, || { self.server.tick() });
     }

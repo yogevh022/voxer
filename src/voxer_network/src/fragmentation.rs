@@ -55,7 +55,6 @@ impl MsgFragAssembler {
 
     pub fn gc_pass(&mut self) {
         let now = Instant::now();
-        let q = self.fragments.len();
         if now.duration_since(self.gc_timer) > self.gc_interval {
             self.fragments
                 .retain(|_, v| v.last_updated.elapsed() < self.fragment_timeout);

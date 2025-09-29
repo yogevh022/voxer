@@ -75,7 +75,7 @@ impl ChunkManager {
             suballocator: SubAllocator::new(max_face_count as u32),
             suballocs: Slap::new(),
             gpu_active_draw: FxHashMap::default(),
-            gpu_chunk_writes: Vec::new(),
+            gpu_chunk_writes: Vec::with_capacity(max_chunk_count),
             chunks_buffer: voxel_chunk_buffer,
             faces_buffer: voxel_face_buffer,
             meshing_pipeline,
@@ -85,19 +85,14 @@ impl ChunkManager {
         }
     }
 
-    pub fn encode_new_chunks<'a>(
+    pub fn encode_new_chunks(
         &mut self,
         renderer: &Renderer<'_>,
         encoder: &mut CommandEncoder,
-        chunks: &[&'a Chunk],
+        chunks: Vec<Chunk>,
     ) {
         self.gpu_chunk_writes.clear();
         for chunk in chunks {
-            if self.suballocs.contains(&chunk.position) {
-                // fixme this branch is not active
-                // remeshing currently rendered chunk, drop first
-                self.drop_chunk_positions(chunk.position);
-            }
             let gpu_chunk = self.allocate_chunk(chunk);
             self.gpu_chunk_writes.push(gpu_chunk);
         }
@@ -135,7 +130,7 @@ impl ChunkManager {
         self.suballocs.contains(&position)
     }
 
-    fn allocate_chunk(&mut self, chunk: &Chunk) -> GPUVoxelChunk {
+    fn allocate_chunk(&mut self, chunk: Chunk) -> GPUVoxelChunk {
         let face_count = chunk.face_count.unwrap() as u32;
         let mesh_alloc = self.suballocator.allocate(face_count).unwrap();
         let slab_index = self.suballocs.insert(chunk.position, mesh_alloc);
@@ -146,9 +141,9 @@ impl ChunkManager {
             chunk.position,
         );
 
-        // fixme dereferencing from raw ptr could cause ub in the future
-        let adjacent_blocks: GPUVoxelChunkAdjContent =
-            unsafe { *(chunk.adjacent_blocks.as_ptr() as *const GPUVoxelChunkAdjContent) };
+        let adjacent_blocks: GPUVoxelChunkAdjContent = unsafe {
+            std::mem::transmute(chunk.adjacent_blocks)
+        };
 
         GPUVoxelChunk::new(header, adjacent_blocks, chunk.blocks)
     }

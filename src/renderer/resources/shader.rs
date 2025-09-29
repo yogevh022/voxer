@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use wgpu::ShaderSource;
+use crate::app::app_renderer::UniformCameraView;
 use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkBufferData, GPUVoxelChunkContent, GPUVoxelFaceData, GPUVoxelChunkHeader};
 use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF};
 
@@ -101,9 +102,13 @@ fn voxel_common() -> (String, String) {
 }
 
 pub fn main_shader() -> String {
+    let uniform_camera_view = include_shader_types!(
+        UniformCameraView
+    );
     let (consts, types) = voxel_common();
     concat_shaders!(
         GLOBAL,
+        &uniform_camera_view,
         &consts,
         &types,
         VOXEL_CONST,
@@ -125,18 +130,6 @@ pub fn chunk_meshing() -> String {
         VOXEL_CHUNK_MESH_VAO,
         F_WORLD,
         F_BITWISE,
-    )
-}
-
-pub fn chunk_write_scattered() -> String {
-    let consts = include_shader_consts!(
-        WORKGROUP_SIZE: u32 = 256;
-    );
-    let (_, types) = voxel_common();
-    concat_shaders!(
-        &consts,
-        &types,
-        VOXEL_CHUNK_WRITE_SCATTERED
     )
 }
 

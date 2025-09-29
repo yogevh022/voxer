@@ -34,10 +34,9 @@ fn run_app() {
 
 fn main() {
     run_app();
-
     // debug();
 }
 
 fn debug() {
-
+    use crate::renderer::gpu::GPUVoxelChunk;
 }

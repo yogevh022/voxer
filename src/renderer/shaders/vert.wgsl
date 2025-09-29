@@ -45,7 +45,7 @@ fn vs_main(
     let quad = QUAD_VERTICES[face_id];
     let vertex_position = voxel_position + quad[vertex_index];
 
-    out.position = camera_view.view_projection * vec4<f32>(chunk_translation + vertex_position, 1.0);
+    out.position = camera_view.view_proj * vec4<f32>(chunk_translation + vertex_position, 1.0);
     out.tex_coords = TEX_COORDS[vertex_index];
     out.ao = occlusion_count_to_ao(ao[vertex_index]);
 

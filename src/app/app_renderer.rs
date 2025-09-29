@@ -8,30 +8,29 @@ use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::vtypes::Camera;
 use crate::world::types::Chunk;
 use bytemuck::{Pod, Zeroable};
-use glam::IVec3;
+use glam::{IVec3, Mat4};
 use std::borrow::Cow;
 use std::sync::Arc;
 use voxer_macros::ShaderType;
-use wgpu::{BindGroup, BufferUsages, CommandEncoder};
+use wgpu::{BindGroup, BufferUsages, CommandEncoder, RenderPipeline};
 use winit::window::Window;
 
 #[repr(C, align(16))]
 #[derive(ShaderType, Copy, Clone, Debug, Pod, Zeroable)]
-struct UniformCameraView {
-    view_proj: [f32; 16],
-    frustum_planes: [Plane; 6],
+pub struct UniformCameraView { // todo move from here
+    view_proj: Mat4,
 }
 
 pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
     chunk_manager: ChunkManager,
-    render_pipeline: wgpu::RenderPipeline,
+    render_pipeline: RenderPipeline,
     atlas_bind_group: BindGroup,
     view_projection_buffer: VxBuffer,
 }
 
 impl AppRenderer<'_> {
-    pub fn load_chunks<'a>(&mut self, encoder: &mut CommandEncoder, chunks: &[&'a Chunk]) {
+    pub fn load_chunks(&mut self, encoder: &mut CommandEncoder, chunks: Vec<Chunk>) {
         self.chunk_manager
             .encode_new_chunks(&self.renderer, encoder, chunks);
     }
@@ -59,10 +58,8 @@ impl AppRenderer<'_> {
         let frame = self.renderer.surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
 
-        let vp = camera.view_projection();
         let cam_view = UniformCameraView {
-            view_proj: vp.to_cols_array(),
-            frustum_planes: Frustum::planes(vp),
+            view_proj: camera.view_projection(),
         };
 
         self.renderer.write_buffer(
@@ -87,15 +84,15 @@ impl AppRenderer<'_> {
 
 pub fn make_app_renderer<'a>(window: Arc<Window>) -> AppRenderer<'a> {
     let renderer = Renderer::new(window);
-
+    
     let view_projection_buffer = renderer.device.create_vx_buffer::<UniformCameraView>(
         "View Projection Buffer",
         1,
         BufferUsages::UNIFORM | BufferUsages::COPY_DST,
     );
 
-    let max_face_count = compute::MIB * 16;
-    let max_chunk_count = 12_288; // fixme arbitrary number
+    let max_chunk_count = 24*24*24; // fixme arbitrary number
+    let max_face_count = max_chunk_count * 12288;
     let chunk_manager = ChunkManager::new(
         &renderer,
         &view_projection_buffer,
