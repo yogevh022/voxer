@@ -177,7 +177,6 @@ impl<'a> App<'a> {
             m_client.temp_send_player_position()
         });
 
-
-        call_every!(SERVER_TICK, 20, || { self.server.tick() });
+        self.server.tick();
     }
 }

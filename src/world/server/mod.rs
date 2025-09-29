@@ -38,7 +38,7 @@ impl ServerWorld {
         let session = ServerWorldSession::new(worlds);
 
         let socket_addr = SocketAddr::from(([0, 0, 0, 0], 3100));
-        let mut network = NetworkHandle::bind(socket_addr, MIB);
+        let mut network = NetworkHandle::bind(socket_addr, MIB * 4);
         network.listen();
         Self {
             config,

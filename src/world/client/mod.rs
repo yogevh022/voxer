@@ -39,7 +39,7 @@ impl<'window> ClientWorld<'window> {
                 position: Vec3::ZERO,
             },
         };
-        let mut network = NetworkHandle::bind(socket_addr, MIB);
+        let mut network = NetworkHandle::bind(socket_addr, MIB * 4);
         network.listen();
         Self {
             config,
