@@ -1,7 +1,7 @@
 use crate::compute;
 use crate::compute::geo::{Frustum, Plane};
 use crate::renderer::Renderer;
-use crate::renderer::gpu::GPUChunkEntry;
+use crate::renderer::gpu::GPUVoxelChunk;
 use crate::renderer::gpu::chunk_manager::ChunkManager;
 use crate::renderer::resources;
 use crate::renderer::resources::texture::get_atlas_image;
@@ -12,11 +12,12 @@ use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
 use std::borrow::Cow;
 use std::sync::Arc;
-use wgpu::BindGroup;
+use voxer_macros::ShaderType;
+use wgpu::{BindGroup, BufferUsages};
 use winit::window::Window;
 
 #[repr(C, align(16))]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+#[derive(ShaderType, Copy, Clone, Debug, Pod, Zeroable)]
 struct UniformCameraView {
     view_proj: [f32; 16],
     frustum_planes: [Plane; 6],
@@ -88,19 +89,19 @@ impl AppRenderer<'_> {
 pub fn make_app_renderer<'a>(window: Arc<Window>) -> AppRenderer<'a> {
     let renderer = Renderer::new(window);
 
-    let view_projection_buffer = VxBuffer::new(
-        &renderer.device,
+    let view_projection_buffer = renderer.device.create_vx_buffer::<UniformCameraView>(
         "View Projection Buffer",
-        size_of::<UniformCameraView>(),
-        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        1,
+        BufferUsages::UNIFORM | BufferUsages::COPY_DST,
     );
 
-    let face_data_buffer_size = compute::MIB * 128;
+    let max_face_count = compute::MIB * 16;
+    let max_chunk_count = 12_288; // fixme arbitrary number
     let chunk_manager = ChunkManager::new(
         &renderer,
         &view_projection_buffer,
-        face_data_buffer_size as wgpu::BufferAddress,
-        12_288 * size_of::<GPUChunkEntry>() as wgpu::BufferAddress, // fixme this is overkill
+        max_face_count,
+        max_chunk_count,
     );
 
     let (atlas_layout, atlas_bind_group) =

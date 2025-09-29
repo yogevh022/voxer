@@ -5,20 +5,28 @@ mod types;
 
 use crate::compute;
 use crate::renderer::resources::vx_buffer::VxBuffer;
+use crate::renderer::resources::vx_device::VxDevice;
 use std::sync::Arc;
+use voxer_macros::ShaderType;
 pub use types::*;
 use wgpu::{
-    Adapter, Backends, BufferAddress, Device, Features, Instance, Limits, Queue, Surface,
-    SurfaceCapabilities, SurfaceConfiguration, TextureView,
+    Adapter, Backends, BufferAddress, BufferUsages, Device, Features, Instance, Limits, Queue,
+    Surface, SurfaceCapabilities, SurfaceConfiguration, TextureView,
 };
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
+use crate::renderer::resources::vx_queue::VxQueue;
+
+#[derive(ShaderType)]
+struct TestShaderTyped {
+    name: u32,
+}
 
 pub(crate) struct Renderer<'window> {
     pub(crate) surface: Surface<'window>,
     pub(crate) adapter: Adapter,
-    pub(crate) device: Device,
-    pub(crate) queue: Queue,
+    pub(crate) device: VxDevice,
+    pub(crate) queue: VxQueue,
     pub(crate) indirect_buffer: VxBuffer,
     pub(crate) surface_format: wgpu::TextureFormat,
     depth_texture_view: TextureView,
@@ -102,28 +110,28 @@ impl<'window> Renderer<'window> {
                 ..Default::default()
             },
         );
+        let vx_device = VxDevice::new(device);
+        let vx_queue = VxQueue::new(queue);
+
         let size = window.inner_size();
         let surface_capabilities = surface.get_capabilities(&adapter);
         let surface_config = Renderer::surface_config(&surface_capabilities, size);
-        surface.configure(&device, &surface_config);
+        surface.configure(&vx_device, &surface_config);
 
-        let indirect_buffer = VxBuffer::new(
-            &device,
+        let indirect_buffer = vx_device.create_vx_buffer::<TestShaderTyped>( // fixme proper type here
             "Indirect Buffer",
-            256 * compute::KIB as u64,
-            wgpu::BufferUsages::INDIRECT
-                | wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST,
+            (256 * compute::KIB as u64).try_into().unwrap(),
+            BufferUsages::INDIRECT | BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
 
-        let depth_texture = resources::texture::create_depth(&device, &surface_config);
+        let depth_texture = resources::texture::create_depth(&vx_device, &surface_config);
         let depth_texture_view = depth_texture.create_view(&Default::default());
 
         Self {
             surface,
             adapter,
-            device,
-            queue,
+            device: vx_device,
+            queue: vx_queue,
             indirect_buffer,
             depth_texture_view,
             surface_format: surface_capabilities.formats[0],

@@ -1,7 +1,9 @@
-use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
-use crate::renderer::{Renderer, resources, VxDrawIndirectBatch};
-use wgpu::{BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, Device, ShaderStages};
+use crate::renderer::resources::vx_buffer::VxBuffer;
+use crate::renderer::resources::vx_device::VxDevice;
+use crate::renderer::{Renderer, VxDrawIndirectBatch, resources};
+use wgpu::{BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BufferUsages, Device, ShaderStages};
+use crate::renderer::gpu::chunk_entry::GPUVoxelFaceData;
 
 pub struct ChunkRender {
     pub face_data_buffer: VxBuffer,
@@ -11,15 +13,14 @@ pub struct ChunkRender {
 
 impl ChunkRender {
     pub fn init(
-        device: &Device,
+        device: &VxDevice,
         view_projection_buffer: &VxBuffer,
-        face_data_buffer_size: wgpu::BufferAddress,
+        max_face_count: usize,
     ) -> Self {
-        let face_data_buffer = VxBuffer::new(
-            &device,
+        let face_data_buffer = device.create_vx_buffer::<GPUVoxelFaceData>(
             "Chunk Face Data Buffer",
-            face_data_buffer_size,
-            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
+            max_face_count,
+            BufferUsages::VERTEX | BufferUsages::STORAGE,
         );
 
         let (layout, bind_group) =

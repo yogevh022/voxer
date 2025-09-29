@@ -1,31 +1,54 @@
-use crate::world::types::{CHUNK_DIM, ChunkBlocks, PACKED_CHUNK_DIM};
+use crate::world::types::{CHUNK_DIM, ChunkBlocks, CHUNK_DIM_HALF};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
+use voxer_macros::ShaderType;
 use wgpu::wgt::DrawIndirectArgs;
 
-type GPUPackedBlockPair = u32;
-type GPUChunkBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM];
-type GPUChunkAdjacentBlocks = [[[GPUPackedBlockPair; PACKED_CHUNK_DIM]; CHUNK_DIM]; 3];
+#[repr(C, align(8))]
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUVoxelChunkContent {
+    blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; CHUNK_DIM]
+}
 
 #[repr(C, align(8))]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct GPUChunkEntryBufferData {
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUVoxelChunkAdjContent {
+    blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3]
+}
+
+#[repr(C, align(8))]
+#[derive(ShaderType)]
+pub struct GPUVoxelFaceData {
+    position_fid_illum_ocl: u32,
+    // position 12b
+    // face id 3b
+    // illumination 5b
+    // occlusion count 8b
+    // 4b free
+    voxel_type: u32,
+    // voxel_type 16b
+    // 16b free
+}
+
+#[repr(C, align(8))]
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUVoxelChunkBufferData {
     pub offset: u32,
     pub face_count: u32,
 }
 
 #[repr(C, align(16))]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct GPUChunkEntryHeader {
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUVoxelChunkHeader {
     pub position: IVec3,                      // 0-11
     pub slab_index: u32,                      // 12-15
-    pub buffer_data: GPUChunkEntryBufferData, // 16-23
+    pub buffer_data: GPUVoxelChunkBufferData, // 16-23
     _padding: [u32; 2],                       // 23-31
 }
 
-impl GPUChunkEntryHeader {
+impl GPUVoxelChunkHeader {
     pub fn new(offset: u32, face_count: u32, slab_index: u32, chunk_position: IVec3) -> Self {
-        let buffer_data = GPUChunkEntryBufferData { face_count, offset };
+        let buffer_data = GPUVoxelChunkBufferData { face_count, offset };
         Self {
             buffer_data,
             slab_index,
@@ -45,24 +68,24 @@ impl GPUChunkEntryHeader {
 }
 
 #[repr(C, align(16))]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct GPUChunkEntry {
-    pub header: GPUChunkEntryHeader,
-    pub adjacent_blocks: GPUChunkAdjacentBlocks,
-    pub blocks: GPUChunkBlocks,
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUVoxelChunk {
+    pub header: GPUVoxelChunkHeader,
+    pub adj_content: GPUVoxelChunkAdjContent,
+    pub content: GPUVoxelChunkContent,
 }
 
-impl GPUChunkEntry {
+impl GPUVoxelChunk {
     pub fn new(
-        header: GPUChunkEntryHeader,
-        adjacent_blocks: GPUChunkAdjacentBlocks,
+        header: GPUVoxelChunkHeader,
+        adjacent_blocks: GPUVoxelChunkAdjContent,
         blocks: ChunkBlocks,
     ) -> Self {
-        let gpu_blocks: GPUChunkBlocks = unsafe { std::mem::transmute(blocks) };
+        let gpu_chunk_content: GPUVoxelChunkContent = unsafe { std::mem::transmute(blocks) };
         Self {
             header,
-            adjacent_blocks,
-            blocks: gpu_blocks,
+            adj_content: adjacent_blocks,
+            content: gpu_chunk_content,
         }
     }
 }

@@ -1,3 +1,4 @@
+use crate::renderer::resources::shader::VxShaderTypeData;
 use std::ops::Deref;
 use wgpu::{
     BindGroupLayoutEntry, BufferAddress, BufferBindingType, BufferSize, BufferUsages, ShaderStages,
@@ -5,20 +6,25 @@ use wgpu::{
 
 pub struct VxBuffer {
     buffer: wgpu::Buffer,
+    stride: usize,
+    shader_type: &'static str,
 }
 
 impl VxBuffer {
-    pub fn new<S>(device: &wgpu::Device, label: &str, size: S, buffer_usages: BufferUsages) -> Self
-    where
-        S: TryInto<usize>,
-        S::Error: std::error::Error,
-    {
+    pub(crate) fn new(
+        device: &wgpu::Device,
+        label: &str,
+        shader_type_name: &'static str,
+        stride: usize,
+        len: usize,
+        buffer_usages: BufferUsages,
+    ) -> Self {
         let buffer_size = match buffer_usages {
             BufferUsages::UNIFORM => std::cmp::max(
-                size.try_into().unwrap(),
+                len * stride,
                 device.limits().min_uniform_buffer_offset_alignment as usize,
             ),
-            _ => size.try_into().unwrap(),
+            _ => len * stride,
         };
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(label),
@@ -26,9 +32,17 @@ impl VxBuffer {
             usage: buffer_usages,
             mapped_at_creation: false,
         });
-        Self { buffer }
+        Self {
+            buffer,
+            stride,
+            shader_type: shader_type_name,
+        }
     }
 
+    pub fn stride(&self) -> usize {
+        self.stride
+    }
+    
     pub fn bind_layout_entry(
         &self,
         binding: u32,

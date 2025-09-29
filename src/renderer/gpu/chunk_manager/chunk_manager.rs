@@ -3,11 +3,11 @@ use super::chunk_render::ChunkRender;
 use crate::call_every;
 use crate::compute::ds::Slap;
 use crate::renderer::Renderer;
-use crate::renderer::gpu::GPUChunkEntry;
-use crate::renderer::gpu::chunk_entry::GPUChunkEntryHeader;
+use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent};
+use crate::renderer::gpu::chunk_entry::GPUVoxelChunkHeader;
 use crate::renderer::gpu::chunk_manager::BufferDrawArgs;
 use crate::renderer::resources::vx_buffer::VxBuffer;
-use crate::world::types::{CHUNK_DIM, Chunk, PACKED_CHUNK_DIM};
+use crate::world::types::{CHUNK_DIM, Chunk, CHUNK_DIM_HALF};
 use glam::IVec3;
 use std::collections::HashMap;
 use suballoc::SubAllocator;
@@ -24,17 +24,17 @@ impl ChunkManager {
     pub fn new(
         renderer: &Renderer<'_>,
         view_projection_buffer: &VxBuffer,
-        face_data_buffer_size: wgpu::BufferAddress,
-        chunks_buffer_size: wgpu::BufferAddress,
+        max_face_count: usize,
+        max_chunk_count: usize,
     ) -> Self {
         let render = ChunkRender::init(
             &renderer.device,
             view_projection_buffer,
-            face_data_buffer_size,
+            max_face_count,
         );
-        let compute = ChunkCompute::init(&renderer.device, &render, chunks_buffer_size);
+        let compute = ChunkCompute::init(&renderer.device, &render, max_chunk_count);
         Self {
-            suballocator: SubAllocator::new(face_data_buffer_size as u32),
+            suballocator: SubAllocator::new(max_face_count as u32),
             suballocs: Slap::new(),
             active_draw: HashMap::new(),
             compute,
@@ -76,7 +76,7 @@ impl ChunkManager {
             let mesh_alloc = self.suballocator.allocate(face_count).unwrap();
             let slab_index = self.suballocs.insert(chunk.position, mesh_alloc);
 
-            let header = GPUChunkEntryHeader::new(
+            let header = GPUVoxelChunkHeader::new(
                 mesh_alloc as u32,
                 face_count,
                 slab_index as u32,
@@ -84,12 +84,12 @@ impl ChunkManager {
             );
 
             // fixme dereferencing from raw ptr could cause ub in the future
-            let adjacent_blocks: [[[u32; PACKED_CHUNK_DIM]; CHUNK_DIM]; 3] = unsafe {
+            let adjacent_blocks: GPUVoxelChunkAdjContent = unsafe {
                 *(chunk.adjacent_blocks.as_ptr()
-                    as *const [[[u32; PACKED_CHUNK_DIM]; CHUNK_DIM]; 3])
+                    as *const GPUVoxelChunkAdjContent)
             };
 
-            let entry = GPUChunkEntry::new(header, adjacent_blocks, chunk.blocks);
+            let entry = GPUVoxelChunk::new(header, adjacent_blocks, chunk.blocks);
             buffer_writes.push(entry);
         }
         self.compute.write_chunks(renderer, &buffer_writes);

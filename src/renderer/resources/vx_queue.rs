@@ -1,4 +1,3 @@
-use crate::renderer::resources::vx_buffer::VxBuffer;
 use std::ops::Deref;
 use wgpu::Queue;
 
