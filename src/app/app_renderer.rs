@@ -1,5 +1,3 @@
-use crate::compute;
-use crate::compute::geo::{Frustum, Plane};
 use crate::renderer::Renderer;
 use crate::renderer::gpu::chunk_manager::ChunkManager;
 use crate::renderer::resources;

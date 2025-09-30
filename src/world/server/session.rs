@@ -1,10 +1,10 @@
-use std::net::SocketAddr;
-use glam::IVec3;
-use rustc_hash::FxHashMap;
 use crate::compute;
 use crate::world::server::world::World;
 use crate::world::session::PlayerSession;
 use crate::world::types::Chunk;
+use glam::IVec3;
+use rustc_hash::FxHashMap;
+use std::net::SocketAddr;
 
 pub(crate) struct ServerPlayerSession {
     pub player: PlayerSession,
@@ -27,18 +27,17 @@ impl ServerWorldSession {
     }
 
     pub(crate) fn tick(&mut self) {
-        let player_locations = self.get_player_locations();
-        for (world_index, origins) in player_locations {
-            self.worlds[world_index].update_simulated_chunks(&origins);
-        }
         for world in self.worlds.iter_mut() {
             world.tick();
+            world.request_chunk_generation();
         }
     }
 
     pub(crate) fn add_player(&mut self, player_session: ServerPlayerSession) {
-        self.addr_to_player.insert(player_session.addr, player_session.player.id);
-        self.players.insert(player_session.player.id, player_session);
+        self.addr_to_player
+            .insert(player_session.addr, player_session.player.id);
+        self.players
+            .insert(player_session.player.id, player_session);
     }
 
     pub(crate) fn remove_player(&mut self, player_id: usize) {
@@ -50,22 +49,15 @@ impl ServerWorldSession {
         self.addr_to_player.get(&addr).copied()
     }
 
-    pub(crate) fn get_chunks(&self, world_index: usize, chunk_positions: &[IVec3]) -> Vec<&Chunk> {
-        self.worlds[world_index].chunks_at(chunk_positions)
+    pub(crate) fn request_chunks_from_world(
+        &mut self,
+        world_index: usize,
+        chunk_positions: &[IVec3],
+    ) -> Vec<&Chunk> {
+        self.worlds[world_index].request_chunks(chunk_positions)
     }
 
     pub(crate) fn start(&mut self) {
         self.worlds.first_mut().unwrap().start_simulation();
-    }
-
-    fn get_player_locations(&self) -> FxHashMap<usize, Vec<IVec3>> {
-        let mut locations = FxHashMap::<usize, Vec<IVec3>>::default();
-        for player_session in self.players.values() {
-            locations
-                .entry(player_session.player.location.world)
-                .or_default()
-                .push(compute::geo::world_to_chunk_pos(player_session.player.location.position));
-        }
-        locations
     }
 }

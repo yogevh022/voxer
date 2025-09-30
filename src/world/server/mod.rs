@@ -9,7 +9,7 @@ use crate::world::network::{
 use crate::world::server::session::{ServerPlayerSession, ServerWorldSession};
 use crate::world::server::world::{Earth, World};
 use crate::world::session::{PlayerLocation, PlayerSession};
-use crate::{compute, voxer_network};
+use crate::voxer_network;
 use glam::Vec3;
 use std::net::SocketAddr;
 use voxer_network::NetworkDeserializable;
@@ -31,7 +31,7 @@ impl ServerWorld {
     pub fn new(config: ServerWorldConfig) -> Self {
         let world_config = WorldConfig {
             seed: config.seed,
-            noise_scale: 0.05,
+            noise_scale: 0.03,
             simulation_distance: config.simulation_distance,
         };
         let worlds: Vec<Box<dyn World>> = vec![Box::new(Earth::new(world_config))];
@@ -63,7 +63,7 @@ impl ServerWorld {
             ServerMessageTag::ChunkDataRequest => {
                 let chunk_req_msg = MsgChunkDataRequest::deserialize(message.message.data);
                 let positions = &chunk_req_msg.positions[0..chunk_req_msg.count as usize];
-                let chunks = self.session.get_chunks(0, positions);
+                let chunks = self.session.request_chunks_from_world(0, positions);
                 for chunk in chunks {
                     let msg = MsgChunkData {
                         position: chunk.position,

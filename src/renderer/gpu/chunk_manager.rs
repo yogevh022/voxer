@@ -88,6 +88,9 @@ impl ChunkManager {
     ) {
         self.gpu_chunk_writes.clear();
         for chunk in chunks {
+            if chunk.face_count.unwrap() == 0 {
+                continue;
+            }
             let gpu_chunk = self.allocate_chunk(chunk);
             self.gpu_chunk_writes.push(gpu_chunk);
         }
