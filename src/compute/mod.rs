@@ -6,6 +6,6 @@ pub mod ds;
 pub mod geo;
 pub mod num;
 pub mod convert;
-pub mod hash;
+pub mod throttler;
 
 pub use constants::*;

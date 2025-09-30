@@ -17,7 +17,8 @@ use winit::window::Window;
 
 #[repr(C, align(16))]
 #[derive(ShaderType, Copy, Clone, Debug, Pod, Zeroable)]
-pub struct UniformCameraView { // todo move from here
+pub struct UniformCameraView {
+    // todo move from here
     view_proj: Mat4,
 }
 
@@ -30,7 +31,45 @@ pub struct AppRenderer<'window> {
 }
 
 impl AppRenderer<'_> {
-    pub fn load_chunks(&mut self, encoder: &mut CommandEncoder, chunks: Vec<Chunk>) {
+    pub fn new(window: Arc<Window>) -> Self {
+        let renderer = Renderer::new(window);
+
+        let view_projection_buffer = renderer.device.create_vx_buffer::<UniformCameraView>(
+            "View Projection Buffer",
+            1,
+            BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        );
+
+        let max_chunk_count = 24 * 24 * 24; // fixme arbitrary number
+        let max_face_count = max_chunk_count * 12288;
+        let chunk_manager = ChunkManager::new(
+            &renderer,
+            &view_projection_buffer,
+            max_face_count,
+            max_chunk_count,
+        );
+
+        let (atlas_layout, atlas_bind_group) =
+            renderer.texture_sampler("Texture Sampler Atlas", get_atlas_image());
+
+        let render_pipeline = make_render_pipeline(
+            &renderer,
+            resources::shader::main_shader().into(),
+            &[
+                &atlas_layout,                           // 0
+                &chunk_manager.render_bind_group_layout, // 1
+            ],
+        );
+
+        Self {
+            renderer,
+            chunk_manager,
+            render_pipeline,
+            atlas_bind_group,
+            view_projection_buffer,
+        }
+    }
+    pub fn encode_new_chunks(&mut self, encoder: &mut CommandEncoder, chunks: &[Chunk]) {
         self.chunk_manager
             .encode_new_chunks(&self.renderer, encoder, chunks);
     }
@@ -79,45 +118,6 @@ impl AppRenderer<'_> {
 
         frame.present();
         Ok(())
-    }
-}
-
-pub fn make_app_renderer<'a>(window: Arc<Window>) -> AppRenderer<'a> {
-    let renderer = Renderer::new(window);
-    
-    let view_projection_buffer = renderer.device.create_vx_buffer::<UniformCameraView>(
-        "View Projection Buffer",
-        1,
-        BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-    );
-
-    let max_chunk_count = 24*24*24; // fixme arbitrary number
-    let max_face_count = max_chunk_count * 12288;
-    let chunk_manager = ChunkManager::new(
-        &renderer,
-        &view_projection_buffer,
-        max_face_count,
-        max_chunk_count,
-    );
-
-    let (atlas_layout, atlas_bind_group) =
-        renderer.texture_sampler("Texture Sampler Atlas", get_atlas_image());
-
-    let render_pipeline = make_render_pipeline(
-        &renderer,
-        resources::shader::main_shader().into(),
-        &[
-            &atlas_layout,                           // 0
-            &chunk_manager.render_bind_group_layout, // 1
-        ],
-    );
-
-    AppRenderer {
-        renderer,
-        chunk_manager,
-        render_pipeline,
-        atlas_bind_group,
-        view_projection_buffer,
     }
 }
 

@@ -84,7 +84,7 @@ impl ChunkManager {
         &mut self,
         renderer: &Renderer<'_>,
         encoder: &mut CommandEncoder,
-        chunks: Vec<Chunk>,
+        chunks: &[Chunk],
     ) {
         self.gpu_chunk_writes.clear();
         for chunk in chunks {
@@ -125,7 +125,7 @@ impl ChunkManager {
         self.suballocs.contains(&position)
     }
 
-    fn allocate_chunk(&mut self, chunk: Chunk) -> GPUVoxelChunk {
+    fn allocate_chunk(&mut self, chunk: &Chunk) -> GPUVoxelChunk {
         let face_count = chunk.face_count.unwrap() as u32;
         let mesh_alloc = self.suballocator.allocate(face_count).unwrap();
         let slab_index = self.suballocs.insert(chunk.position, mesh_alloc);

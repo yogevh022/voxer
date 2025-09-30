@@ -1,4 +1,4 @@
-mod types;
+mod session;
 mod world;
 
 use crate::world::generation::WorldConfig;
@@ -6,7 +6,7 @@ use crate::world::network::{
     MsgChunkData, MsgChunkDataRequest, MsgSetPositionRequest, NetworkHandle, ServerMessage,
     ServerMessageTag,
 };
-use crate::world::server::types::{ServerPlayerSession, ServerWorldSession};
+use crate::world::server::session::{ServerPlayerSession, ServerWorldSession};
 use crate::world::server::world::{Earth, World};
 use crate::world::session::{PlayerLocation, PlayerSession};
 use crate::{compute, voxer_network};

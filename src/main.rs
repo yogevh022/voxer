@@ -41,7 +41,7 @@ fn main() {
 }
 
 fn debug() {
-    use crate::compute::hash::mix_ivec3_to_u16;
+    use smallhash;
     use crate::renderer::gpu::GPUVoxelChunk;
     use std::hint::black_box;
     use glam::IVec3;
@@ -52,8 +52,7 @@ fn debug() {
         for x in -bound..bound {
             for y in -bound..bound {
                 for z in -bound..bound {
-                    let ivec = IVec3::new(x, y, z);
-                    let hash = mix_ivec3_to_u16(ivec);
+                    let hash = smallhash::u32x3_to_18_bits([x, y, z]);
                     black_box(hash);
                 }
             }

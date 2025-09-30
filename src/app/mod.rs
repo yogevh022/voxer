@@ -86,10 +86,17 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                             ));
                         }
 
-                        let mut encoder = client.renderer.renderer.create_encoder("Main Encoder");
-                        client.tick();
-                        client.encode_render_tick(&mut encoder);
-                        if let Err(e) = client.renderer.submit_render_pass(encoder, &self.v.camera)
+                        // fixme naming here (renderer.renderer)
+                        let mut encoder = client
+                            .session
+                            .renderer
+                            .renderer
+                            .create_encoder("Main Encoder");
+                        client.tick(&mut encoder);
+                        if let Err(e) = client
+                            .session
+                            .renderer
+                            .submit_render_pass(encoder, &self.v.camera)
                         {
                             println!("{:?}", e);
                         }
@@ -171,7 +178,7 @@ impl<'a> App<'a> {
                 .chunk_view_projection(((m_client.config.render_distance - 1) * CHUNK_DIM) as f32),
         );
         m_client.temp_set_player_position(player_position);
-        m_client.set_view_frustum(chunk_frustum_planes);
+        m_client.temp_set_view_frustum(chunk_frustum_planes);
 
         call_every!(CLIENT_POS_SEND, 20, || {
             m_client.temp_send_player_position()
