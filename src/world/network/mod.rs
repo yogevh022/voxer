@@ -65,12 +65,19 @@ pub struct MsgChunkDataRequest {
 }
 
 impl MsgChunkDataRequest {
-    pub fn new(count: u8, positions: [IVec3; MAX_CHUNKS_PER_BATCH]) -> Self {
+    pub fn new() -> Self {
         Self {
-            count,
+            count: 0,
             _pad: [0; 3],
-            positions,
+            positions: [IVec3::default(); MAX_CHUNKS_PER_BATCH],
         }
+    }
+
+    pub fn new_with_positions(positions: &[IVec3]) -> Self {
+        let mut request = Self::new();
+        request.count = positions.len() as u8;
+        request.positions[..positions.len()].copy_from_slice(positions);
+        request
     }
 }
 

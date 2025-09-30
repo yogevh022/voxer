@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-voxer_network = { path = "src/voxer_network" }
 voxer_macros = { path = "voxer_macros" }
+voxer_network = { git = "https://github.com/yogevh022/voxer_network" }
 suballoc = { git = "https://github.com/yogevh022/suballoc-rs", branch = "master" }
 smallhash = { path="C:/Users/Yogev/RustroverProjects/vec3_hash" }
 #wgpu = { version = "26.0.1", features = ["dx12", "vulkan", "metal"] }

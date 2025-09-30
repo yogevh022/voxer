@@ -1,14 +1,14 @@
 mod session;
 use crate::compute::MIB;
-use crate::compute::geo::{Frustum, Plane};
+use crate::compute::geo::Plane;
 use crate::world::client::session::ClientWorldSession;
 use crate::world::network::{
-    MAX_CHUNKS_PER_BATCH, MsgChunkData, MsgChunkDataRequest, MsgConnectRequest,
-    MsgSetPositionRequest, NetworkHandle, ServerMessage, ServerMessageTag,
+    MsgChunkData, MsgChunkDataRequest, MsgConnectRequest, MsgSetPositionRequest, NetworkHandle,
+    ServerMessage, ServerMessageTag,
 };
 use crate::world::session::{PlayerLocation, PlayerSession};
-use crate::world::types::{CHUNK_DIM, Chunk};
-use glam::{IVec3, Vec3};
+use crate::world::types::Chunk;
+use glam::Vec3;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use voxer_network::NetworkDeserializable;
@@ -23,6 +23,7 @@ pub struct ClientWorld<'window> {
     pub config: ClientWorldConfig,
     pub session: ClientWorldSession<'window>,
     network: NetworkHandle,
+    temp_server_addr: SocketAddr,
 }
 
 impl ClientWorld<'_> {
@@ -38,10 +39,12 @@ impl ClientWorld<'_> {
         };
         let mut network = NetworkHandle::bind(socket_addr, MIB * 4);
         network.listen();
+        let temp_server_addr = SocketAddr::from(([127, 0, 0, 1], 3100));
         Self {
             config,
-            network,
             session: ClientWorldSession::new(window, player),
+            network,
+            temp_server_addr,
         }
     }
 
@@ -50,21 +53,17 @@ impl ClientWorld<'_> {
     }
 
     pub fn temp_send_player_position(&self) {
-        let temp_server_addr = SocketAddr::from(([127, 0, 0, 1], 3100));
-        let pos_req = MsgSetPositionRequest {
+        let set_position_request = MsgSetPositionRequest {
             position: self.session.player.location.position,
         };
-        self.network
-            .send_to(Box::new(pos_req), &temp_server_addr)
-            .unwrap();
+        let msg = Box::new(set_position_request);
+        self.network.send_to(msg, &self.temp_server_addr).unwrap();
     }
 
     pub fn temp_send_req_conn(&self) {
-        let temp_server_addr = SocketAddr::from(([127, 0, 0, 1], 3100));
-        let con_req = MsgConnectRequest { byte: 62 };
-        self.network
-            .send_to(Box::new(con_req), &temp_server_addr)
-            .unwrap();
+        let connection_request = MsgConnectRequest { byte: 62 };
+        let msg = Box::new(connection_request);
+        self.network.send_to(msg, &self.temp_server_addr).unwrap();
     }
 
     pub fn temp_set_view_frustum(&mut self, frustum: [Plane; 6]) {
@@ -82,19 +81,12 @@ impl ClientWorld<'_> {
 
     fn request_chunk_batch(&mut self) {
         let positions = self.session.chunk_request_batch();
-        debug_assert!(positions.len() <= MAX_CHUNKS_PER_BATCH);
         if positions.is_empty() {
             return;
         }
-        let temp_server_addr = SocketAddr::from(([127, 0, 0, 1], 3100)); // temp
-        let mut arr = [IVec3::ZERO; MAX_CHUNKS_PER_BATCH];
-        let positions_capped = &positions[0..positions.len()];
-        arr[0..positions_capped.len()].copy_from_slice(positions_capped);
-        let msg = MsgChunkDataRequest::new(positions_capped.len() as u8, arr);
-
-        self.network
-            .send_to(Box::new(msg), &temp_server_addr)
-            .unwrap();
+        let chunk_data_request = MsgChunkDataRequest::new_with_positions(positions);
+        let msg = Box::new(chunk_data_request);
+        self.network.send_to(msg, &self.temp_server_addr).unwrap();
     }
 
     fn handle_network_message(&mut self, message: ServerMessage) {

@@ -2440,6 +2440,7 @@ dependencies = [
 [[package]]
 name = "voxer_network"
 version = "0.1.0"
+source = "git+https://github.com/yogevh022/voxer_network#c8aa83ccdd3978f78b3021751d60ca8dcd37e6df"
 dependencies = [
  "bytemuck",
  "crc32fast",
