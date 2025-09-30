@@ -13,9 +13,11 @@ pub struct Earth {
 
 impl Earth {
     pub fn new(config: WorldConfig) -> Self {
+        let mut chunks = FxHashMap::default();
+        chunks.reserve(config.simulation_distance.pow(4)); // fixme temporary arbitrary capacity
         Self {
             config,
-            chunks: FxHashMap::default(),
+            chunks,
             generation_handle: WorldGenHandle::new(config),
             generation_request_batch: FxHashSet::default(),
         }

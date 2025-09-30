@@ -31,12 +31,14 @@ pub struct ClientWorldSession<'window> {
 
 impl<'window> ClientWorldSession<'window> {
     pub fn new(window: Arc<Window>, player: PlayerSession, config: ClientWorldConfig) -> Self {
+        let mut chunks = FxHashMap::default();
+        chunks.reserve(config.render_distance.pow(3));
         Self {
             player,
             config, // fixme config redundancy
             renderer: AppRenderer::new(window),
             view_frustum: [Plane::default(); 6],
-            chunks: FxHashMap::default(),
+            chunks,
             unprocessed_chunk_positions: Vec::new(),
 
             chunk_request_throttler: Throttler::new((1 << 18) + 1, Duration::from_millis(200)),
@@ -56,20 +58,20 @@ impl<'window> ClientWorldSession<'window> {
     }
 
     pub fn lazy_chunk_gc(&mut self) {
-        const CHUNKS_PER_PASS: usize = 32;
         if self.lazy_chunk_positions.is_empty() {
             self.lazy_chunk_positions.extend(self.chunks.keys());
-        } else {
-            let remaining_positions = self.lazy_chunk_positions.len();
-            let render_threshold_sq = (self.config.render_distance as i32).pow(2) + 1;
-            let camera_chunk_position = world_to_chunk_pos(self.player.location.position);
-            for position in self
-                .lazy_chunk_positions
-                .drain(remaining_positions.saturating_sub(CHUNKS_PER_PASS)..)
-            {
-                if camera_chunk_position.distance_squared(position) > render_threshold_sq {
-                    self.chunks.remove(&position);
-                }
+            return;
+        }
+        const CHUNKS_PER_PASS: usize = 32;
+        let remaining_positions = self.lazy_chunk_positions.len();
+        let render_threshold_sq = (self.config.render_distance as i32).pow(2) + 1;
+        let camera_chunk_position = world_to_chunk_pos(self.player.location.position);
+        for position in self
+            .lazy_chunk_positions
+            .drain(remaining_positions.saturating_sub(CHUNKS_PER_PASS)..)
+        {
+            if camera_chunk_position.distance_squared(position) > render_threshold_sq {
+                self.chunks.remove(&position);
             }
         }
     }
