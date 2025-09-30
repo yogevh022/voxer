@@ -24,7 +24,7 @@ pub struct ClientWorldConfig {
 
 pub struct ClientWorld<'window> {
     config: ClientWorldConfig,
-    pub(crate) renderer: AppRenderer<'window, 2>,
+    pub(crate) renderer: AppRenderer<'window, 4>,
     network: NetworkHandle<{ compute::KIB * 16 }>,
     session: ClientWorldSession,
 }
