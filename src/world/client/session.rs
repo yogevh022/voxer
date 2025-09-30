@@ -57,15 +57,13 @@ impl<'window> ClientWorldSession<'window> {
         &self.chunk_request_batch
     }
 
-    pub fn lazy_chunk_gc(&mut self) {
+    pub fn lazy_chunk_gc(&mut self, camera_chunk_position: IVec3, render_threshold_sq: i32) {
         if self.lazy_chunk_positions.is_empty() {
             self.lazy_chunk_positions.extend(self.chunks.keys());
             return;
         }
         const CHUNKS_PER_PASS: usize = 32;
         let remaining_positions = self.lazy_chunk_positions.len();
-        let render_threshold_sq = (self.config.render_distance as i32).pow(2) + 1;
-        let camera_chunk_position = world_to_chunk_pos(self.player.location.position);
         for position in self
             .lazy_chunk_positions
             .drain(remaining_positions.saturating_sub(CHUNKS_PER_PASS)..)
@@ -81,21 +79,27 @@ impl<'window> ClientWorldSession<'window> {
         frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
         frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
 
-        self.retain_frustum_chunks(frustum_aabb);
-        self.update_chunk_batches(frustum_aabb);
-        self.lazy_chunk_gc();
+        let camera_chunk_position = world_to_chunk_pos(self.player.location.position);
+        let render_threshold_sq = (self.config.render_distance as i32).pow(2);
+
+        self.retain_frustum_chunks(frustum_aabb, camera_chunk_position, render_threshold_sq);
+        self.update_chunk_batches(frustum_aabb, camera_chunk_position, render_threshold_sq);
+        self.lazy_chunk_gc(camera_chunk_position, render_threshold_sq);
         self.renderer
             .encode_new_chunks(encoder, &self.chunk_render_batch);
     }
 
-    fn update_chunk_batches(&mut self, frustum_aabb: AABB) {
+    fn update_chunk_batches(
+        &mut self,
+        frustum_aabb: AABB,
+        camera_chunk_position: IVec3,
+        render_threshold_sq: i32,
+    ) {
         self.chunk_request_batch.clear();
         self.chunk_render_batch.clear();
         self.chunk_request_throttler.set_now(Instant::now());
-        let player_chunk_position = world_to_chunk_pos(self.player.location.position);
-        let render_threshold_sq = (self.config.render_distance as i32).pow(2);
         frustum_aabb.discrete_points(|chunk_position| {
-            if player_chunk_position.distance_squared(chunk_position) > render_threshold_sq {
+            if camera_chunk_position.distance_squared(chunk_position) > render_threshold_sq {
                 return;
             }
             if let Some(chunk) = self.chunks.get(&chunk_position) {
@@ -111,11 +115,17 @@ impl<'window> ClientWorldSession<'window> {
         });
     }
 
-    fn retain_frustum_chunks(&mut self, frustum_aabb: AABB) {
-        self.renderer.retain_chunk_positions(|c_pos| {
+    fn retain_frustum_chunks(
+        &mut self,
+        frustum_aabb: AABB,
+        camera_chunk_position: IVec3,
+        render_threshold_sq: i32,
+    ) {
+        self.renderer.retain_chunk_positions(|&c_pos| {
             let min = c_pos.as_vec3();
             let chunk_aabb = AABB::new(min, min + 1.0);
-            AABB::within_aabb(chunk_aabb, frustum_aabb)
+            camera_chunk_position.distance_squared(c_pos) <= render_threshold_sq
+                && AABB::within_aabb(chunk_aabb, frustum_aabb)
         });
     }
 
