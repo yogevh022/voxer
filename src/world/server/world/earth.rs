@@ -7,7 +7,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 pub struct Earth {
     config: WorldConfig,
     chunks: FxHashMap<IVec3, Chunk>,
-    simulated_chunks: FxHashSet<IVec3>,
     generation_handle: WorldGenHandle,
     generation_request_batch: FxHashSet<IVec3>,
 }
@@ -17,7 +16,6 @@ impl Earth {
         Self {
             config,
             chunks: FxHashMap::default(),
-            simulated_chunks: FxHashSet::default(),
             generation_handle: WorldGenHandle::new(config),
             generation_request_batch: FxHashSet::default(),
         }

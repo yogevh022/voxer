@@ -1,20 +1,22 @@
-use std::sync::Arc;
 use crate::app::app_renderer::AppRenderer;
 use crate::compute;
 use crate::compute::array::Array3D;
-use crate::compute::geo::{AABB, Plane, Frustum};
+use crate::compute::geo::{AABB, Frustum, Plane, world_to_chunk_pos};
 use crate::compute::throttler::Throttler;
+use crate::world::ClientWorldConfig;
 use crate::world::network::MAX_CHUNKS_PER_BATCH;
 use crate::world::session::PlayerSession;
-use crate::world::types::{Chunk, CHUNK_DIM};
+use crate::world::types::{CHUNK_DIM, Chunk};
 use glam::IVec3;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use wgpu::CommandEncoder;
 use winit::window::Window;
 
 pub struct ClientWorldSession<'window> {
     pub player: PlayerSession,
+    pub config: ClientWorldConfig,
     pub renderer: AppRenderer<'window>,
     pub view_frustum: [Plane; 6],
     pub chunks: FxHashMap<IVec3, Chunk>,
@@ -23,12 +25,15 @@ pub struct ClientWorldSession<'window> {
     chunk_request_throttler: Throttler,
     chunk_request_batch: Vec<IVec3>,
     chunk_render_batch: Vec<Chunk>,
+
+    lazy_chunk_positions: Vec<IVec3>,
 }
 
 impl<'window> ClientWorldSession<'window> {
-    pub fn new(window: Arc<Window>, player: PlayerSession) -> Self {
+    pub fn new(window: Arc<Window>, player: PlayerSession, config: ClientWorldConfig) -> Self {
         Self {
             player,
+            config, // fixme config redundancy
             renderer: AppRenderer::new(window),
             view_frustum: [Plane::default(); 6],
             chunks: FxHashMap::default(),
@@ -37,6 +42,7 @@ impl<'window> ClientWorldSession<'window> {
             chunk_request_throttler: Throttler::new((1 << 18) + 1, Duration::from_millis(200)),
             chunk_request_batch: Vec::new(),
             chunk_render_batch: Vec::new(),
+            lazy_chunk_positions: Vec::new(),
         }
     }
 
@@ -49,6 +55,25 @@ impl<'window> ClientWorldSession<'window> {
         &self.chunk_request_batch
     }
 
+    pub fn lazy_chunk_gc(&mut self) {
+        const CHUNKS_PER_PASS: usize = 32;
+        if self.lazy_chunk_positions.is_empty() {
+            self.lazy_chunk_positions.extend(self.chunks.keys());
+        } else {
+            let remaining_positions = self.lazy_chunk_positions.len();
+            let render_threshold_sq = (self.config.render_distance as i32).pow(2) + 1;
+            let camera_chunk_position = world_to_chunk_pos(self.player.location.position);
+            for position in self
+                .lazy_chunk_positions
+                .drain(remaining_positions.saturating_sub(CHUNKS_PER_PASS)..)
+            {
+                if camera_chunk_position.distance_squared(position) > render_threshold_sq {
+                    self.chunks.remove(&position);
+                }
+            }
+        }
+    }
+
     pub fn update_render_state(&mut self, encoder: &mut CommandEncoder) {
         let mut frustum_aabb = Frustum::aabb(&self.view_frustum);
         frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
@@ -56,14 +81,21 @@ impl<'window> ClientWorldSession<'window> {
 
         self.retain_frustum_chunks(frustum_aabb);
         self.update_chunk_batches(frustum_aabb);
-        self.renderer.encode_new_chunks(encoder, &self.chunk_render_batch);
+        self.lazy_chunk_gc();
+        self.renderer
+            .encode_new_chunks(encoder, &self.chunk_render_batch);
     }
 
     fn update_chunk_batches(&mut self, frustum_aabb: AABB) {
         self.chunk_request_batch.clear();
         self.chunk_render_batch.clear();
         self.chunk_request_throttler.set_now(Instant::now());
+        let player_chunk_position = world_to_chunk_pos(self.player.location.position);
+        let render_threshold_sq = (self.config.render_distance as i32).pow(2);
         frustum_aabb.discrete_points(|chunk_position| {
+            if player_chunk_position.distance_squared(chunk_position) > render_threshold_sq {
+                return;
+            }
             if let Some(chunk) = self.chunks.get(&chunk_position) {
                 if !self.renderer.is_chunk_rendered(chunk_position) {
                     self.chunk_render_batch.push(chunk.clone());

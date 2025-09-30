@@ -97,7 +97,7 @@ impl ChunkManager {
         self.encode_meshing_pass(renderer, encoder);
     }
 
-    pub fn drop_chunk_positions(&mut self, position: IVec3) {
+    pub fn drop_chunk_position(&mut self, position: IVec3) {
         let slap_entry_opt = self.suballocs.remove(&position);
         let (slab_index, alloc_start) = slap_entry_opt.unwrap();
         self.gpu_active_draw.remove(&slab_index).unwrap();
@@ -111,7 +111,7 @@ impl ChunkManager {
             .filter_map(|(p, _)| (!func(p)).then_some(p).cloned())
             .collect::<Vec<_>>();
         for p in to_drop {
-            self.drop_chunk_positions(p);
+            self.drop_chunk_position(p);
         }
     }
 

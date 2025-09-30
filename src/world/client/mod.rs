@@ -15,6 +15,7 @@ use voxer_network::NetworkDeserializable;
 use wgpu::CommandEncoder;
 use winit::window::Window;
 
+#[derive(Clone, Copy)]
 pub struct ClientWorldConfig {
     pub render_distance: usize,
 }
@@ -42,7 +43,7 @@ impl ClientWorld<'_> {
         let temp_server_addr = SocketAddr::from(([127, 0, 0, 1], 3100));
         Self {
             config,
-            session: ClientWorldSession::new(window, player),
+            session: ClientWorldSession::new(window, player, config),
             network,
             temp_server_addr,
         }
