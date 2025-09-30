@@ -83,7 +83,7 @@ impl MsgChunkDataRequest {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
-#[network_message(tag = ServerMessageTag::ChunkData.as_tag() frags = 10)]
+#[network_message(tag = ServerMessageTag::ChunkData.as_tag())]
 pub struct MsgChunkData {
     pub position: IVec3,     // 0..11
     pub solid_count: u32,    // 12..15
