@@ -14,6 +14,9 @@ use rustc_hash::FxHashMap;
 use voxer_network;
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
+use crate::compute::array::Array3D;
+use crate::world::generation::{generate_chunk, WorldConfig};
+use crate::world::types::Chunk;
 
 const SIMULATION_AND_RENDER_DISTANCE: usize = 16; // fixme temp location
 
@@ -36,8 +39,8 @@ fn run_app() {
 }
 
 fn main() {
-    run_app();
-    // debug();
+    // run_app();
+    debug();
 }
 
 fn debug() {
@@ -47,19 +50,36 @@ fn debug() {
     use glam::IVec3;
     use std::time::Instant;
 
-    fn dbg_hash(bound: i32)
-    {
-        for x in -bound..bound {
-            for y in -bound..bound {
-                for z in -bound..bound {
-                    let hash = smallhash::u32x3_to_18_bits([x, y, z]);
-                    black_box(hash);
+    const CHUNK_COUNT: i32 = 10;
+
+    let world_config = WorldConfig {
+        seed: 0,
+        noise_scale: 0.3,
+        simulation_distance: 16,
+    };
+    let mut chunks_map: FxHashMap<IVec3, Chunk> = FxHashMap::default();
+    let exc = true;
+    if exc {
+        let chunk_pos = IVec3::new(5, 5, 5);
+        let chunk = generate_chunk(world_config, chunk_pos);
+        chunks_map.insert(chunk_pos, chunk);
+    } else {
+        for x in 0..CHUNK_COUNT {
+            for y in 0..CHUNK_COUNT {
+                for z in 0..CHUNK_COUNT {
+                    let chunk_pos = IVec3::new(x, y, z);
+                    let chunk = generate_chunk(world_config, chunk_pos);
+                    chunks_map.insert(chunk_pos, chunk);
                 }
             }
         }
     }
 
-    let start = Instant::now();
-    dbg_hash(512);
-    println!("time: {:?}", start.elapsed());
+    let test_pos = IVec3::new(5, 5, 5);
+
+    let adj_blocks = Array3D(compute::chunk::get_adjacent_blocks(test_pos, &chunks_map));
+    chunks_map.get_mut(&test_pos).map(|chunk| {
+        let fc = Some(compute::chunk::face_count(&chunk.blocks, &adj_blocks));
+        dbg!(fc);
+    });
 }
