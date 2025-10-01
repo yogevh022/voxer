@@ -1,5 +1,5 @@
-use crate::compute::array::{array_pop_count_u16, array_pop_count_u32, Array3D};
 use crate::compute::array::array_xor;
+use crate::compute::array::{Array3D, array_pop_count_u16, array_pop_count_u32};
 use crate::compute::bytes::bit_at;
 use crate::world::types::{
     BlockBytewise, CHUNK_DIM, CHUNK_SLICE, Chunk, ChunkAdjacentBlocks, ChunkBlocks, VoxelBlock,
@@ -34,7 +34,7 @@ fn faces(packed: [u16; CHUNK_SLICE], packed_adj: [u16; CHUNK_DIM * 6]) -> u32 {
         .try_into()
         .unwrap();
     *xb = packed[0..CHUNK_DIM].try_into().unwrap();
-    // result += array_pop_count_u16(array_xor(xa, xb));
+    result += array_pop_count_u16(array_xor(xa, xb));
 
     for i in 0..CHUNK_DIM - 1 {
         adj_x(&packed, xa, xb, i);
@@ -48,7 +48,6 @@ fn faces(packed: [u16; CHUNK_SLICE], packed_adj: [u16; CHUNK_DIM * 6]) -> u32 {
         result += array_pop_count_u16(array_xor(xa, xb));
         result += array_pop_count_u16(array_xor(ya, yb));
         result += array_pop_count_u32(array_xor(za, zb));
-        println!("pass (x: {} + y: {} + z: {}) {}: {}", i, xx, yx, zx, result);
     }
     adj_y(&packed, &packed_adj, ya, yb, CHUNK_DIM - 1);
     adj_z(&packed_adj, xb, za, zb, CHUNK_DIM - 1);
@@ -84,8 +83,8 @@ fn adj_y(
     let packed_adj_plus = packed_adj[CHUNK_DIM + x];
     let packed_adj_minus = packed_adj[CHUNK_DIM * 4 + x];
 
-    // ya[0] = packed_adj_minus;
-    // yb[0] = packed[x * CHUNK_DIM];
+    ya[0] = packed_adj_minus;
+    yb[0] = packed[x * CHUNK_DIM];
     for j in 0..CHUNK_DIM - 1 {
         ya[j + 1] = packed[(x * CHUNK_DIM) + j];
         yb[j + 1] = packed[(x * CHUNK_DIM) + j + 1];
@@ -104,18 +103,13 @@ fn adj_z(
 ) {
     let adj_plus = packed_adj[CHUNK_DIM * 2 + x];
     let adj_minus = packed_adj[CHUNK_DIM * 5 + x];
-    *za = array::from_fn(|i| xa[i] as u32);
-    *zb = array::from_fn(|i| {
+    *za = array::from_fn(|i| {
         let adj_plus_bit = bit_at(adj_plus, i) as u32;
         let adj_minus_bit = bit_at(adj_minus, i) as u32;
-        adj_plus_bit << 17 | (za[i] << 1) | 0//adj_minus_bit
+        adj_plus_bit << 17 | (xa[i] as u32) << 1 | adj_minus_bit
     });
+    *zb = array::from_fn(|i| za[i] >> 1);
 }
-//
-// #[inline]
-// fn adj_z(packed_adjacent_blocks: u16, xa: &[u16; CHUNK_DIM], zb: &mut [u16; CHUNK_DIM]) {
-//     *zb = array::from_fn(|i| bit_at(packed_adjacent_blocks, i) << 15 | (xa[i] >> 1));
-// }
 
 fn pack_solid_blocks<const X: usize, const Y: usize, const Z: usize, const XY: usize>(
     blocks: &Array3D<VoxelBlock, X, Y, Z>,
