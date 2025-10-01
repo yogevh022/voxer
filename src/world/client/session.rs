@@ -1,7 +1,7 @@
 use crate::app::app_renderer::AppRenderer;
 use crate::compute;
 use crate::compute::array::Array3D;
-use crate::compute::geo::{AABB, Frustum, Plane, world_to_chunk_pos};
+use crate::compute::geo::{AABB, Frustum, Plane, chunk_to_world_pos, world_to_chunk_pos};
 use crate::compute::throttler::Throttler;
 use crate::world::ClientWorldConfig;
 use crate::world::network::MAX_CHUNKS_PER_BATCH;
@@ -57,7 +57,7 @@ impl<'window> ClientWorldSession<'window> {
         &self.chunk_request_batch
     }
 
-    pub fn lazy_chunk_gc(&mut self, camera_chunk_position: IVec3, render_threshold_sq: i32) {
+    pub fn lazy_chunk_gc(&mut self, camera_ch_position: IVec3, render_threshold_sq: i32) {
         if self.lazy_chunk_positions.is_empty() {
             self.lazy_chunk_positions.extend(self.chunks.keys());
             return;
@@ -68,7 +68,7 @@ impl<'window> ClientWorldSession<'window> {
             .lazy_chunk_positions
             .drain(remaining_positions.saturating_sub(CHUNKS_PER_PASS)..)
         {
-            if camera_chunk_position.distance_squared(position) > render_threshold_sq {
+            if camera_ch_position.distance_squared(position) > render_threshold_sq {
                 self.chunks.remove(&position);
             }
         }
@@ -79,12 +79,12 @@ impl<'window> ClientWorldSession<'window> {
         frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
         frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
 
-        let camera_chunk_position = world_to_chunk_pos(self.player.location.position);
+        let camera_ch_position = world_to_chunk_pos(self.player.location.position);
         let render_threshold_sq = (self.config.render_distance as i32).pow(2);
 
-        self.retain_frustum_chunks(frustum_aabb, camera_chunk_position, render_threshold_sq);
-        self.update_chunk_batches(frustum_aabb, camera_chunk_position, render_threshold_sq);
-        self.lazy_chunk_gc(camera_chunk_position, render_threshold_sq);
+        self.retain_frustum_chunks();
+        self.update_chunk_batches(frustum_aabb, camera_ch_position, render_threshold_sq);
+        self.lazy_chunk_gc(camera_ch_position, render_threshold_sq);
         self.renderer
             .encode_new_chunks(encoder, &self.chunk_render_batch);
     }
@@ -92,40 +92,37 @@ impl<'window> ClientWorldSession<'window> {
     fn update_chunk_batches(
         &mut self,
         frustum_aabb: AABB,
-        camera_chunk_position: IVec3,
+        camera_ch_position: IVec3,
         render_threshold_sq: i32,
     ) {
         self.chunk_request_batch.clear();
         self.chunk_render_batch.clear();
         self.chunk_request_throttler.set_now(Instant::now());
-        frustum_aabb.discrete_points(|chunk_position| {
-            if camera_chunk_position.distance_squared(chunk_position) > render_threshold_sq {
+        frustum_aabb.discrete_points(|ch_position| {
+            // higher precision pass chunk aabb vs precise frustum
+            let min = chunk_to_world_pos(ch_position);
+            if !Frustum::aabb_within_frustum(min, min + CHUNK_DIM as f32, &self.view_frustum)
+                || camera_ch_position.distance_squared(ch_position) >= render_threshold_sq
+            {
                 return;
             }
-            if let Some(chunk) = self.chunks.get(&chunk_position) {
-                if !self.renderer.is_chunk_rendered(chunk_position) {
+            if let Some(chunk) = self.chunks.get(&ch_position) {
+                if !self.renderer.is_chunk_rendered(ch_position) {
                     self.chunk_render_batch.push(chunk.clone());
                 }
             } else if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
-                let throttle_idx = smallhash::u32x3_to_18_bits(chunk_position.to_array());
+                let throttle_idx = smallhash::u32x3_to_18_bits(ch_position.to_array());
                 if self.chunk_request_throttler.request(throttle_idx as usize) {
-                    self.chunk_request_batch.push(chunk_position);
+                    self.chunk_request_batch.push(ch_position);
                 }
             }
         });
     }
 
-    fn retain_frustum_chunks(
-        &mut self,
-        frustum_aabb: AABB,
-        camera_chunk_position: IVec3,
-        render_threshold_sq: i32,
-    ) {
+    fn retain_frustum_chunks(&mut self) {
         self.renderer.retain_chunk_positions(|&c_pos| {
-            let min = c_pos.as_vec3();
-            let chunk_aabb = AABB::new(min, min + 1.0);
-            camera_chunk_position.distance_squared(c_pos) <= render_threshold_sq
-                && AABB::within_aabb(chunk_aabb, frustum_aabb)
+            let min = chunk_to_world_pos(c_pos);
+            Frustum::aabb_within_frustum(min, min + CHUNK_DIM as f32, &self.view_frustum)
         });
     }
 
