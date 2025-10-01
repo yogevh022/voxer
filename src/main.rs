@@ -39,8 +39,8 @@ fn run_app() {
 }
 
 fn main() {
-    run_app();
-    // debug();
+    // run_app();
+    debug();
 }
 
 fn debug() {
@@ -58,7 +58,7 @@ fn debug() {
         simulation_distance: 16,
     };
     let mut chunks_map: FxHashMap<IVec3, Chunk> = FxHashMap::default();
-    let exc = false;
+    let exc = true;
     if exc {
         let chunk_pos = IVec3::new(5, 5, 5);
         let chunk = generate_chunk(world_config, chunk_pos);

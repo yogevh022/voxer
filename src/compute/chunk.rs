@@ -33,8 +33,8 @@ fn faces(packed: [u16; CHUNK_SLICE], packed_adj: [u16; CHUNK_DIM * 6]) -> u32 {
     *xa = packed_adj[(CHUNK_DIM * 3)..(CHUNK_DIM * 4)]
         .try_into()
         .unwrap();
-    *xb = packed[..CHUNK_DIM].try_into().unwrap();
-    result += array_pop_count_u16(array_xor(xa, xb));
+    *xb = packed[0..CHUNK_DIM].try_into().unwrap();
+    // result += array_pop_count_u16(array_xor(xa, xb));
 
     for i in 0..CHUNK_DIM - 1 {
         adj_x(&packed, xa, xb, i);
@@ -44,12 +44,14 @@ fn faces(packed: [u16; CHUNK_SLICE], packed_adj: [u16; CHUNK_DIM * 6]) -> u32 {
         result += array_pop_count_u16(array_xor(xa, xb));
         result += array_pop_count_u16(array_xor(ya, yb));
         result += array_pop_count_u32(array_xor(za, zb));
+        println!("pass {}: {}", i, result);
     }
     adj_y(&packed, &packed_adj, ya, yb, CHUNK_DIM - 1);
     adj_z(&packed_adj, xb, za, zb, CHUNK_DIM - 1);
     result += array_pop_count_u16(array_xor(xb, &packed_adj[0..CHUNK_DIM].try_into().unwrap()));
     result += array_pop_count_u16(array_xor(ya, yb));
     result += array_pop_count_u32(array_xor(za, zb));
+    println!("pass final: {}", result);
     result
 }
 
@@ -79,8 +81,8 @@ fn adj_y(
     let packed_adj_plus = packed_adj[CHUNK_DIM + x];
     let packed_adj_minus = packed_adj[CHUNK_DIM * 4 + x];
 
-    ya[0] = packed_adj_minus;
-    yb[0] = packed[x * CHUNK_DIM];
+    // ya[0] = packed_adj_minus;
+    // yb[0] = packed[x * CHUNK_DIM];
     for j in 0..CHUNK_DIM - 1 {
         ya[j + 1] = packed[(x * CHUNK_DIM) + j];
         yb[j + 1] = packed[(x * CHUNK_DIM) + j + 1];
@@ -103,7 +105,7 @@ fn adj_z(
     *zb = array::from_fn(|i| {
         let adj_plus_bit = bit_at(adj_plus, i) as u32;
         let adj_minus_bit = bit_at(adj_minus, i) as u32;
-        adj_plus_bit << 17 | (za[i] << 1) | adj_minus_bit
+        adj_plus_bit << 17 | (za[i] << 1) | 0//adj_minus_bit
     });
 }
 //
