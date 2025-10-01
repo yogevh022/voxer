@@ -18,7 +18,7 @@ use winit::event_loop::ControlFlow;
 use crate::compute::array::Array3D;
 use crate::world::types::Chunk;
 
-const SIMULATION_AND_RENDER_DISTANCE: usize = 2; // fixme temp location
+const SIMULATION_AND_RENDER_DISTANCE: usize = 8; // fixme temp location
 
 fn run_app() {
     let mut server = ServerWorld::new(ServerWorldConfig {
@@ -39,8 +39,8 @@ fn run_app() {
 }
 
 fn main() {
-    // run_app();
-    debug();
+    run_app();
+    // debug();
 }
 
 fn debug() {
