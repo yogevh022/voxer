@@ -70,36 +70,7 @@ fn write_faces_z(
 
 fn mesh_chunk_position(x: u32, y: u32) {
     for (var z: u32 = 0u; z < CHUNK_DIM; z++) {
-        var neighbors: array<array<array<u32, 3>, 3>, 3>;
-        neighbors[0][0][0] = bit_at(safe_xyz(x - 1, y - 1, z - 1), 15);
-        neighbors[0][0][1] = bit_at(safe_xyz(x - 1, y - 1, z), 15);
-        neighbors[0][0][2] = bit_at(safe_xyz(x - 1, y - 1, z + 1), 15);
-        neighbors[0][1][0] = bit_at(safe_xyz(x - 1, y, z - 1), 15);
-        neighbors[0][1][1] = bit_at(safe_xyz(x - 1, y, z), 15);
-        neighbors[0][1][2] = bit_at(safe_xyz(x - 1, y, z + 1), 15);
-        neighbors[0][2][0] = bit_at(safe_xyz(x - 1, y + 1, z - 1), 15);
-        neighbors[0][2][1] = bit_at(safe_xyz(x - 1, y + 1, z), 15);
-        neighbors[0][2][2] = bit_at(safe_xyz(x - 1, y + 1, z + 1), 15);
-
-        neighbors[1][0][0] = bit_at(safe_xyz(x, y - 1, z - 1), 15);
-        neighbors[1][0][1] = bit_at(safe_xyz(x, y - 1, z), 15);
-        neighbors[1][0][2] = bit_at(safe_xyz(x, y - 1, z + 1), 15);
-        neighbors[1][1][0] = bit_at(safe_xyz(x, y, z - 1), 15);
-//        neighbors[1][1][1] = current_voxel;
-        neighbors[1][1][2] = bit_at(safe_z(x, y, z + 1), 15);
-        neighbors[1][2][0] = bit_at(safe_xyz(x, y + 1, z - 1), 15);
-        neighbors[1][2][1] = bit_at(safe_y(x, y + 1, z), 15);
-        neighbors[1][2][2] = bit_at(safe_xyz(x, y + 1, z + 1), 15);
-
-        neighbors[2][0][0] = bit_at(safe_xyz(x + 1, y - 1, z - 1), 15);
-        neighbors[2][0][1] = bit_at(safe_xyz(x + 1, y - 1, z), 15);
-        neighbors[2][0][2] = bit_at(safe_xyz(x + 1, y - 1, z + 1), 15);
-        neighbors[2][1][0] = bit_at(safe_xyz(x + 1, y, z - 1), 15);
-        neighbors[2][1][1] = bit_at(safe_x(x + 1, y, z), 15);
-        neighbors[2][1][2] = bit_at(safe_xyz(x + 1, y, z + 1), 15);
-        neighbors[2][2][0] = bit_at(safe_xyz(x + 1, y + 1, z - 1), 15);
-        neighbors[2][2][1] = bit_at(safe_xyz(x + 1, y + 1, z), 15);
-        neighbors[2][2][2] = bit_at(safe_xyz(x + 1, y + 1, z + 1), 15);
+        var neighbors = voxel_neighbors(x, y, z);
 
         let current_voxel = bit_at(get_u16(workgroup_chunk_content.blocks[x][y][z / 2u], z % 2), 15);
         let packed_position = (x << 8) | (y << 4) | z;
@@ -107,11 +78,76 @@ fn mesh_chunk_position(x: u32, y: u32) {
         write_faces_y(current_voxel, &neighbors, packed_position);
         write_faces_z(current_voxel, &neighbors, packed_position);
     }
+    // todo z == CHUNK_DIM - 1
 
     let offset: u32 = atomicAdd(&workgroup_buffer_write_offset, private_face_count);
     for (var i = 0u; i < private_face_count; i++) {
         face_data_buffer[offset + i] = private_face_data[FACE_DATA_VOID_OFFSET + i];
     }
+}
+
+fn px_safe(adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
+    return select(
+        workgroup_chunk_content.blocks[safe_x][safe_y][half_z],
+        private_adj_x[safe_y][half_z],
+        adj,
+    );
+}
+
+fn py_safe(adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
+    return select(
+        workgroup_chunk_content.blocks[safe_x][safe_y][half_z],
+        private_adj_y[safe_x][half_z],
+        adj,
+    );
+}
+
+fn voxel_neighbors(x: u32, y: u32, z: u32) -> array<array<array<u32, 3>, 3>, 3> {
+    let px_safe_idx = min(x + 1, CHUNK_DIM - 1);
+    let py_safe_idx = min(y + 1, CHUNK_DIM - 1);
+    let half_z = z / 2;
+    let half_z_bit_pos = z % 2;
+    let phalf_z_idx = (z + 1) / 2;
+    let phalf_z_idx_bit_pos = phalf_z_idx % 2;
+
+    let x_is_adj = x == CHUNK_DIM - 1;
+    let y_is_adj = y == CHUNK_DIM - 1;
+
+    var neighbors: array<array<array<u32, 3>, 3>, 3>;
+
+    neighbors[0][0][0] = bit_at(safe_xyz(x - 1, y - 1, z - 1), 15);
+    neighbors[0][0][1] = bit_at(safe_xyz(x - 1, y - 1, z), 15);
+    neighbors[0][0][2] = bit_at(safe_xyz(x - 1, y - 1, z + 1), 15);
+    neighbors[0][1][0] = bit_at(safe_xyz(x - 1, y, z - 1), 15);
+    neighbors[0][1][1] = bit_at(safe_xyz(x - 1, y, z), 15);
+    neighbors[0][1][2] = bit_at(safe_xyz(x - 1, y, z + 1), 15);
+    neighbors[0][2][0] = bit_at(safe_xyz(x - 1, y + 1, z - 1), 15);
+    neighbors[0][2][1] = bit_at(safe_xyz(x - 1, y + 1, z), 15);
+    neighbors[0][2][2] = bit_at(safe_xyz(x - 1, y + 1, z + 1), 15);
+
+    neighbors[1][0][0] = bit_at(safe_xyz(x, y - 1, z - 1), 15);
+    neighbors[1][0][1] = bit_at(safe_xyz(x, y - 1, z), 15);
+    neighbors[1][0][2] = bit_at(safe_xyz(x, y - 1, z + 1), 15);
+    neighbors[1][1][0] = bit_at(safe_xyz(x, y, z - 1), 15);
+    //        neighbors[1][1][1] = current_voxel;
+    neighbors[1][1][2] = bit_at(safe_z(x, y, z + 1), 15);
+    neighbors[1][2][0] = bit_at(safe_xyz(x, y + 1, z - 1), 15);
+    neighbors[1][2][1] = bit_at(safe_y(x, y + 1, z), 15);
+    neighbors[1][2][2] = bit_at(safe_xyz(x, y + 1, z + 1), 15);
+
+    px_safe(x_is_adj, px_safe_idx, safe_y, half_z);
+
+    neighbors[2][0][0] = bit_at(safe_xyz(x + 1, y - 1, z - 1), 15);
+    neighbors[2][0][1] = bit_at(safe_xyz(x + 1, y - 1, z), 15);
+    neighbors[2][0][2] = bit_at(safe_xyz(x + 1, y - 1, z + 1), 15);
+    neighbors[2][1][0] = bit_at(safe_xyz(x + 1, y, z - 1), 15);
+    neighbors[2][1][1] = bit_at(safe_x(x + 1, y, z), 15);
+    neighbors[2][1][2] = bit_at(safe_xyz(x + 1, y, z + 1), 15);
+    neighbors[2][2][0] = bit_at(safe_xyz(x + 1, y + 1, z - 1), 15);
+    neighbors[2][2][1] = bit_at(safe_xyz(x + 1, y + 1, z), 15);
+    neighbors[2][2][2] = bit_at(safe_xyz(x + 1, y + 1, z + 1), 15);
+
+    return neighbors;
 }
 
 fn safe_xyz(x: u32, y: u32, z: u32) -> u32 {

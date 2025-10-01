@@ -13,6 +13,8 @@ var<workgroup> workgroup_chunk_y_i16_low: i32;
 
 var<private> private_face_data: array<GPUVoxelFaceData, MAX_FACES_PER_THREAD>;
 var<private> private_face_count: u32 = 0u;
+var<private> private_adj_x: array<array<u32, CHUNK_DIM_HALF>, CHUNK_DIM>;
+var<private> private_adj_y: array<array<u32, CHUNK_DIM_HALF>, CHUNK_DIM>;
 
 @compute @workgroup_size(CHUNK_DIM, CHUNK_DIM, 1)
 fn mesh_chunks_entry(
@@ -31,6 +33,8 @@ fn mesh_chunks_entry(
         atomicStore(&workgroup_buffer_write_offset, chunk_header.buffer_data.offset);
     }
     workgroupBarrier();
+    private_adj_x = workgroup_chunk_adj_content.blocks[0u];
+    private_adj_y = workgroup_chunk_adj_content.blocks[1u];
 
     mesh_chunk_position(lid.x, lid.y);
 }
