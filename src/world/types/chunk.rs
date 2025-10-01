@@ -8,7 +8,7 @@ pub const CHUNK_DIM_HALF: usize = CHUNK_DIM / 2;
 pub const CHUNK_SLICE: usize = CHUNK_DIM * CHUNK_DIM;
 pub const CHUNK_VOLUME: usize = CHUNK_SLICE * CHUNK_DIM;
 pub type ChunkBlocks = Array3D<VoxelBlock, CHUNK_DIM, CHUNK_DIM, CHUNK_DIM>;
-pub type ChunkAdjacentBlocks = Array3D<VoxelBlock, 3, CHUNK_DIM, CHUNK_DIM>;
+pub type ChunkAdjacentBlocks = Array3D<VoxelBlock, 6, CHUNK_DIM, CHUNK_DIM>; // px py pz mx my mz
 
 
 #[derive(Debug, Clone)]

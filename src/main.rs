@@ -7,15 +7,18 @@ mod renderer;
 mod vtypes;
 mod world;
 
-use std::hint::black_box;
+use crate::world::generation::{WorldConfig, generate_chunk};
 use crate::world::{ServerWorld, ServerWorldConfig};
 use glam::IVec3;
 use rustc_hash::FxHashMap;
+use std::hint::black_box;
 use voxer_network;
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
+use crate::compute::array::Array3D;
+use crate::world::types::Chunk;
 
-const SIMULATION_AND_RENDER_DISTANCE: usize = 16; // fixme temp location
+const SIMULATION_AND_RENDER_DISTANCE: usize = 2; // fixme temp location
 
 fn run_app() {
     let mut server = ServerWorld::new(ServerWorldConfig {
@@ -41,25 +44,42 @@ fn main() {
 }
 
 fn debug() {
-    use smallhash;
     use crate::renderer::gpu::GPUVoxelChunk;
-    use std::hint::black_box;
     use glam::IVec3;
+    use smallhash;
+    use std::hint::black_box;
     use std::time::Instant;
 
-    fn dbg_hash(bound: i32)
-    {
-        for x in -bound..bound {
-            for y in -bound..bound {
-                for z in -bound..bound {
-                    let hash = smallhash::u32x3_to_18_bits([x, y, z]);
-                    black_box(hash);
+    const CHUNK_COUNT: i32 = 10;
+
+    let world_config = WorldConfig {
+        seed: 0,
+        noise_scale: 0.3,
+        simulation_distance: 16,
+    };
+    let mut chunks_map: FxHashMap<IVec3, Chunk> = FxHashMap::default();
+    let exc = false;
+    if exc {
+        let chunk_pos = IVec3::new(5, 5, 5);
+        let chunk = generate_chunk(world_config, chunk_pos);
+        chunks_map.insert(chunk_pos, chunk);
+    } else {
+        for x in 0..CHUNK_COUNT {
+            for y in 0..CHUNK_COUNT {
+                for z in 0..CHUNK_COUNT {
+                    let chunk_pos = IVec3::new(x, y, z);
+                    let chunk = generate_chunk(world_config, chunk_pos);
+                    chunks_map.insert(chunk_pos, chunk);
                 }
             }
         }
     }
 
-    let start = Instant::now();
-    dbg_hash(512);
-    println!("time: {:?}", start.elapsed());
+    let test_pos = IVec3::new(5, 5, 5);
+
+    let adj_blocks = Array3D(compute::chunk::get_adj_blocks(test_pos, &chunks_map));
+    chunks_map.get_mut(&test_pos).map(|chunk| {
+        let fc = Some(compute::chunk::face_count(&chunk.blocks, &adj_blocks));
+        dbg!(fc);
+    });
 }

@@ -1,7 +1,9 @@
-use crate::compute;
-use crate::compute::array::Array3D;
+use crate::compute::array::{array_pop_count_u16, array_pop_count_u32, Array3D};
+use crate::compute::array::array_xor;
 use crate::compute::bytes::bit_at;
-use crate::world::types::{VoxelBlock, BlockBytewise, CHUNK_DIM, CHUNK_SLICE, Chunk, ChunkBlocks, ChunkAdjacentBlocks};
+use crate::world::types::{
+    BlockBytewise, CHUNK_DIM, CHUNK_SLICE, Chunk, ChunkAdjacentBlocks, ChunkBlocks, VoxelBlock,
+};
 use glam::IVec3;
 use rustc_hash::FxHashMap;
 use std::array;
@@ -10,70 +12,49 @@ pub const TRANSPARENT_LAYER_BITS: [u16; CHUNK_DIM] = [0u16; CHUNK_DIM];
 pub const TRANSPARENT_LAYER_BLOCKS: [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] =
     [[VoxelBlock { value: 0 }; CHUNK_DIM]; CHUNK_DIM];
 
-pub fn face_count(blocks: &ChunkBlocks, adjacent_blocks: &ChunkAdjacentBlocks) -> usize {
+pub fn face_count(blocks: &ChunkBlocks, adj_blocks: &ChunkAdjacentBlocks) -> usize {
     let packed_blocks = pack_solid_blocks(blocks);
-    let packed_adjacent_blocks = pack_solid_blocks(adjacent_blocks);
+    let packed_adjacent_blocks = pack_solid_blocks(adj_blocks);
 
-    let faces = faces(packed_blocks, packed_adjacent_blocks);
-    faces.iter().map(|b| b.count_ones() as usize).sum::<usize>()
+    let face_count = faces(packed_blocks, packed_adjacent_blocks);
+    face_count as usize
+    // faces.iter().map(|b| b.count_ones() as usize).sum::<usize>()
 }
 
-fn faces(
-    packed_blocks: [u16; CHUNK_SLICE],
-    packed_adjacent_blocks: [u16; CHUNK_DIM * 3],
-) -> [u16; CHUNK_SLICE * 3] {
-    let mut result = [0u16; CHUNK_SLICE * 3];
-    let result_layers: &mut [[u16; CHUNK_DIM]; CHUNK_DIM * 3] =
-        unsafe { &mut *(result.as_mut_ptr() as *mut [[u16; CHUNK_DIM]; CHUNK_DIM * 3]) };
+fn faces(packed: [u16; CHUNK_SLICE], packed_adj: [u16; CHUNK_DIM * 6]) -> u32 {
+    let xa = &mut [0u16; CHUNK_DIM];
+    let xb = &mut [0u16; CHUNK_DIM];
+    let ya = &mut [0u16; CHUNK_DIM + 1];
+    let yb = &mut [0u16; CHUNK_DIM + 1];
+    let za = &mut [0u32; CHUNK_DIM];
+    let zb = &mut [0u32; CHUNK_DIM];
 
-    let mut xa = [0u16; CHUNK_DIM];
-    let mut xb = [0u16; CHUNK_DIM];
-    let mut ya = [0u16; CHUNK_DIM];
-    let mut yb = [0u16; CHUNK_DIM];
-    let mut zb = [0u16; CHUNK_DIM];
+    let mut result = 0u32;
+    *xa = packed_adj[(CHUNK_DIM * 3)..(CHUNK_DIM * 4)]
+        .try_into()
+        .unwrap();
+    *xb = packed[..CHUNK_DIM].try_into().unwrap();
+    result += array_pop_count_u16(array_xor(xa, xb));
 
     for i in 0..CHUNK_DIM - 1 {
-        adjacent_x(&packed_blocks, &mut xa, &mut xb, i);
-        adjacent_y(
-            &packed_blocks,
-            packed_adjacent_blocks[CHUNK_DIM + i],
-            &mut ya,
-            &mut yb,
-            i,
-        );
-        adjacent_z(
-            packed_adjacent_blocks[CHUNK_DIM + CHUNK_DIM + i],
-            &xa,
-            &mut zb,
-        );
+        adj_x(&packed, xa, xb, i);
+        adj_y(&packed, &packed_adj, ya, yb, i);
+        adj_z(&packed_adj, xa, za, zb, i);
 
-        result_layers[i] = compute::array::xor(&xa, &xb);
-        result_layers[CHUNK_DIM + i] = compute::array::xor(&ya, &yb);
-        result_layers[CHUNK_DIM + CHUNK_DIM + i] = compute::array::xor(&xa, &zb);
+        result += array_pop_count_u16(array_xor(xa, xb));
+        result += array_pop_count_u16(array_xor(ya, yb));
+        result += array_pop_count_u32(array_xor(za, zb));
     }
-    adjacent_y(
-        &packed_blocks,
-        packed_adjacent_blocks[CHUNK_DIM + CHUNK_DIM - 1],
-        &mut ya,
-        &mut yb,
-        CHUNK_DIM - 1,
-    );
-    adjacent_z(
-        packed_adjacent_blocks[CHUNK_DIM + CHUNK_DIM + CHUNK_DIM - 1],
-        &xb,
-        &mut zb,
-    );
-    result_layers[CHUNK_DIM - 1] = compute::array::xor(
-        &xb,
-        &packed_adjacent_blocks[0..CHUNK_DIM].try_into().unwrap(),
-    );
-    result_layers[CHUNK_DIM + CHUNK_DIM - 1] = compute::array::xor(&ya, &yb);
-    result_layers[CHUNK_DIM + CHUNK_DIM + CHUNK_DIM - 1] = compute::array::xor(&xb, &zb);
+    adj_y(&packed, &packed_adj, ya, yb, CHUNK_DIM - 1);
+    adj_z(&packed_adj, xb, za, zb, CHUNK_DIM - 1);
+    result += array_pop_count_u16(array_xor(xb, &packed_adj[0..CHUNK_DIM].try_into().unwrap()));
+    result += array_pop_count_u16(array_xor(ya, yb));
+    result += array_pop_count_u32(array_xor(za, zb));
     result
 }
 
-#[inline(always)]
-fn adjacent_x(
+#[inline]
+fn adj_x(
     packed_blocks: &[u16; CHUNK_SLICE],
     xa: &mut [u16; CHUNK_DIM],
     xb: &mut [u16; CHUNK_DIM],
@@ -87,26 +68,49 @@ fn adjacent_x(
         .unwrap();
 }
 
-#[inline(always)]
-fn adjacent_y(
-    packed_blocks: &[u16; CHUNK_SLICE],
-    packed_adjacent_blocks: u16,
-    ya: &mut [u16; CHUNK_DIM],
-    yb: &mut [u16; CHUNK_DIM],
+#[inline]
+fn adj_y(
+    packed: &[u16; CHUNK_SLICE],
+    packed_adj: &[u16; CHUNK_DIM * 6],
+    ya: &mut [u16; CHUNK_DIM + 1],
+    yb: &mut [u16; CHUNK_DIM + 1],
     x: usize,
 ) {
+    let packed_adj_plus = packed_adj[CHUNK_DIM + x];
+    let packed_adj_minus = packed_adj[CHUNK_DIM * 4 + x];
+
+    ya[0] = packed_adj_minus;
+    yb[0] = packed[x * CHUNK_DIM];
     for j in 0..CHUNK_DIM - 1 {
-        ya[j] = packed_blocks[(x * CHUNK_DIM) + j];
-        yb[j] = packed_blocks[(x * CHUNK_DIM) + j + 1];
+        ya[j + 1] = packed[(x * CHUNK_DIM) + j];
+        yb[j + 1] = packed[(x * CHUNK_DIM) + j + 1];
     }
-    ya[CHUNK_DIM - 1] = packed_blocks[(x * CHUNK_DIM) + (CHUNK_DIM - 1)];
-    yb[CHUNK_DIM - 1] = packed_adjacent_blocks;
+    ya[CHUNK_DIM] = packed[(x * CHUNK_DIM) + CHUNK_DIM - 1];
+    yb[CHUNK_DIM] = packed_adj_plus;
 }
 
-#[inline(always)]
-fn adjacent_z(packed_adjacent_blocks: u16, xa: &[u16; CHUNK_DIM], zb: &mut [u16; CHUNK_DIM]) {
-    *zb = array::from_fn(|i| bit_at(packed_adjacent_blocks, i) << 15 | (xa[i] >> 1));
+#[inline]
+fn adj_z(
+    packed_adj: &[u16; CHUNK_DIM * 6],
+    xa: &[u16; CHUNK_DIM],
+    za: &mut [u32; CHUNK_DIM],
+    zb: &mut [u32; CHUNK_DIM],
+    x: usize,
+) {
+    let adj_plus = packed_adj[CHUNK_DIM * 2 + x];
+    let adj_minus = packed_adj[CHUNK_DIM * 5 + x];
+    *za = array::from_fn(|i| xa[i] as u32);
+    *zb = array::from_fn(|i| {
+        let adj_plus_bit = bit_at(adj_plus, i) as u32;
+        let adj_minus_bit = bit_at(adj_minus, i) as u32;
+        adj_plus_bit << 17 | (za[i] << 1) | adj_minus_bit
+    });
 }
+//
+// #[inline]
+// fn adj_z(packed_adjacent_blocks: u16, xa: &[u16; CHUNK_DIM], zb: &mut [u16; CHUNK_DIM]) {
+//     *zb = array::from_fn(|i| bit_at(packed_adjacent_blocks, i) << 15 | (xa[i] >> 1));
+// }
 
 fn pack_solid_blocks<const X: usize, const Y: usize, const Z: usize, const XY: usize>(
     blocks: &Array3D<VoxelBlock, X, Y, Z>,
@@ -139,14 +143,19 @@ fn get_mz_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
     array::from_fn(|x| array::from_fn(|y| blocks[x][y][0]))
 }
 
-pub fn get_adjacent_blocks(
+pub fn get_adj_blocks(
     position: IVec3,
     chunks_map: &FxHashMap<IVec3, Chunk>,
-) -> [[[VoxelBlock; CHUNK_DIM]; CHUNK_DIM]; 3] {
+) -> [[[VoxelBlock; CHUNK_DIM]; CHUNK_DIM]; 6] {
     let px = IVec3::new(position.x + 1, position.y, position.z);
     let py = IVec3::new(position.x, position.y + 1, position.z);
     let pz = IVec3::new(position.x, position.y, position.z + 1);
 
+    let mx = IVec3::new(position.x - 1, position.y, position.z);
+    let my = IVec3::new(position.x, position.y - 1, position.z);
+    let mz = IVec3::new(position.x, position.y, position.z - 1);
+
+    // fixme just pass none?
     [
         chunks_map
             .get(&px)
@@ -156,6 +165,15 @@ pub fn get_adjacent_blocks(
             .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_my_layer(&c.blocks)),
         chunks_map
             .get(&pz)
+            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_mz_layer(&c.blocks)),
+        chunks_map
+            .get(&mx)
+            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_mx_layer(&c.blocks)),
+        chunks_map
+            .get(&my)
+            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_my_layer(&c.blocks)),
+        chunks_map
+            .get(&mz)
             .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_mz_layer(&c.blocks)),
     ]
 }

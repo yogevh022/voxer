@@ -121,9 +121,9 @@ fn safe_xyz(x: u32, y: u32, z: u32) -> u32 {
     let safe_half_z = safe_z_idx / 2;
     let safe_packed_z_index = safe_z_idx % 2;
 
-    let adj_x = workgroup_chunk_adj_content.blocks[0u][safe_y_idx][safe_half_z];
-    let adj_y = workgroup_chunk_adj_content.blocks[1u][safe_x_idx][safe_half_z];
-    let adj_z = get_u16(workgroup_chunk_adj_content.blocks[2u][safe_x_idx][safe_y_idx / 2u], safe_y_idx % 2);
+    let adj_x = workgroup_chunk_adj_content.next_blocks[0u][safe_y_idx][safe_half_z];
+    let adj_y = workgroup_chunk_adj_content.next_blocks[1u][safe_x_idx][safe_half_z];
+    let adj_z = get_u16(workgroup_chunk_adj_content.next_blocks[2u][safe_x_idx][safe_y_idx / 2u], safe_y_idx % 2);
 
     let packed = select(
         select(
@@ -147,7 +147,7 @@ fn safe_x(x: u32, y: u32, z: u32) -> u32 {
 
     let safe_x_idx = min(x, CHUNK_DIM - 1);
     let packed = select(
-        workgroup_chunk_adj_content.blocks[0u][y][half_z],
+        workgroup_chunk_adj_content.next_blocks[0u][y][half_z],
         workgroup_chunk_content.blocks[safe_x_idx][y][half_z],
         x <= (CHUNK_DIM - 1),
     );
@@ -160,7 +160,7 @@ fn safe_y(x: u32, y: u32, z: u32) -> u32 {
 
     let safe_y_idx = min(y, CHUNK_DIM - 1);
     let packed = select(
-        workgroup_chunk_adj_content.blocks[1u][x][half_z],
+        workgroup_chunk_adj_content.next_blocks[1u][x][half_z],
         workgroup_chunk_content.blocks[x][safe_y_idx][half_z],
         y <= (CHUNK_DIM - 1),
     );
@@ -172,7 +172,7 @@ fn safe_z(x: u32, y: u32, z: u32) -> u32 {
     let safe_half_z = safe_pz_idx / 2;
     let safe_packed_z_index = safe_pz_idx % 2;
 
-    let adj_z = get_u16(workgroup_chunk_adj_content.blocks[2u][x][y / 2u], y % 2);
+    let adj_z = get_u16(workgroup_chunk_adj_content.next_blocks[2u][x][y / 2u], y % 2);
     let packed = select(
         adj_z << (16 * safe_packed_z_index),
         workgroup_chunk_content.blocks[x][y][safe_half_z],

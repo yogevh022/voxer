@@ -143,10 +143,10 @@ impl<'window> ClientWorldSession<'window> {
     }
 
     fn update_chunk_data(&mut self, position: IVec3) {
-        let adjacent_blocks = Array3D(compute::chunk::get_adjacent_blocks(position, &self.chunks));
+        let adj_blocks = Array3D(compute::chunk::get_adj_blocks(position, &self.chunks));
         self.chunks.get_mut(&position).map(|chunk| {
-            chunk.face_count = Some(compute::chunk::face_count(&chunk.blocks, &adjacent_blocks));
-            chunk.adjacent_blocks = adjacent_blocks;
+            chunk.face_count = Some(compute::chunk::face_count(&chunk.blocks, &adj_blocks));
+            chunk.adjacent_blocks = adj_blocks;
         });
     }
 }

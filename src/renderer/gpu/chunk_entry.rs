@@ -13,7 +13,8 @@ pub struct GPUVoxelChunkContent {
 #[repr(C, align(8))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkAdjContent {
-    blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3]
+    next_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
+    prev_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
 }
 
 #[repr(C, align(8))]
@@ -79,13 +80,13 @@ pub struct GPUVoxelChunk {
 impl GPUVoxelChunk {
     pub fn new(
         header: GPUVoxelChunkHeader,
-        adjacent_blocks: GPUVoxelChunkAdjContent,
+        adj: GPUVoxelChunkAdjContent,
         blocks: ChunkBlocks,
     ) -> Self {
         let gpu_chunk_content: GPUVoxelChunkContent = unsafe { std::mem::transmute(blocks) };
         Self {
             header,
-            adj_content: adjacent_blocks,
+            adj_content: adj,
             content: gpu_chunk_content,
         }
     }
