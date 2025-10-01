@@ -41,17 +41,20 @@ fn faces(packed: [u16; CHUNK_SLICE], packed_adj: [u16; CHUNK_DIM * 6]) -> u32 {
         adj_y(&packed, &packed_adj, ya, yb, i);
         adj_z(&packed_adj, xa, za, zb, i);
 
+        let xx = array_pop_count_u16(array_xor(xa, xb));
+        let yx = array_pop_count_u16(array_xor(ya, yb));
+        let zx = array_pop_count_u32(array_xor(za, zb));
+
         result += array_pop_count_u16(array_xor(xa, xb));
         result += array_pop_count_u16(array_xor(ya, yb));
         result += array_pop_count_u32(array_xor(za, zb));
-        println!("pass {}: {}", i, result);
+        println!("pass (x: {} + y: {} + z: {}) {}: {}", i, xx, yx, zx, result);
     }
     adj_y(&packed, &packed_adj, ya, yb, CHUNK_DIM - 1);
     adj_z(&packed_adj, xb, za, zb, CHUNK_DIM - 1);
     result += array_pop_count_u16(array_xor(xb, &packed_adj[0..CHUNK_DIM].try_into().unwrap()));
     result += array_pop_count_u16(array_xor(ya, yb));
     result += array_pop_count_u32(array_xor(za, zb));
-    println!("pass final: {}", result);
     result
 }
 
