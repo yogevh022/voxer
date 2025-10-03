@@ -142,6 +142,18 @@ fn get_mz_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
     array::from_fn(|x| array::from_fn(|y| blocks[x][y][0]))
 }
 
+fn get_px_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
+    blocks[CHUNK_DIM - 1]
+}
+
+fn get_py_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
+    array::from_fn(|i| blocks[i][CHUNK_DIM - 1])
+}
+
+fn get_pz_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
+    array::from_fn(|x| array::from_fn(|y| blocks[x][y][CHUNK_DIM - 1]))
+}
+
 pub fn get_adj_blocks(
     position: IVec3,
     chunks_map: &FxHashMap<IVec3, Chunk>,
@@ -167,12 +179,12 @@ pub fn get_adj_blocks(
             .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_mz_layer(&c.blocks)),
         chunks_map
             .get(&mx)
-            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_mx_layer(&c.blocks)),
+            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_px_layer(&c.blocks)),
         chunks_map
             .get(&my)
-            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_my_layer(&c.blocks)),
+            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_py_layer(&c.blocks)),
         chunks_map
             .get(&mz)
-            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_mz_layer(&c.blocks)),
+            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_pz_layer(&c.blocks)),
     ]
 }

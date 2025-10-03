@@ -111,6 +111,12 @@ impl<'window> ClientWorldSession<'window> {
                     self.chunk_render_batch.push(chunk.clone());
                 }
             } else if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
+                if !(ch_position == IVec3::new(0, 0, 0)
+                    || ch_position == IVec3::new(1, 0, 0)
+                    || ch_position == IVec3::new(2, 0, 0))
+                {
+                    return;
+                }
                 let throttle_idx = smallhash::u32x3_to_18_bits(ch_position.to_array());
                 if self.chunk_request_throttler.request(throttle_idx as usize) {
                     self.chunk_request_batch.push(ch_position);

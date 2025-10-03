@@ -39,8 +39,8 @@ fn run_app() {
 }
 
 fn main() {
-    run_app();
-    // debug();
+    // run_app();
+    debug();
 }
 
 fn debug() {
@@ -50,17 +50,18 @@ fn debug() {
     use std::hint::black_box;
     use std::time::Instant;
 
-    const CHUNK_COUNT: i32 = 10;
+    const CHUNK_COUNT: i32 = 3;
 
     let world_config = WorldConfig {
         seed: 0,
         noise_scale: 0.3,
         simulation_distance: 16,
     };
+    let sample_pos = IVec3::new(1, 1, 1);
     let mut chunks_map: FxHashMap<IVec3, Chunk> = FxHashMap::default();
     let exc = true;
     if exc {
-        let chunk_pos = IVec3::new(5, 5, 5);
+        let chunk_pos = sample_pos;
         let chunk = generate_chunk(world_config, chunk_pos);
         chunks_map.insert(chunk_pos, chunk);
     } else {
@@ -75,10 +76,9 @@ fn debug() {
         }
     }
 
-    let test_pos = IVec3::new(5, 5, 5);
 
-    let adj_blocks = Array3D(compute::chunk::get_adj_blocks(test_pos, &chunks_map));
-    chunks_map.get_mut(&test_pos).map(|chunk| {
+    let adj_blocks = Array3D(compute::chunk::get_adj_blocks(sample_pos, &chunks_map));
+    chunks_map.get_mut(&sample_pos).map(|chunk| {
         let fc = Some(compute::chunk::face_count(&chunk.blocks, &adj_blocks));
         dbg!(fc);
     });
