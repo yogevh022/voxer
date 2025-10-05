@@ -155,7 +155,7 @@ impl<'a> App<'a> {
             let input = self.v.input.read();
             const MOVE_SPEED: f32 = 10.0;
             let fast_mul: f32 = if input.keyboard.key_down(KeyCode::ShiftLeft) {
-                4.0
+                6.0
             } else {
                 1.0
             };

@@ -26,22 +26,22 @@ fn vs_main(
 
     let chunk_translation = f32(CHUNK_DIM) * vec3<f32>(f32(unpacked_xz.x), f32(unpacked_y), f32(unpacked_xz.y));
 
-    let voxel_x: u32 = (pfio >> 8) & 0xF;
-    let voxel_y: u32 = (pfio >> 4) & 0xF;
-    let voxel_z: u32 = pfio & 0xF;
+    let voxel_x: u32 = (pfio >> 10) & 0x1F;
+    let voxel_y: u32 = (pfio >> 5) & 0x1F;
+    let voxel_z: u32 = pfio & 0x1F;
 
-    let face_id: u32 = (pfio >> 12) & 0x7;
+    let face_id: u32 = (pfio >> 15) & 0x7;
 
-    let illum: u32 = (pfio >> 15) & 0x1F;
+    let illum: u32 = (pfio >> 18) & 0x1F;
 
-    let ao_tl: u32 = (pfio >> 20) & 0x3;
-    let ao_tr: u32 = (pfio >> 22) & 0x3;
-    let ao_br: u32 = (pfio >> 24) & 0x3;
-    let ao_bl: u32 = (pfio >> 26) & 0x3;
+    let ao_tl: u32 = (pfio >> 23) & 0x3;
+    let ao_tr: u32 = (pfio >> 25) & 0x3;
+    let ao_br: u32 = (pfio >> 27) & 0x3;
+    let ao_bl: u32 = (pfio >> 29) & 0x3;
 
     let ao = array<u32, 4>(ao_tl, ao_tr, ao_br, ao_bl);
 
-    let voxel_position = vec3<f32>(f32(voxel_x), f32(voxel_y), f32(voxel_z));
+    let voxel_position = vec3<f32>(f32(voxel_x), f32(voxel_y), f32(voxel_z)) - 1.0;
     let quad = QUAD_VERTICES[face_id];
     let vertex_position = voxel_position + quad[vertex_index];
 

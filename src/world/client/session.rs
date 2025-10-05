@@ -113,7 +113,8 @@ impl<'window> ClientWorldSession<'window> {
             } else if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
                 if !(ch_position == IVec3::new(0, 0, 0)
                     || ch_position == IVec3::new(1, 0, 0)
-                    || ch_position == IVec3::new(2, 0, 0))
+                    || ch_position == IVec3::new(0, 0, 1)
+                    || ch_position == IVec3::new(1, 0, 1))
                 {
                     return;
                 }

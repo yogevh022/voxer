@@ -39,8 +39,8 @@ fn run_app() {
 }
 
 fn main() {
-    // run_app();
-    debug();
+    run_app();
+    // debug();
 }
 
 fn debug() {
