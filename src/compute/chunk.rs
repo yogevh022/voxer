@@ -1,9 +1,7 @@
-use crate::compute::array::array_xor;
-use crate::compute::array::{Array3D, array_pop_count_u16, array_pop_count_u32};
+use crate::compute;
+use crate::compute::array::Array3D;
 use crate::compute::bytes::bit_at;
-use crate::world::types::{
-    BlockBytewise, CHUNK_DIM, CHUNK_SLICE, Chunk, ChunkAdjacentBlocks, ChunkBlocks, VoxelBlock,
-};
+use crate::world::types::{VoxelBlock, BlockBytewise, CHUNK_DIM, CHUNK_SLICE, Chunk, ChunkBlocks, ChunkAdjacentBlocks};
 use glam::IVec3;
 use rustc_hash::FxHashMap;
 use std::array;
@@ -12,53 +10,73 @@ pub const TRANSPARENT_LAYER_BITS: [u16; CHUNK_DIM] = [0u16; CHUNK_DIM];
 pub const TRANSPARENT_LAYER_BLOCKS: [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] =
     [[VoxelBlock { value: 0 }; CHUNK_DIM]; CHUNK_DIM];
 
-pub fn face_count(blocks: &ChunkBlocks, adj_blocks: &ChunkAdjacentBlocks) -> usize {
+pub fn face_count(blocks: &ChunkBlocks, adjacent_blocks: &ChunkAdjacentBlocks) -> usize {
+    let next_adj_blocks = unsafe {
+        *adjacent_blocks.as_ptr().cast::<Array3D<VoxelBlock, 3, CHUNK_DIM, CHUNK_DIM>>()
+    };
     let packed_blocks = pack_solid_blocks(blocks);
-    let packed_adjacent_blocks = pack_solid_blocks(adj_blocks);
+    let packed_adjacent_blocks = pack_solid_blocks(&next_adj_blocks);
 
-    let face_count = faces(packed_blocks, packed_adjacent_blocks);
-    face_count as usize
-    // faces.iter().map(|b| b.count_ones() as usize).sum::<usize>()
+    let faces = faces(packed_blocks, packed_adjacent_blocks);
+    faces.iter().map(|b| b.count_ones() as usize).sum::<usize>()
 }
 
-fn faces(packed: [u16; CHUNK_SLICE], packed_adj: [u16; CHUNK_DIM * 6]) -> u32 {
-    let xa = &mut [0u16; CHUNK_DIM];
-    let xb = &mut [0u16; CHUNK_DIM];
-    let ya = &mut [0u16; CHUNK_DIM + 1];
-    let yb = &mut [0u16; CHUNK_DIM + 1];
-    let za = &mut [0u32; CHUNK_DIM];
-    let zb = &mut [0u32; CHUNK_DIM];
+fn faces(
+    packed_blocks: [u16; CHUNK_SLICE],
+    packed_adjacent_blocks: [u16; CHUNK_DIM * 3],
+) -> [u16; CHUNK_SLICE * 3] {
+    let mut result = [0u16; CHUNK_SLICE * 3];
+    let result_layers: &mut [[u16; CHUNK_DIM]; CHUNK_DIM * 3] =
+        unsafe { &mut *(result.as_mut_ptr() as *mut [[u16; CHUNK_DIM]; CHUNK_DIM * 3]) };
 
-    let mut result = 0u32;
-    *xa = packed_adj[(CHUNK_DIM * 3)..(CHUNK_DIM * 4)]
-        .try_into()
-        .unwrap();
-    *xb = packed[0..CHUNK_DIM].try_into().unwrap();
-    result += array_pop_count_u16(array_xor(xa, xb));
+    let mut xa = [0u16; CHUNK_DIM];
+    let mut xb = [0u16; CHUNK_DIM];
+    let mut ya = [0u16; CHUNK_DIM];
+    let mut yb = [0u16; CHUNK_DIM];
+    let mut zb = [0u16; CHUNK_DIM];
 
     for i in 0..CHUNK_DIM - 1 {
-        adj_x(&packed, xa, xb, i);
-        adj_y(&packed, &packed_adj, ya, yb, i);
-        adj_z(&packed_adj, xa, za, zb, i);
+        adjacent_x(&packed_blocks, &mut xa, &mut xb, i);
+        adjacent_y(
+            &packed_blocks,
+            packed_adjacent_blocks[CHUNK_DIM + i],
+            &mut ya,
+            &mut yb,
+            i,
+        );
+        adjacent_z(
+            packed_adjacent_blocks[CHUNK_DIM + CHUNK_DIM + i],
+            &xa,
+            &mut zb,
+        );
 
-        let xx = array_pop_count_u16(array_xor(xa, xb));
-        let yx = array_pop_count_u16(array_xor(ya, yb));
-        let zx = array_pop_count_u32(array_xor(za, zb));
-
-        result += array_pop_count_u16(array_xor(xa, xb));
-        result += array_pop_count_u16(array_xor(ya, yb));
-        result += array_pop_count_u32(array_xor(za, zb));
+        result_layers[i] = compute::array::array_xor(&xa, &xb);
+        result_layers[CHUNK_DIM + i] = compute::array::array_xor(&ya, &yb);
+        result_layers[CHUNK_DIM + CHUNK_DIM + i] = compute::array::array_xor(&xa, &zb);
     }
-    adj_y(&packed, &packed_adj, ya, yb, CHUNK_DIM - 1);
-    adj_z(&packed_adj, xb, za, zb, CHUNK_DIM - 1);
-    result += array_pop_count_u16(array_xor(xb, &packed_adj[0..CHUNK_DIM].try_into().unwrap()));
-    result += array_pop_count_u16(array_xor(ya, yb));
-    result += array_pop_count_u32(array_xor(za, zb));
+    adjacent_y(
+        &packed_blocks,
+        packed_adjacent_blocks[CHUNK_DIM + CHUNK_DIM - 1],
+        &mut ya,
+        &mut yb,
+        CHUNK_DIM - 1,
+    );
+    adjacent_z(
+        packed_adjacent_blocks[CHUNK_DIM + CHUNK_DIM + CHUNK_DIM - 1],
+        &xb,
+        &mut zb,
+    );
+    result_layers[CHUNK_DIM - 1] = compute::array::array_xor(
+        &xb,
+        &packed_adjacent_blocks[0..CHUNK_DIM].try_into().unwrap(),
+    );
+    result_layers[CHUNK_DIM + CHUNK_DIM - 1] = compute::array::array_xor(&ya, &yb);
+    result_layers[CHUNK_DIM + CHUNK_DIM + CHUNK_DIM - 1] = compute::array::array_xor(&xb, &zb);
     result
 }
 
-#[inline]
-fn adj_x(
+#[inline(always)]
+fn adjacent_x(
     packed_blocks: &[u16; CHUNK_SLICE],
     xa: &mut [u16; CHUNK_DIM],
     xb: &mut [u16; CHUNK_DIM],
@@ -72,43 +90,25 @@ fn adj_x(
         .unwrap();
 }
 
-#[inline]
-fn adj_y(
-    packed: &[u16; CHUNK_SLICE],
-    packed_adj: &[u16; CHUNK_DIM * 6],
-    ya: &mut [u16; CHUNK_DIM + 1],
-    yb: &mut [u16; CHUNK_DIM + 1],
+#[inline(always)]
+fn adjacent_y(
+    packed_blocks: &[u16; CHUNK_SLICE],
+    packed_adjacent_blocks: u16,
+    ya: &mut [u16; CHUNK_DIM],
+    yb: &mut [u16; CHUNK_DIM],
     x: usize,
 ) {
-    let packed_adj_plus = packed_adj[CHUNK_DIM + x];
-    let packed_adj_minus = packed_adj[CHUNK_DIM * 4 + x];
-
-    ya[0] = packed_adj_minus;
-    yb[0] = packed[x * CHUNK_DIM];
     for j in 0..CHUNK_DIM - 1 {
-        ya[j + 1] = packed[(x * CHUNK_DIM) + j];
-        yb[j + 1] = packed[(x * CHUNK_DIM) + j + 1];
+        ya[j] = packed_blocks[(x * CHUNK_DIM) + j];
+        yb[j] = packed_blocks[(x * CHUNK_DIM) + j + 1];
     }
-    ya[CHUNK_DIM] = packed[(x * CHUNK_DIM) + CHUNK_DIM - 1];
-    yb[CHUNK_DIM] = packed_adj_plus;
+    ya[CHUNK_DIM - 1] = packed_blocks[(x * CHUNK_DIM) + (CHUNK_DIM - 1)];
+    yb[CHUNK_DIM - 1] = packed_adjacent_blocks;
 }
 
-#[inline]
-fn adj_z(
-    packed_adj: &[u16; CHUNK_DIM * 6],
-    xa: &[u16; CHUNK_DIM],
-    za: &mut [u32; CHUNK_DIM],
-    zb: &mut [u32; CHUNK_DIM],
-    x: usize,
-) {
-    let adj_plus = packed_adj[CHUNK_DIM * 2 + x];
-    let adj_minus = packed_adj[CHUNK_DIM * 5 + x];
-    *za = array::from_fn(|i| {
-        let adj_plus_bit = bit_at(adj_plus, i) as u32;
-        let adj_minus_bit = bit_at(adj_minus, i) as u32;
-        adj_plus_bit << 17 | (xa[i] as u32) << 1 | adj_minus_bit
-    });
-    *zb = array::from_fn(|i| za[i] >> 1);
+#[inline(always)]
+fn adjacent_z(packed_adjacent_blocks: u16, xa: &[u16; CHUNK_DIM], zb: &mut [u16; CHUNK_DIM]) {
+    *zb = array::from_fn(|i| bit_at(packed_adjacent_blocks, i) << 15 | (xa[i] >> 1));
 }
 
 fn pack_solid_blocks<const X: usize, const Y: usize, const Z: usize, const XY: usize>(

@@ -3,14 +3,14 @@ const FACE_ID_BASE_Y: u32 = 3u;
 const FACE_ID_BASE_Z: u32 = 5u;
 
 fn pack_xyz_to_15_bits(pos: vec3<u32>) -> u32 {
-    return (pos.x << 10) | (pos.y << 5) | pos.z;
+    return (pos.x << 8) | (pos.y << 4) | pos.z;
 }
 
 fn pack_face_data(current_voxel: u32, packed_local_position: u32, fid: u32, illum: u32, ocl_count: u32) -> GPUVoxelFaceData {
-    let packed_face_data = (packed_local_position & 0x7FFF)
-            | (fid << 15)
-            | (illum << 18)
-            | (ocl_count << 23);
+    let packed_face_data = (packed_local_position & 0xFFF)
+            | (fid << 12)
+            | (illum << 15)
+            | (ocl_count << 20);
     let packed_voxel_ypos = (current_voxel << 16) | bitcast<u32>(workgroup_chunk_y_i16_low);
     return GPUVoxelFaceData(packed_face_data, packed_voxel_ypos);
 }
@@ -20,21 +20,20 @@ struct FaceDrawMask {
     dir: u32,
 }
 
-fn face_draw_mask(current_voxel: u32, next_voxel: u32, only_positive: bool) -> FaceDrawMask {
+fn face_draw_mask(current_voxel: u32, next_voxel: u32) -> FaceDrawMask {
     let face_draw = current_voxel ^ next_voxel;
     let face_dir = current_voxel & (~next_voxel);
-    let dir_mask = select(1, face_dir, only_positive);
-    return FaceDrawMask(face_draw * dir_mask, face_dir);
+    return FaceDrawMask(face_draw, face_dir);
 }
 
 fn face_data(
     neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
     packed_local_position: u32,
     fid: u32,
+    ocl_count: u32,
     draw_mask: FaceDrawMask,
 ) -> GPUVoxelFaceData {
     let illum = 0u;
-    let ocl_count = occlusion_count_x(neighbors)[draw_mask.dir];
     let current_voxel = (*neighbors)[1][1][1];
     return pack_face_data(current_voxel, packed_local_position, fid, illum, ocl_count);
 }
@@ -49,9 +48,10 @@ fn face_write_args(
     neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
     draw_mask: FaceDrawMask,
     fid: u32,
+    ocl_count: u32,
     packed_local_position: u32,
 ) -> VoxelFaceWriteArgs {
-    let face_data = face_data(neighbors, packed_local_position, fid, draw_mask);
+    let face_data = face_data(neighbors, packed_local_position, fid, ocl_count, draw_mask);
     let private_face_idx = draw_mask.draw * (private_face_count + FACE_DATA_VOID_OFFSET);
     return VoxelFaceWriteArgs(draw_mask, face_data, private_face_idx);
 }
@@ -64,98 +64,46 @@ fn write_face(face_write_args: VoxelFaceWriteArgs) {
 fn write_x_face(
     neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
     face_position: vec3<u32>,
-    is_first: bool,
-    is_last: bool,
 ) {
     let packed_face_pos: u32 = pack_xyz_to_15_bits(face_position);
-    let draw_mask: FaceDrawMask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[2][1][1], is_last);
+    let draw_mask: FaceDrawMask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[2][1][1]);
     let fid: u32 = FACE_ID_BASE_X + draw_mask.dir; // + instead of - because x is inversed
-    let write_args: VoxelFaceWriteArgs = face_write_args(neighbors, draw_mask, fid, packed_face_pos);
-    write_face(write_args);
-
-    if (is_first == true) {
-        // first x logic, high divergence
-        write_x_zero_edge_face(neighbors, face_position);
-    }
-}
-
-fn write_x_zero_edge_face(
-    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-    face_position: vec3<u32>,
-) {
-    let zero_x_edge_face_pos = vec3<u32>(0, face_position.y, face_position.z);
-    let packed_face_pos = pack_xyz_to_15_bits(zero_x_edge_face_pos);
-    var draw_mask = face_draw_mask((*neighbors)[0][1][1], (*neighbors)[1][1][1], false);
-    draw_mask.draw = draw_mask.draw * (1 ^ draw_mask.dir);
-    let fid = FACE_ID_BASE_X + draw_mask.dir;
-    let write_args = face_write_args(neighbors, draw_mask, fid, packed_face_pos);
+    let ocl_count = occlusion_count_x(neighbors)[draw_mask.dir];
+    let write_args: VoxelFaceWriteArgs = face_write_args(neighbors, draw_mask, fid, ocl_count, packed_face_pos);
     write_face(write_args);
 }
 
 fn write_y_face(
     neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
     face_position: vec3<u32>,
-    is_first: bool,
-    is_last: bool,
 ) {
     let packed_face_pos: u32 = pack_xyz_to_15_bits(face_position);
-    let draw_mask: FaceDrawMask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[1][2][1], is_last);
+    let draw_mask: FaceDrawMask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[1][2][1]);
     let fid: u32 = FACE_ID_BASE_Y - draw_mask.dir;
-    let write_args: VoxelFaceWriteArgs = face_write_args(neighbors, draw_mask, fid, packed_face_pos);
-    write_face(write_args);
-
-    if (is_first == true) {
-        // first y logic, minimal divergence
-        write_y_zero_edge_face(neighbors, face_position);
-    }
-}
-
-fn write_y_zero_edge_face(
-    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-    face_position: vec3<u32>,
-) {
-    let zero_y_edge_face_pos = vec3<u32>(face_position.x, 0, face_position.z);
-    let packed_face_pos = pack_xyz_to_15_bits(zero_y_edge_face_pos);
-    var draw_mask = face_draw_mask((*neighbors)[1][0][1], (*neighbors)[1][1][1], false);
-    draw_mask.draw = draw_mask.draw * (1 ^ draw_mask.dir);
-    let fid = FACE_ID_BASE_Y - draw_mask.dir;
-    let write_args = face_write_args(neighbors, draw_mask, fid, packed_face_pos);
+    let ocl_count = occlusion_count_y(neighbors)[draw_mask.dir];
+    let write_args: VoxelFaceWriteArgs = face_write_args(neighbors, draw_mask, fid, ocl_count, packed_face_pos);
     write_face(write_args);
 }
 
 fn write_z_face(
     neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
     face_position: vec3<u32>,
-    is_last: bool,
 ) {
     let packed_face_pos: u32 = pack_xyz_to_15_bits(face_position);
-    let draw_mask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[1][1][2], is_last);
+    let draw_mask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[1][1][2]);
     let fid = FACE_ID_BASE_Z - draw_mask.dir;
-    let write_args = face_write_args(neighbors, draw_mask, fid, packed_face_pos);
+    let ocl_count = occlusion_count_z(neighbors)[draw_mask.dir];
+    let write_args = face_write_args(neighbors, draw_mask, fid, ocl_count, packed_face_pos);
     write_face(write_args);
 }
 
-fn write_z_zero_edge_face(
+fn write_xyz_faces(
     neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
     face_position: vec3<u32>,
 ) {
-    let packed_face_pos = pack_xyz_to_15_bits(face_position);
-    var draw_mask = face_draw_mask((*neighbors)[1][1][0], (*neighbors)[1][1][1], false);
-    draw_mask.draw = draw_mask.draw * (1 ^ draw_mask.dir);
-    let fid = FACE_ID_BASE_Z - draw_mask.dir;
-    let write_args = face_write_args(neighbors, draw_mask, fid, packed_face_pos);
-    write_face(write_args);
-}
-
-fn write_faces(
-    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-    face_position: vec3<u32>,
-    first_voxel: vec3<bool>,
-    last_voxel: vec3<bool>,
-) {
-    write_x_face(neighbors, face_position, first_voxel.x, last_voxel.x);
-    write_y_face(neighbors, face_position, first_voxel.y, last_voxel.y);
-    write_z_face(neighbors, face_position, last_voxel.z);
+    write_x_face(neighbors, face_position);
+    write_y_face(neighbors, face_position);
+    write_z_face(neighbors, face_position);
 }
 
 fn mesh_chunk_position(x: u32, y: u32) {
@@ -164,36 +112,32 @@ fn mesh_chunk_position(x: u32, y: u32) {
     let mx = max(x, 1) - 1;
     let my = max(y, 1) - 1;
     var neighbors: array<array<array<u32, 3>, 3>, 3>;
-    var packed_local_position: u32;
 
     var first_voxel = vec3<bool>(x == 0, y == 0, false);
     var last_voxel = vec3<bool>(x == CHUNK_DIM - 1, y == CHUNK_DIM - 1, false);
-    var face_position = vec3<u32>(x, y, 0) + 1; // 0 reserved for adj prev face
+    var face_position = vec3<u32>(x, y, 0);
 
     // xy at (z != first/last)
     for (var z: u32 = 1u; z < CHUNK_DIM - 1; z++) {
-        face_position.z = z + 1;
+        face_position.z = z;
         let mz = z - 1;
         let pz = z + 1;
         neighbors = voxel_neighbors_safe_z(first_voxel, last_voxel, mx, x, px, my, y, py, mz, z, pz);
-        write_faces(&neighbors, face_position, first_voxel, last_voxel);
+        write_xyz_faces(&neighbors, face_position);
     }
 
     // xy at first z
-    face_position.z = 0 + 1;
+    face_position.z = 0;
     first_voxel.z = true;
     neighbors = voxel_neighbors_first_z(first_voxel, last_voxel, mx, x, px, my, y, py);
-    write_faces(&neighbors, face_position, first_voxel, last_voxel);
-
-    face_position.z = 0;
-    write_z_zero_edge_face(&neighbors, face_position);
+    write_xyz_faces(&neighbors, face_position);
 
     // xy at last z
-    face_position.z = (CHUNK_DIM - 1u) + 1;
+    face_position.z = CHUNK_DIM - 1u;
     first_voxel.z = false;
     last_voxel.z = true;
     neighbors = voxel_neighbors_last_z(first_voxel, last_voxel, mx, x, px, my, y, py);
-    write_faces(&neighbors, face_position, first_voxel, last_voxel);
+    write_xyz_faces(&neighbors, face_position);
 
     let offset: u32 = atomicAdd(&workgroup_buffer_write_offset, private_face_count);
     for (var i = 0u; i < private_face_count; i++) {
@@ -242,19 +186,19 @@ fn mz_safe(safe_x: u32, safe_y: u32) -> u32 {
 }
 
 fn pxpy_safe(x_adj: bool, y_adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(px_safe(x_adj, safe_x, safe_y, half_z), py_safe(y_adj, safe_x, safe_y, half_z), x_adj);
+    return select(py_safe(y_adj, safe_x, safe_y, half_z), px_safe(x_adj, safe_x, safe_y, half_z), x_adj);
 }
 
 fn pxmy_safe(x_adj: bool, y_adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(px_safe(x_adj, safe_x, safe_y, half_z), my_safe(y_adj, safe_x, safe_y, half_z), x_adj);
+    return select(my_safe(y_adj, safe_x, safe_y, half_z), px_safe(x_adj, safe_x, safe_y, half_z), x_adj);
 }
 
 fn mxpy_safe(x_adj: bool, y_adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(mx_safe(x_adj, safe_x, safe_y, half_z), py_safe(y_adj, safe_x, safe_y, half_z), x_adj);
+    return select(py_safe(y_adj, safe_x, safe_y, half_z), mx_safe(x_adj, safe_x, safe_y, half_z), x_adj);
 }
 
 fn mxmy_safe(x_adj: bool, y_adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(mx_safe(x_adj, safe_x, safe_y, half_z), my_safe(y_adj, safe_x, safe_y, half_z), x_adj);
+    return select(my_safe(y_adj, safe_x, safe_y, half_z), mx_safe(x_adj, safe_x, safe_y, half_z), x_adj);
 }
 
 fn opaque_bit(voxel: u32) -> u32 {
@@ -417,56 +361,3 @@ fn voxel_neighbors_last_z(
 
     return neighbors;
 }
-//
-//
-//fn write_faces_y(
-//    current_voxel: u32,
-//    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-//    packed_position: u32,
-//) {
-//    let face_draw = current_voxel ^ (*neighbors)[1][2][1];
-//    let face_dir = current_voxel & (~(*neighbors)[1][2][1]);
-//
-//    let fid = FACE_ID_BASE_Y - face_dir;
-//    let illum = 0u;
-//    let ocl_count = occlusion_count_y(neighbors)[face_dir];
-//
-//    let face_data = pack_face_data(current_voxel, packed_position, fid, illum, ocl_count);
-//
-//    let private_face_index = face_draw * (private_face_count + FACE_DATA_VOID_OFFSET);
-//    private_face_data[private_face_index] = face_data;
-//    private_face_count += 1u * face_draw;
-//}
-//
-//fn write_faces_z(
-//    current_voxel: u32,
-//    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-//    packed_position: u32,
-//) {
-//    let face_draw = current_voxel ^ (*neighbors)[1][1][2];
-//    let face_dir = current_voxel & (~(*neighbors)[1][1][2]);
-//
-//    let fid = FACE_ID_BASE_Z - face_dir;
-//    let illum = 0u;
-//    let ocl_count = occlusion_count_z(neighbors)[face_dir];
-//
-//    let face_data = pack_face_data(current_voxel, packed_position, fid, illum, ocl_count);
-//
-//    let private_face_index = face_draw * (private_face_count + FACE_DATA_VOID_OFFSET);
-//    private_face_data[private_face_index] = face_data;
-//    private_face_count += 1u * face_draw;
-//}
-
-//    neighbors = voxel_neighbors_first_z(mx, x, px, x_first, x_last, my, y, py, y_first, y_last, 0);
-//    current_voxel = opaque_bit_of_packed(workgroup_chunk_content.blocks[x][y][0], 0);
-//    packed_position = (x << 8) | (y << 4) | 0;
-//    face_x_draw_data(current_voxel, &neighbors, packed_position);
-//    write_faces_y(current_voxel, &neighbors, packed_position);
-//    write_faces_z(current_voxel, &neighbors, packed_position);
-//
-//    neighbors = voxel_neighbors_last_z(mx, x, px, x_first, x_last, my, y, py, y_first, y_last, CHUNK_DIM - 1);
-//    current_voxel = opaque_bit_of_packed(workgroup_chunk_content.blocks[x][y][(CHUNK_DIM - 1) / 2], 1);
-//    packed_position = (x << 8) | (y << 4) | (CHUNK_DIM - 1);
-//    face_x_draw_data(current_voxel, &neighbors, packed_position);
-//    write_faces_y(current_voxel, &neighbors, packed_position);
-//    write_faces_z(current_voxel, &neighbors, packed_position);

@@ -76,10 +76,10 @@ fn debug() {
         }
     }
 
-
-    let adj_blocks = Array3D(compute::chunk::get_adj_blocks(sample_pos, &chunks_map));
-    chunks_map.get_mut(&sample_pos).map(|chunk| {
-        let fc = Some(compute::chunk::face_count(&chunk.blocks, &adj_blocks));
-        dbg!(fc);
-    });
+    //
+    // let adj_blocks = Array3D(compute::chunk::get_adj_blocks(sample_pos, &chunks_map));
+    // chunks_map.get_mut(&sample_pos).map(|chunk| {
+    //     let fc = Some(compute::chunk::face_count(&chunk.blocks, &adj_blocks));
+    //     dbg!(fc);
+    // });
 }

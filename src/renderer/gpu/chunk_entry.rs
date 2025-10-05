@@ -21,7 +21,7 @@ pub struct GPUVoxelChunkAdjContent {
 #[derive(ShaderType)]
 pub struct GPUVoxelFaceData {
     position_fid_illum_ocl: u32,
-    // position 15b
+    // position 12b
     // face id 3b
     // illumination 5b
     // occlusion count 8b
