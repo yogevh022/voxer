@@ -35,7 +35,6 @@ impl WorldGenRequest {
 pub struct WorldConfig {
     pub seed: i32,
     pub noise_scale: f64,
-    pub simulation_distance: usize,
 }
 
 pub struct WorldGenHandle {

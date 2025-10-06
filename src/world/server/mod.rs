@@ -1,6 +1,8 @@
 mod session;
 mod world;
 
+use crate::compute::MIB;
+use crate::voxer_network;
 use crate::world::generation::WorldConfig;
 use crate::world::network::{
     MsgChunkData, MsgChunkDataRequest, MsgSetPositionRequest, NetworkHandle, ServerMessage,
@@ -9,15 +11,13 @@ use crate::world::network::{
 use crate::world::server::session::{ServerPlayerSession, ServerWorldSession};
 use crate::world::server::world::{Earth, World};
 use crate::world::session::{PlayerLocation, PlayerSession};
-use crate::voxer_network;
 use glam::Vec3;
 use std::net::SocketAddr;
 use voxer_network::NetworkDeserializable;
-use crate::compute::MIB;
 
 #[derive(Debug)]
 pub struct ServerWorldConfig {
-    pub seed: i32,
+    pub world_config: WorldConfig,
     pub simulation_distance: usize,
 }
 
@@ -29,12 +29,9 @@ pub struct ServerWorld {
 
 impl ServerWorld {
     pub fn new(config: ServerWorldConfig) -> Self {
-        let world_config = WorldConfig {
-            seed: config.seed,
-            noise_scale: 0.03,
-            simulation_distance: config.simulation_distance,
-        };
-        let worlds: Vec<Box<dyn World>> = vec![Box::new(Earth::new(world_config))];
+        let chunks_size_hint = config.simulation_distance.pow(4); // fixme arbitrary number
+        let earth = Box::new(Earth::new(config.world_config.clone(), chunks_size_hint));
+        let worlds: Vec<Box<dyn World>> = vec![earth];
         let session = ServerWorldSession::new(worlds);
 
         let socket_addr = SocketAddr::from(([0, 0, 0, 0], 3100));
