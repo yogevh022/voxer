@@ -133,7 +133,7 @@ fn mesh_chunk_position(x: u32, y: u32) {
     write_xyz_faces(&neighbors, face_position);
 
     // xy at last z
-    face_position.z = CHUNK_DIM - 1u;
+    face_position.z = CHUNK_DIM - 1;
     first_voxel.z = false;
     last_voxel.z = true;
     neighbors = voxel_neighbors_last_z(first_voxel, last_voxel, mx, x, px, my, y, py);

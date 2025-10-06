@@ -91,6 +91,10 @@ impl ChunkManager {
             if chunk.face_count.unwrap() == 0 {
                 continue;
             }
+            if self.is_rendered(chunk.position) {
+                // needs to be remeshed, dropping existing one first
+                self.drop_chunk_position(chunk.position);
+            }
             let gpu_chunk = self.allocate_chunk(chunk);
             self.gpu_chunk_writes.push(gpu_chunk);
         }
