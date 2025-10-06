@@ -6,7 +6,6 @@ use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::{Renderer, VxDrawIndirectBatch, resources};
 use crate::world::types::Chunk;
 use glam::IVec3;
-use std::collections::HashMap;
 use std::num::NonZeroU64;
 use rustc_hash::FxHashMap;
 use suballoc::SubAllocator;

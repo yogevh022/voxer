@@ -12,9 +12,9 @@ pub struct Earth {
 }
 
 impl Earth {
-    pub fn new(config: WorldConfig) -> Self {
+    pub fn new(config: WorldConfig, chunks_size_hint: usize) -> Self {
         let mut chunks = FxHashMap::default();
-        chunks.reserve(config.simulation_distance.pow(4)); // fixme temporary arbitrary capacity
+        chunks.reserve(chunks_size_hint);
         Self {
             config,
             chunks,

@@ -7,25 +7,35 @@ mod renderer;
 mod vtypes;
 mod world;
 
-use crate::world::{ServerWorld, ServerWorldConfig};
+use crate::world::generation::WorldConfig;
+use crate::world::{ClientWorldConfig, ServerWorld, ServerWorldConfig};
 use voxer_network;
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
-const SIMULATION_AND_RENDER_DISTANCE: usize = 8; // fixme temp location
-
 fn run_app() {
-    let mut server = ServerWorld::new(ServerWorldConfig {
-        seed: 0,
+    const SIMULATION_AND_RENDER_DISTANCE: usize = 8;
+
+    let server_config = ServerWorldConfig {
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
-    });
+        world_config: WorldConfig {
+            seed: 0,
+            noise_scale: 0.03,
+        },
+    };
+
+    let client_config = ClientWorldConfig {
+        render_distance: SIMULATION_AND_RENDER_DISTANCE,
+    };
+
+    let mut server = ServerWorld::new(server_config);
     let voxer_engine = vtypes::Voxer::default();
     let scene = vtypes::Scene {
         objects: vec![VObject::Camera(CameraController::with_sensitivity(0.01))],
     };
 
     server.start_session();
-    let mut app = app::App::new(voxer_engine, server, scene);
+    let mut app = app::App::new(voxer_engine, server, scene, client_config);
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);

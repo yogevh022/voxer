@@ -3,7 +3,7 @@ pub mod app_renderer;
 use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::types::CHUNK_DIM;
 use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld};
-use crate::{SIMULATION_AND_RENDER_DISTANCE, call_every, compute, vtypes};
+use crate::{call_every, compute, vtypes};
 use glam::IVec3;
 use std::sync::Arc;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -21,17 +21,19 @@ pub struct App<'a> {
     pub v: Voxer, // voxer engine; input, time, camera, etc
     pub server: ServerWorld,
     pub client: Option<ClientWorld<'a>>,
+    pub client_config: ClientWorldConfig,
     pub scene: Scene,
     pub debug: AppDebug,
 }
 
 impl<'a> App<'a> {
-    pub fn new(v: Voxer, server: ServerWorld, scene: Scene) -> Self {
+    pub fn new(v: Voxer, server: ServerWorld, scene: Scene, client_config: ClientWorldConfig) -> Self {
         Self {
             window: None,
             v,
             server,
             client: None,
+            client_config,
             scene,
             debug: Default::default(),
         }
@@ -51,10 +53,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
                 arc_window.inner_size().width as f32 / arc_window.inner_size().height as f32,
             );
             self.v.camera.transform.position = glam::vec3(20.0, 10.0, 20.0);
-            let client_config = ClientWorldConfig {
-                render_distance: SIMULATION_AND_RENDER_DISTANCE,
-            };
-            self.client = Some(ClientWorld::new(arc_window, client_config));
+            self.client = Some(ClientWorld::new(arc_window, self.client_config));
             self.client.as_mut().unwrap().temp_send_req_conn();
 
             self.debug.last_chunk_pos = IVec3::new(100, 100, 100);
