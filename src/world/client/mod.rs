@@ -75,8 +75,7 @@ impl ClientWorld<'_> {
         for message in self.network.take_messages(64) {
             self.handle_network_message(message);
         }
-        self.session.tick();
-        self.session.update_render_state(gpu_encoder);
+        self.session.tick(gpu_encoder);
         self.request_chunk_batch();
     }
 
@@ -99,7 +98,7 @@ impl ClientWorld<'_> {
                     chunk_data_msg.blocks,
                     chunk_data_msg.solid_count as usize,
                 );
-                self.session.add_chunk(chunk);
+                self.session.add_new_chunk(chunk);
             }
             ServerMessageTag::SetPosition => {
                 todo!()

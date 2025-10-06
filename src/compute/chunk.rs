@@ -11,8 +11,11 @@ pub const TRANSPARENT_LAYER_BLOCKS: [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] =
     [[VoxelBlock { value: 0 }; CHUNK_DIM]; CHUNK_DIM];
 
 pub fn face_count(blocks: &ChunkBlocks, adjacent_blocks: &ChunkAdjacentBlocks) -> usize {
+    let next_adj_blocks = unsafe {
+        *adjacent_blocks.as_ptr().cast::<Array3D<VoxelBlock, 3, CHUNK_DIM, CHUNK_DIM>>()
+    };
     let packed_blocks = pack_solid_blocks(blocks);
-    let packed_adjacent_blocks = pack_solid_blocks(adjacent_blocks);
+    let packed_adjacent_blocks = pack_solid_blocks(&next_adj_blocks);
 
     let faces = faces(packed_blocks, packed_adjacent_blocks);
     faces.iter().map(|b| b.count_ones() as usize).sum::<usize>()
@@ -47,9 +50,9 @@ fn faces(
             &mut zb,
         );
 
-        result_layers[i] = compute::array::xor(&xa, &xb);
-        result_layers[CHUNK_DIM + i] = compute::array::xor(&ya, &yb);
-        result_layers[CHUNK_DIM + CHUNK_DIM + i] = compute::array::xor(&xa, &zb);
+        result_layers[i] = compute::array::array_xor(&xa, &xb);
+        result_layers[CHUNK_DIM + i] = compute::array::array_xor(&ya, &yb);
+        result_layers[CHUNK_DIM + CHUNK_DIM + i] = compute::array::array_xor(&xa, &zb);
     }
     adjacent_y(
         &packed_blocks,
@@ -63,12 +66,12 @@ fn faces(
         &xb,
         &mut zb,
     );
-    result_layers[CHUNK_DIM - 1] = compute::array::xor(
+    result_layers[CHUNK_DIM - 1] = compute::array::array_xor(
         &xb,
         &packed_adjacent_blocks[0..CHUNK_DIM].try_into().unwrap(),
     );
-    result_layers[CHUNK_DIM + CHUNK_DIM - 1] = compute::array::xor(&ya, &yb);
-    result_layers[CHUNK_DIM + CHUNK_DIM + CHUNK_DIM - 1] = compute::array::xor(&xb, &zb);
+    result_layers[CHUNK_DIM + CHUNK_DIM - 1] = compute::array::array_xor(&ya, &yb);
+    result_layers[CHUNK_DIM + CHUNK_DIM + CHUNK_DIM - 1] = compute::array::array_xor(&xb, &zb);
     result
 }
 
@@ -139,14 +142,31 @@ fn get_mz_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
     array::from_fn(|x| array::from_fn(|y| blocks[x][y][0]))
 }
 
-pub fn get_adjacent_blocks(
+fn get_px_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
+    blocks[CHUNK_DIM - 1]
+}
+
+fn get_py_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
+    array::from_fn(|i| blocks[i][CHUNK_DIM - 1])
+}
+
+fn get_pz_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
+    array::from_fn(|x| array::from_fn(|y| blocks[x][y][CHUNK_DIM - 1]))
+}
+
+pub fn get_adj_blocks(
     position: IVec3,
     chunks_map: &FxHashMap<IVec3, Chunk>,
-) -> [[[VoxelBlock; CHUNK_DIM]; CHUNK_DIM]; 3] {
+) -> [[[VoxelBlock; CHUNK_DIM]; CHUNK_DIM]; 6] {
     let px = IVec3::new(position.x + 1, position.y, position.z);
     let py = IVec3::new(position.x, position.y + 1, position.z);
     let pz = IVec3::new(position.x, position.y, position.z + 1);
 
+    let mx = IVec3::new(position.x - 1, position.y, position.z);
+    let my = IVec3::new(position.x, position.y - 1, position.z);
+    let mz = IVec3::new(position.x, position.y, position.z - 1);
+
+    // fixme just pass none?
     [
         chunks_map
             .get(&px)
@@ -157,5 +177,14 @@ pub fn get_adjacent_blocks(
         chunks_map
             .get(&pz)
             .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_mz_layer(&c.blocks)),
+        chunks_map
+            .get(&mx)
+            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_px_layer(&c.blocks)),
+        chunks_map
+            .get(&my)
+            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_py_layer(&c.blocks)),
+        chunks_map
+            .get(&mz)
+            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_pz_layer(&c.blocks)),
     ]
 }

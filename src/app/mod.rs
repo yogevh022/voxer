@@ -50,6 +50,7 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             self.v.camera.set_aspect_ratio(
                 arc_window.inner_size().width as f32 / arc_window.inner_size().height as f32,
             );
+            self.v.camera.transform.position = glam::vec3(20.0, 10.0, 20.0);
             let client_config = ClientWorldConfig {
                 render_distance: SIMULATION_AND_RENDER_DISTANCE,
             };
@@ -155,7 +156,7 @@ impl<'a> App<'a> {
             let input = self.v.input.read();
             const MOVE_SPEED: f32 = 10.0;
             let fast_mul: f32 = if input.keyboard.key_down(KeyCode::ShiftLeft) {
-                4.0
+                6.0
             } else {
                 1.0
             };

@@ -2127,6 +2127,7 @@ dependencies = [
 [[package]]
 name = "smallhash"
 version = "0.1.0"
+source = "git+https://github.com/yogevh022/smallhash#979c48cb3ad08f639c2e3e681c76991ce5541bf1"
 
 [[package]]
 name = "smallvec"

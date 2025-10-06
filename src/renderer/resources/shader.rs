@@ -81,7 +81,6 @@ include_shaders!(
     VOXEL_CHUNK_MESH_ENTRY => "voxel/chunk_mesh_entry.wgsl",
     VOXEL_CHUNK_MESH_FACES => "voxel/chunk_mesh_faces.wgsl",
     VOXEL_CHUNK_MESH_VAO => "voxel/chunk_mesh_vao.wgsl",
-    VOXEL_CHUNK_WRITE_SCATTERED => "voxel/chunk_write_scattered.wgsl",
 );
 
 fn voxel_common() -> (String, String) {

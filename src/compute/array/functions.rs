@@ -4,7 +4,7 @@ use bytemuck::{NoUninit, Pod, Zeroable};
 use std::ops::BitXor;
 
 #[inline]
-pub fn xor<T, const N: usize>(a: &[T; N], b: &[T; N]) -> [T; N]
+pub fn array_xor<T, const N: usize>(a: &[T; N], b: &[T; N]) -> [T; N]
 where
     T: BitXor<Output = T> + Copy + Default + Pod + Zeroable + NoUninit,
 {
@@ -50,26 +50,12 @@ where
     output
 }
 
-pub fn rotated_z_bits<const X: usize, const Y: usize>(arr_2d: &[[u16; Y]; X]) -> [[u16; Y]; X] {
-    let mut output = [[0; Y]; X];
-    for x in 0..X {
-        for y in 0..Y {
-            output[y][X - 1 - x] = arr_2d[x][y];
-        }
-    }
-    output
+#[inline]
+pub fn array_pop_count_u16<const N: usize>(arr: [u16; N]) -> u32 {
+    arr.into_iter().map(|x| x.count_ones()).sum::<u32>()
 }
 
-pub fn rotated_y_bits<const X: usize, const Y: usize, const Z: usize>(
-    arr_2d: &[[u16; Y]; X],
-) -> [[u16; Y]; X] {
-    let mut output = [[0; Y]; X];
-    for x in 0..X {
-        for y in 0..Y {
-            for z in 0..Z {
-                output[z][y] |= compute::bytes::bit_at(arr_2d[x][y], z) << (X - 1 - x);
-            }
-        }
-    }
-    output
+#[inline]
+pub fn array_pop_count_u32<const N: usize>(arr: [u32; N]) -> u32 {
+    arr.into_iter().map(|x| x.count_ones()).sum::<u32>()
 }

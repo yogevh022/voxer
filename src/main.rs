@@ -7,15 +7,12 @@ mod renderer;
 mod vtypes;
 mod world;
 
-use std::hint::black_box;
 use crate::world::{ServerWorld, ServerWorldConfig};
-use glam::IVec3;
-use rustc_hash::FxHashMap;
 use voxer_network;
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
-const SIMULATION_AND_RENDER_DISTANCE: usize = 16; // fixme temp location
+const SIMULATION_AND_RENDER_DISTANCE: usize = 8; // fixme temp location
 
 fn run_app() {
     let mut server = ServerWorld::new(ServerWorldConfig {
@@ -41,25 +38,12 @@ fn main() {
 }
 
 fn debug() {
-    use smallhash;
+    use crate::compute::geo::IVec3Iter;
     use crate::renderer::gpu::GPUVoxelChunk;
-    use std::hint::black_box;
     use glam::IVec3;
+    use rustc_hash::{FxHashMap, FxHashSet};
+    use smallhash;
+    use std::hint::black_box;
+    use std::time::Duration;
     use std::time::Instant;
-
-    fn dbg_hash(bound: i32)
-    {
-        for x in -bound..bound {
-            for y in -bound..bound {
-                for z in -bound..bound {
-                    let hash = smallhash::u32x3_to_18_bits([x, y, z]);
-                    black_box(hash);
-                }
-            }
-        }
-    }
-
-    let start = Instant::now();
-    dbg_hash(512);
-    println!("time: {:?}", start.elapsed());
 }
