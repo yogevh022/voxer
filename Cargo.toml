@@ -6,8 +6,9 @@ edition = "2024"
 [dependencies]
 voxer_macros = { path = "voxer_macros" }
 voxer_network = { git = "https://github.com/yogevh022/voxer_network" }
-suballoc = { git = "https://github.com/yogevh022/suballoc-rs", branch = "master" }
+suballoc = { git = "https://github.com/yogevh022/suballoc-rs" }
 smallhash = { git = "https://github.com/yogevh022/smallhash" }
+slabmap = { git = "https://github.com/yogevh022/slabmap", branch = "bitslab" }
 #wgpu = { version = "26.0.1", features = ["dx12", "vulkan", "metal"] }
 wgpu = { path="C:/Users/Yogev/RustroverProjects/wgpu/wgpu", features = ["dx12", "vulkan", "metal"] }
 winit = "0.30.12"
@@ -19,7 +20,6 @@ parking_lot = "0.12.4"
 fastnoise2 = "0.3.1"
 rayon = "1.10.0"
 crossbeam = "0.8.4"
-slab = "0.4.11"
 rustc-hash = "2.1.1"
 
 [profile.dev]

@@ -14,7 +14,7 @@ use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
 fn run_app() {
-    const SIMULATION_AND_RENDER_DISTANCE: usize = 8;
+    const SIMULATION_AND_RENDER_DISTANCE: usize = 16;
 
     let server_config = ServerWorldConfig {
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
@@ -53,7 +53,21 @@ fn debug() {
     use glam::IVec3;
     use rustc_hash::{FxHashMap, FxHashSet};
     use smallhash;
+    use slabmap;
     use std::hint::black_box;
     use std::time::Duration;
     use std::time::Instant;
+
+    let count = 1usize << 19;
+
+    let mut slabmap = slabmap::SlabMap::<IVec3, usize>::with_capacity(count);
+
+    let slabmap_time = timed!({
+        for i in 0..count {
+            let p = IVec3::new(i as i32, i as i32, i as i32);
+            slabmap.insert(p, i);
+        }
+    });
+
+    println!("slabmap: {:?}", slabmap_time);
 }

@@ -1,10 +1,10 @@
 use crate::call_every;
-use crate::compute::ds::Slap;
 use crate::renderer::gpu::chunk_entry::GPUVoxelChunkHeader;
 use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelFaceData};
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::{Renderer, VxDrawIndirectBatch, resources};
 use crate::world::types::Chunk;
+use slabmap::SlabMap;
 use glam::IVec3;
 use std::num::NonZeroU64;
 use rustc_hash::FxHashMap;
@@ -16,7 +16,7 @@ type BufferDrawArgs = FxHashMap<usize, DrawIndirectArgs>;
 
 pub struct ChunkManager {
     suballocator: SubAllocator,
-    suballocs: Slap<IVec3, u32>,
+    suballocs: SlabMap<IVec3, u32>,
 
     gpu_active_draw: BufferDrawArgs,
     gpu_chunk_writes: Vec<GPUVoxelChunk>,
@@ -67,7 +67,7 @@ impl ChunkManager {
 
         Self {
             suballocator: SubAllocator::new(max_face_count as u32),
-            suballocs: Slap::new(),
+            suballocs: SlabMap::with_capacity(max_chunk_count),
             gpu_active_draw: FxHashMap::default(),
             gpu_chunk_writes: Vec::with_capacity(max_chunk_count),
             chunks_buffer: voxel_chunk_buffer,
@@ -92,7 +92,7 @@ impl ChunkManager {
             }
             if self.is_rendered(chunk.position) {
                 // needs to be remeshed, dropping existing one first
-                self.drop_chunk_position(chunk.position);
+                self.drop_chunk(chunk.position);
             }
             let gpu_chunk = self.allocate_chunk(chunk);
             self.gpu_chunk_writes.push(gpu_chunk);
@@ -100,7 +100,7 @@ impl ChunkManager {
         self.encode_meshing_pass(renderer, encoder);
     }
 
-    pub fn drop_chunk_position(&mut self, position: IVec3) {
+    pub fn drop_chunk(&mut self, position: IVec3) {
         let slap_entry_opt = self.suballocs.remove(&position);
         let (slab_index, alloc_start) = slap_entry_opt.unwrap();
         self.gpu_active_draw.remove(&slab_index).unwrap();
@@ -114,7 +114,7 @@ impl ChunkManager {
             .filter_map(|(p, _)| (!func(p)).then_some(p).cloned())
             .collect::<Vec<_>>();
         for p in to_drop {
-            self.drop_chunk_position(p);
+            self.drop_chunk(p);
         }
     }
 
@@ -128,7 +128,7 @@ impl ChunkManager {
     }
 
     pub fn is_rendered(&self, position: IVec3) -> bool {
-        self.suballocs.contains(&position)
+        self.suballocs.get(&position).is_some()
     }
 
     fn allocate_chunk(&mut self, chunk: &Chunk) -> GPUVoxelChunk {

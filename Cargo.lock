@@ -2116,6 +2116,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2ae44ef20feb57a68b23d846850f861394c2e02dc425a50098ae8c90267589"
 
 [[package]]
+name = "slabmap"
+version = "0.1.0"
+source = "git+https://github.com/yogevh022/slabmap?branch=bitslab#bc6a463e8608c5e84831bdb16e9f3214a9b0c054"
+dependencies = [
+ "rustc-hash 2.1.1",
+ "word_bitmap",
+]
+
+[[package]]
 name = "slotmap"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2193,7 +2202,7 @@ checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 [[package]]
 name = "suballoc"
 version = "0.1.4"
-source = "git+https://github.com/yogevh022/suballoc-rs?branch=master#b9133bf86652343cd7c5180eebf3be936de4c1ef"
+source = "git+https://github.com/yogevh022/suballoc-rs#b9133bf86652343cd7c5180eebf3be936de4c1ef"
 
 [[package]]
 name = "syn"
@@ -2420,7 +2429,7 @@ dependencies = [
  "pollster",
  "rayon",
  "rustc-hash 2.1.1",
- "slab",
+ "slabmap",
  "smallhash",
  "suballoc",
  "voxer_macros",
@@ -3242,6 +3251,11 @@ checksum = "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1"
 dependencies = [
  "bitflags 2.9.1",
 ]
+
+[[package]]
+name = "word_bitmap"
+version = "0.1.0"
+source = "git+https://github.com/yogevh022/word_bitmap#c8cf48ec0cc27b5c096ea2d6461f42471013540d"
 
 [[package]]
 name = "x11-dl"
