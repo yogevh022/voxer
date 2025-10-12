@@ -15,6 +15,15 @@ struct StructField {
     ty: String,
 }
 
+impl StructField {
+    pub fn new(ident: String, ty: String) -> Option<Self> {
+        if ident.starts_with("_cpu_padding") {
+            return None;
+        }
+        Some(Self { ident, ty })
+    }
+}
+
 fn rust_to_wgsl_path(type_path: &TypePath) -> String {
     let name_seg = type_path.path.segments.last().unwrap();
     match name_seg.ident.to_string().as_str() {
@@ -67,11 +76,13 @@ pub(crate) fn rust_to_wgsl_code(struct_input: &syn::DeriveInput) -> String {
     match &data_struct.fields {
         Fields::Named(fields_named) => {
             for field in fields_named.named.iter() {
-                let field = StructField {
-                    ident: field.ident.as_ref().unwrap().to_string(),
-                    ty: rust_to_wgsl_type(&field.ty),
-                };
-                struct_fields.push(field);
+                let field_opt = StructField::new(
+                    field.ident.as_ref().unwrap().to_string(),
+                    rust_to_wgsl_type(&field.ty),
+                );
+                if let Some(field) = field_opt {
+                    struct_fields.push(field);
+                }
             }
         }
         _ => panic!("ShaderType must be a named struct"),

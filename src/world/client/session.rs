@@ -13,7 +13,7 @@ use glam::IVec3;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use wgpu::CommandEncoder;
+use wgpu::{CommandEncoder, ComputePassDescriptor};
 use winit::window::Window;
 
 pub struct ClientWorldSession<'window> {
@@ -30,6 +30,8 @@ pub struct ClientWorldSession<'window> {
     chunk_render_batch: Vec<Chunk>,
 
     lazy_chunk_positions: Vec<IVec3>,
+
+    new_chunks: Vec<IVec3>,
 }
 
 impl<'window> ClientWorldSession<'window> {
@@ -47,11 +49,13 @@ impl<'window> ClientWorldSession<'window> {
             chunk_render_batch: Vec::new(),
             lazy_chunk_positions: Vec::new(),
             chunk_remesh_batch: Vec::new(),
+            new_chunks: Vec::new(),
         }
     }
 
     pub fn add_new_chunk(&mut self, chunk: Chunk) {
         self.chunk_remesh_batch.push(chunk.position);
+        self.new_chunks.push(chunk.position);
         self.chunks.insert(chunk.position, chunk);
     }
 
@@ -76,27 +80,71 @@ impl<'window> ClientWorldSession<'window> {
         }
     }
 
-
     pub fn tick(&mut self, encoder: &mut CommandEncoder) {
+        // fixme temp
+        // fixme no enforcement of max_new_chunks
         let to_remesh = self.process_chunk_remesh_batch();
-        self.update_render_state(encoder, to_remesh);
+        self.renderer.update_new_chunks(
+            &self
+                .new_chunks
+                .drain(..)
+                .map(|p| self.chunks.get(&p).unwrap().clone())
+                .collect::<Vec<_>>(),
+        );
+        self.renderer.update_view_chunks(&self.view_frustum);
+        let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+            label: Some("Chunk Compute Pass"),
+            timestamp_writes: None,
+        });
+        self.renderer.encode_new_chunks(&mut compute_pass);
+        self.renderer.encode_view_chunks(&mut compute_pass);
+        let p_ch_pos = world_to_chunk_pos(self.player.location.position);
+        self.temp_req(p_ch_pos);
+        // self.update_render_state(encoder, to_remesh);
     }
 
     fn update_render_state(&mut self, encoder: &mut CommandEncoder, to_remesh: FxHashSet<IVec3>) {
+        // let mut frustum_aabb = Frustum::aabb(&self.view_frustum);
+        // frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
+        // frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
+        //
+        // let camera_ch_position = world_to_chunk_pos(self.player.location.position);
+        //
+        // self.retain_frustum_chunks(camera_ch_position);
+        // self.update_chunk_batches(frustum_aabb, camera_ch_position, to_remesh);
+        // self.lazy_chunk_gc(camera_ch_position);
+        // self.renderer
+        //     .encode_new_chunks(encoder, &self.chunk_render_batch);
+    }
+
+    fn temp_req(&mut self, camera_pos: IVec3) {
         let mut frustum_aabb = Frustum::aabb(&self.view_frustum);
         frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
         frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
 
-        let camera_ch_position = world_to_chunk_pos(self.player.location.position);
+        frustum_aabb.discrete_points(|ch_pos| {
+            if !Self::should_render(camera_pos, ch_pos, &self.view_frustum, self.render_max_sq) {
+                return;
+            }
+            if self.renderer.is_chunk_rendered(ch_pos) {
+                return;
+            }
 
-        self.retain_frustum_chunks(camera_ch_position);
-        self.update_chunk_batches(frustum_aabb, camera_ch_position, to_remesh);
-        self.lazy_chunk_gc(camera_ch_position);
-        self.renderer
-            .encode_new_chunks(encoder, &self.chunk_render_batch);
+            if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
+                let throttle_idx = smallhash::u32x3_to_18_bits(ch_pos.to_array());
+                if self.chunk_request_throttler.request(throttle_idx as usize) {
+                    self.chunk_request_batch.push(ch_pos);
+                }
+            }
+        });
     }
 
-    fn update_chunk_batches(&mut self, frustum_aabb: AABB, camera_pos: IVec3, to_remesh: FxHashSet<IVec3>) {
+    fn update_chunk_batches(
+        &mut self,
+        frustum_aabb: AABB,
+        camera_pos: IVec3,
+        to_remesh: FxHashSet<IVec3>,
+    ) {
         self.chunk_request_batch.clear();
         self.chunk_render_batch.clear();
         self.chunk_request_throttler.set_now(Instant::now());
@@ -106,9 +154,7 @@ impl<'window> ClientWorldSession<'window> {
                 return;
             }
             if let Some(chunk) = self.chunks.get(&ch_pos) {
-                if !self.renderer.is_chunk_rendered(ch_pos)
-                    || to_remesh.contains(&ch_pos)
-                {
+                if !self.renderer.is_chunk_rendered(ch_pos) || to_remesh.contains(&ch_pos) {
                     self.chunk_render_batch.push(chunk.clone());
                 }
             } else if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {

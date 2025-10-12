@@ -7,11 +7,6 @@ struct Vertex {
     ao: f32,
 }
 
-struct Plane {
-    normal: vec3<f32>,
-    distance: f32,
-}
-
 alias Index = u32;
 alias IndexBuffer = array<Index>;
 alias VertexBuffer = array<Vertex>;

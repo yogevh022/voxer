@@ -10,14 +10,16 @@ use glam::{IVec3, Mat4};
 use std::borrow::Cow;
 use std::sync::Arc;
 use voxer_macros::ShaderType;
-use wgpu::{BindGroup, BufferUsages, CommandEncoder, RenderPipeline};
+use wgpu::{BindGroup, BufferUsages, CommandEncoder, ComputePass, RenderPipeline};
 use winit::window::Window;
+use crate::compute::geo::{Frustum, Plane};
 
 #[repr(C, align(16))]
 #[derive(ShaderType, Copy, Clone, Debug, Pod, Zeroable)]
 pub struct UniformCameraView {
     // todo move from here
     view_proj: Mat4,
+    view_planes: [Plane; 6],
 }
 
 pub struct AppRenderer<'window> {
@@ -69,9 +71,20 @@ impl AppRenderer<'_> {
             view_projection_buffer,
         }
     }
-    pub fn encode_new_chunks(&mut self, encoder: &mut CommandEncoder, chunks: &[Chunk]) {
-        self.chunk_manager
-            .encode_new_chunks(&self.renderer, encoder, chunks);
+    pub fn update_new_chunks(&mut self, chunks: &[Chunk]) {
+        self.chunk_manager.update_gpu_chunk_writes(chunks);
+    }
+
+    pub fn encode_new_chunks(&mut self, compute_pass: &mut ComputePass) {
+        self.chunk_manager.encode_gpu_chunk_writes(&self.renderer, compute_pass);
+    }
+
+    pub fn update_view_chunks(&mut self, view_planes: &[Plane; 6] ) {
+        self.chunk_manager.update_gpu_view_chunks(view_planes);
+    }
+
+    pub fn encode_view_chunks(&mut self, compute_pass: &mut ComputePass) {
+        self.chunk_manager.encode_gpu_view_chunks(&self.renderer, compute_pass);
     }
 
     pub fn is_chunk_rendered(&self, position: IVec3) -> bool {
@@ -99,6 +112,7 @@ impl AppRenderer<'_> {
 
         let cam_view = UniformCameraView {
             view_proj: camera.view_projection(),
+            view_planes: Frustum::planes(camera.view_projection()), // fixme perf
         };
 
         self.renderer.write_buffer(
@@ -125,8 +139,8 @@ pub fn make_render_pipeline(
     renderer: &Renderer<'_>,
     shader_source: Cow<str>,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
-) -> wgpu::RenderPipeline {
-    let shader = resources::shader::create(&renderer.device, shader_source);
+) -> RenderPipeline {
+    let shader = resources::shader::create(&renderer.device, shader_source, "render pipeline shader");
     let render_pipeline_layout =
         &renderer
             .device

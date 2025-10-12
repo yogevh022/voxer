@@ -1,7 +1,8 @@
 use std::borrow::Cow;
 use wgpu::ShaderSource;
 use crate::app::app_renderer::UniformCameraView;
-use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkBufferData, GPUVoxelChunkContent, GPUVoxelFaceData, GPUVoxelChunkHeader};
+use crate::compute::geo::Plane;
+use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkBufferData, GPUVoxelChunkContent, GPUVoxelFaceData, GPUVoxelChunkHeader, GPUDrawIndirectArgs};
 use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF};
 
 macro_rules! include_shaders {
@@ -81,12 +82,15 @@ include_shaders!(
     VOXEL_CHUNK_MESH_ENTRY => "voxel/chunk_mesh_entry.wgsl",
     VOXEL_CHUNK_MESH_FACES => "voxel/chunk_mesh_faces.wgsl",
     VOXEL_CHUNK_MESH_VAO => "voxel/chunk_mesh_vao.wgsl",
+    VOXEL_CHUNK_WRITE_ENTRY => "voxel/chunk_write.wgsl",
+    VOXEL_CHUNK_CULL_ENTRY => "voxel/chunk_cull.wgsl",
 );
 
 fn voxel_common() -> (String, String) {
     let consts = include_shader_consts!(
         CHUNK_DIM: u32 = CHUNK_DIM;
         CHUNK_DIM_HALF: u32 = CHUNK_DIM_HALF;
+        MAX_WORKGROUP_DIM_2D: u32 = 16;
         CFG_VAO_FACTOR: f32 = 0.35;
     );
     let types = include_shader_types!(
@@ -96,6 +100,9 @@ fn voxel_common() -> (String, String) {
         GPUVoxelChunkHeader,
         GPUVoxelChunkBufferData,
         GPUVoxelFaceData,
+
+        GPUDrawIndirectArgs,
+        Plane
     );
     (consts, types)
 }
@@ -132,9 +139,34 @@ pub fn chunk_meshing() -> String {
     )
 }
 
-pub fn create(device: &wgpu::Device, source: Cow<str>) -> wgpu::ShaderModule {
+pub fn chunk_draw_args() -> String {
+    let uniform_camera_view = include_shader_types!(
+        UniformCameraView
+    );
+    let (consts, types) = voxel_common();
+    concat_shaders!(
+        GLOBAL,
+        &consts,
+        &types,
+        &uniform_camera_view,
+        F_BITWISE,
+        VOXEL_CHUNK_CULL_ENTRY,
+    )
+}
+
+pub fn chunk_write() -> String {
+    let (consts, types) = voxel_common();
+    concat_shaders!(
+        GLOBAL,
+        &consts,
+        &types,
+        VOXEL_CHUNK_WRITE_ENTRY,
+    )
+}
+
+pub fn create(device: &wgpu::Device, source: Cow<str>, label: &'static str) -> wgpu::ShaderModule {
     device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("main_shader"),
+        label: Some(label),
         source: ShaderSource::Wgsl(source),
     })
 }

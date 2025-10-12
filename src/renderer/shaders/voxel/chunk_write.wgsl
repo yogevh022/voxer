@@ -1,13 +1,13 @@
 
 @group(0) @binding(0)
-var<storage, read> chunks_buffer_src: array<GPUVoxelChunk>;
-@group(0) @binding(1)
 var<storage, read_write> chunks_buffer_dst: array<GPUVoxelChunk>;
+@group(0) @binding(1)
+var<storage, read> chunks_buffer_src: array<GPUVoxelChunk>;
 
 var<workgroup> workgroup_write_count: u32;
 
-@compute @workgroup_size(CHUNK_DIM, CHUNK_DIM, 1)
-fn chunks_write_entry(
+@compute @workgroup_size(MAX_WORKGROUP_DIM_2D, MAX_WORKGROUP_DIM_2D, 1)
+fn chunk_write_entry(
     @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
 ) {
@@ -22,9 +22,10 @@ fn chunks_write_entry(
     add_new_chunk(write_mapping);
 }
 
+// fixme add write mapping math util as general shader code
 fn src_index_from_mapping(write_mapping: vec3<u32>) -> u32 {
-    let wg_offset = write_mapping.z * CHUNK_DIM * CHUNK_DIM;
-    let y_offset = write_mapping.y * CHUNK_DIM;
+    let wg_offset = write_mapping.z * MAX_WORKGROUP_DIM_2D * MAX_WORKGROUP_DIM_2D;
+    let y_offset = write_mapping.y * MAX_WORKGROUP_DIM_2D;
     let x_offset = write_mapping.x;
     return 1 + wg_offset + y_offset + x_offset;
 }

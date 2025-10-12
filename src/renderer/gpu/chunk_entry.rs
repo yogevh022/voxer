@@ -1,13 +1,28 @@
-use crate::world::types::{CHUNK_DIM, ChunkBlocks, CHUNK_DIM_HALF};
+use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, ChunkBlocks};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
 use voxer_macros::ShaderType;
 use wgpu::wgt::DrawIndirectArgs;
 
+#[repr(C)]
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPU4Bytes {
+    pub data: u32,
+}
+
+#[repr(C)]
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUDrawIndirectArgs {
+    vertex_count: u32,
+    instance_count: u32,
+    first_vertex: u32,
+    first_instance: u32,
+}
+
 #[repr(C, align(8))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkContent {
-    blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; CHUNK_DIM]
+    blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; CHUNK_DIM],
 }
 
 #[repr(C, align(8))]
@@ -41,10 +56,11 @@ pub struct GPUVoxelChunkBufferData {
 #[repr(C, align(16))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkHeader {
-    pub position: IVec3,                      // 0-11
-    pub slab_index: u32,                      // 12-15
-    pub buffer_data: GPUVoxelChunkBufferData, // 16-23
-    _padding: [u32; 2],                       // 23-31
+    pub position: IVec3,
+    pub slab_index: u32,
+    pub buffer_data: GPUVoxelChunkBufferData,
+    _padding: u32,
+    _cpu_padding: u32,
 }
 
 impl GPUVoxelChunkHeader {
@@ -54,7 +70,8 @@ impl GPUVoxelChunkHeader {
             buffer_data,
             slab_index,
             position,
-            _padding: [0; 2],
+            _padding: 0,
+            _cpu_padding: 0,
         }
     }
 
@@ -63,7 +80,7 @@ impl GPUVoxelChunkHeader {
         DrawIndirectArgs {
             vertex_count: self.buffer_data.face_count * 6,
             instance_count: 1,
-            first_vertex: self.buffer_data.offset * 6,
+            first_vertex: self.buffer_data.offset.wrapping_mul(6),
             first_instance: packed_xz,
         }
     }
