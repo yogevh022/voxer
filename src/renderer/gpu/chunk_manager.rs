@@ -1,16 +1,20 @@
-use crate::call_every;
+use crate::compute::MIB;
 use crate::renderer::gpu::chunk_entry::GPUVoxelChunkHeader;
 use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelFaceData};
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::{Renderer, VxDrawIndirectBatch, resources};
 use crate::world::types::Chunk;
-use slabmap::SlabMap;
 use glam::IVec3;
-use std::num::NonZeroU64;
 use rustc_hash::FxHashMap;
+use slabmap::SlabMap;
 use suballoc::SubAllocator;
-use wgpu::{BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, BufferUsages, CommandEncoder, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, PipelineLayoutDescriptor, RenderPass, ShaderStages};
 use wgpu::wgt::DrawIndirectArgs;
+use wgpu::{
+    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, BufferUsages, CommandEncoder,
+    ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device,
+    PipelineLayoutDescriptor, RenderPass, ShaderStages,
+};
 
 type BufferDrawArgs = FxHashMap<usize, DrawIndirectArgs>;
 
@@ -22,6 +26,7 @@ pub struct ChunkManager {
     gpu_chunk_writes: Vec<GPUVoxelChunk>,
 
     chunks_buffer: VxBuffer,
+    chunks_write_buffer: VxBuffer,
     faces_buffer: VxBuffer,
     meshing_pipeline: ComputePipeline,
     meshing_bind_group: BindGroup,
@@ -35,11 +40,18 @@ impl ChunkManager {
         view_projection_buffer: &VxBuffer,
         max_face_count: usize,
         max_chunk_count: usize,
+        max_chunk_write_count: usize,
     ) -> Self {
         let voxel_chunk_buffer = renderer.device.create_vx_buffer::<GPUVoxelChunk>(
             "Voxel Chunks Buffer",
             max_chunk_count,
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        );
+
+        let voxel_chunk_write_buffer = renderer.device.create_vx_buffer::<GPUVoxelChunk>(
+            "Voxel Chunk Write Buffer",
+            max_chunk_write_count,
+            BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
         );
 
         let voxel_face_buffer = renderer.device.create_vx_buffer::<GPUVoxelFaceData>(
@@ -48,10 +60,13 @@ impl ChunkManager {
             BufferUsages::VERTEX | BufferUsages::STORAGE,
         );
 
-        let chunk_buffer_size = NonZeroU64::new(voxel_chunk_buffer.size()).unwrap();
-        let face_buffer_size = NonZeroU64::new(voxel_face_buffer.size()).unwrap();
+        let meshing_bgl = chunk_meshing_bgl(
+            &renderer.device,
+            voxel_chunk_buffer.buffer_size,
+            voxel_chunk_write_buffer.buffer_size,
+            voxel_face_buffer.buffer_size,
+        );
 
-        let meshing_bgl = chunk_meshing_bgl(&renderer.device, chunk_buffer_size, face_buffer_size);
         let meshing_pipeline = chunk_meshing_pipeline(&renderer.device, &[&meshing_bgl]);
         let meshing_bind_group = renderer.device.create_bind_group(&BindGroupDescriptor {
             label: Some("Chunk Meshing Bind Group"),
@@ -59,6 +74,7 @@ impl ChunkManager {
             entries: &resources::utils::bind_entries([
                 voxel_chunk_buffer.as_entire_binding(),
                 voxel_face_buffer.as_entire_binding(),
+                voxel_chunk_write_buffer.as_entire_binding(),
             ]),
         });
 
@@ -71,6 +87,7 @@ impl ChunkManager {
             gpu_active_draw: FxHashMap::default(),
             gpu_chunk_writes: Vec::with_capacity(max_chunk_count),
             chunks_buffer: voxel_chunk_buffer,
+            chunks_write_buffer: voxel_chunk_write_buffer,
             faces_buffer: voxel_face_buffer,
             meshing_pipeline,
             meshing_bind_group,
@@ -142,22 +159,21 @@ impl ChunkManager {
             chunk.position,
         );
 
-        let adjacent_blocks: GPUVoxelChunkAdjContent = unsafe {
-            std::mem::transmute(chunk.adjacent_blocks)
-        };
+        let adjacent_blocks: GPUVoxelChunkAdjContent =
+            unsafe { std::mem::transmute(chunk.adjacent_blocks) };
 
         GPUVoxelChunk::new(header, adjacent_blocks, chunk.blocks)
     }
 
-    fn encode_meshing_pass(
-        &mut self,
-        renderer: &Renderer<'_>,
-        encoder: &mut CommandEncoder,
-    ) {
+    fn encode_meshing_pass(&mut self, renderer: &Renderer<'_>, encoder: &mut CommandEncoder) {
         if self.gpu_chunk_writes.is_empty() {
             return;
         }
-        renderer.write_buffer(&self.chunks_buffer, 0, bytemuck::cast_slice(&self.gpu_chunk_writes));
+        renderer.write_buffer(
+            &self.chunks_buffer,
+            0,
+            bytemuck::cast_slice(&self.gpu_chunk_writes),
+        );
         {
             let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
                 label: Some("Chunk Meshing Compute Pass"),
@@ -186,6 +202,8 @@ impl ChunkManager {
     }
 
     pub fn mem_debug_throttled(&self) {
+        use crate::call_every;
+
         // the blob clears cli
         let capacity = self.suballocator.capacity();
         let free_percent = (self.suballocator.free() as f32 / capacity as f32) * 100.0;
@@ -220,16 +238,17 @@ fn chunk_render_bind_group(
     (layout, bind_group)
 }
 
-pub fn chunk_meshing_bgl(
+fn chunk_meshing_bgl(
     device: &Device,
     chunk_buffer_size: BufferSize,
+    chunk_write_buffer_size: BufferSize,
     face_data_buffer_size: BufferSize,
 ) -> BindGroupLayout {
     device.create_bind_group_layout(&BindGroupLayoutDescriptor {
         label: Some("Chunk Compute Bind Group Layout"),
         entries: &[
             BindGroupLayoutEntry {
-                binding: 0, // chunk entry data
+                binding: 0, // chunk data
                 visibility: ShaderStages::COMPUTE,
                 ty: BindingType::Buffer {
                     ty: BufferBindingType::Storage { read_only: true },
@@ -239,7 +258,7 @@ pub fn chunk_meshing_bgl(
                 count: None,
             },
             BindGroupLayoutEntry {
-                binding: 1, // face data buffer
+                binding: 1, // face data
                 visibility: ShaderStages::COMPUTE,
                 ty: BindingType::Buffer {
                     ty: BufferBindingType::Storage { read_only: false },
@@ -248,11 +267,21 @@ pub fn chunk_meshing_bgl(
                 },
                 count: None,
             },
+            BindGroupLayoutEntry {
+                binding: 2, // chunk write
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: Some(chunk_write_buffer_size),
+                },
+                count: None,
+            },
         ],
     })
 }
 
-pub fn chunk_meshing_pipeline(
+fn chunk_meshing_pipeline(
     device: &Device,
     bind_group_layouts: &[&BindGroupLayout],
 ) -> ComputePipeline {

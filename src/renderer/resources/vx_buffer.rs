@@ -1,4 +1,3 @@
-use crate::renderer::resources::shader::VxShaderTypeData;
 use std::ops::Deref;
 use wgpu::{
     BindGroupLayoutEntry, BufferAddress, BufferBindingType, BufferSize, BufferUsages, ShaderStages,
@@ -8,6 +7,7 @@ pub struct VxBuffer {
     buffer: wgpu::Buffer,
     stride: usize,
     shader_type: &'static str,
+    pub buffer_size: BufferSize,
 }
 
 impl VxBuffer {
@@ -36,6 +36,7 @@ impl VxBuffer {
             buffer,
             stride,
             shader_type: shader_type_name,
+            buffer_size: BufferSize::new(buffer_size as _).unwrap(),
         }
     }
 

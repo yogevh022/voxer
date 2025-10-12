@@ -38,13 +38,15 @@ impl AppRenderer<'_> {
             BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         );
 
-        let max_chunk_count = 24 * 24 * 24; // fixme arbitrary number
+        let max_chunk_write_count = 1 << 14; // fixme move to a config how many chunks can be written at once
+        let max_chunk_count = 24 * 24 * 24; // fixme arbitrary number, move to a config
         let max_face_count = max_chunk_count * 12288;
         let chunk_manager = ChunkManager::new(
             &renderer,
             &view_projection_buffer,
             max_face_count,
             max_chunk_count,
+            max_chunk_write_count,
         );
 
         let (atlas_layout, atlas_bind_group) =
