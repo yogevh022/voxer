@@ -40,7 +40,7 @@ impl<'window> ClientWorldSession<'window> {
         chunks.reserve(config.render_distance.pow(3));
         Self {
             player,
-            renderer: AppRenderer::new(window),
+            renderer: AppRenderer::new(window, config.render_distance as i32),
             view_frustum: [Plane::default(); 6],
             chunks,
             render_max_sq: (config.render_distance as i32).pow(2),
@@ -83,24 +83,66 @@ impl<'window> ClientWorldSession<'window> {
     pub fn tick(&mut self, encoder: &mut CommandEncoder) {
         // fixme temp
         // fixme no enforcement of max_new_chunks
+
         let to_remesh = self.process_chunk_remesh_batch();
-        self.renderer.update_new_chunks(
-            &self
-                .new_chunks
-                .drain(..)
-                .map(|p| self.chunks.get(&p).unwrap().clone())
-                .collect::<Vec<_>>(),
+
+        let new_chunks = self
+            .new_chunks
+            .drain(..)
+            .chain(to_remesh.into_iter())
+            .map(|p| self.chunks.get(&p).unwrap().clone())
+            .collect::<Vec<_>>();
+
+        self.renderer
+            .chunk_manager
+            .update_gpu_chunk_writes(&new_chunks);
+
+        self.chunk_request_batch.clear();
+        self.chunk_request_throttler.set_now(Instant::now());
+
+        let camera_ch_position = world_to_chunk_pos(self.player.location.position);
+        self.renderer.chunk_manager.update_gpu_view_chunks(
+            camera_ch_position,
+            &self.view_frustum,
+            |ch_pos| {
+                if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
+                    let throttle_idx = smallhash::u32x3_to_18_bits(ch_pos.to_array());
+                    if self.chunk_request_throttler.request(throttle_idx as usize) {
+                        self.chunk_request_batch.push(ch_pos);
+                    }
+                }
+            },
         );
-        self.renderer.update_view_chunks(&self.view_frustum);
+
         let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: Some("Chunk Compute Pass"),
             timestamp_writes: None,
         });
-        self.renderer.encode_new_chunks(&mut compute_pass);
-        self.renderer.encode_view_chunks(&mut compute_pass);
-        let p_ch_pos = world_to_chunk_pos(self.player.location.position);
-        self.temp_req(p_ch_pos);
-        // self.update_render_state(encoder, to_remesh);
+        self.renderer
+            .chunk_manager
+            .encode_gpu_chunk_writes(&self.renderer.renderer, &mut compute_pass);
+        self.renderer
+            .chunk_manager
+            .encode_gpu_view_chunks(&self.renderer.renderer, &mut compute_pass);
+
+        // let to_remesh = self.process_chunk_remesh_batch();
+        // self.renderer.update_new_chunks(
+        //     &self
+        //         .new_chunks
+        //         .drain(..)
+        //         .map(|p| self.chunks.get(&p).unwrap().clone())
+        //         .collect::<Vec<_>>(),
+        // );
+        // self.renderer.update_view_chunks(&self.view_frustum);
+        // let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+        //     label: Some("Chunk Compute Pass"),
+        //     timestamp_writes: None,
+        // });
+        // self.renderer.encode_new_chunks(&mut compute_pass);
+        // self.renderer.encode_view_chunks(&mut compute_pass);
+        // let p_ch_pos = world_to_chunk_pos(self.player.location.position);
+        // self.temp_req(p_ch_pos);
+        // // self.update_render_state(encoder, to_remesh);
     }
 
     fn update_render_state(&mut self, encoder: &mut CommandEncoder, to_remesh: FxHashSet<IVec3>) {
@@ -117,54 +159,58 @@ impl<'window> ClientWorldSession<'window> {
         //     .encode_new_chunks(encoder, &self.chunk_render_batch);
     }
 
-    fn temp_req(&mut self, camera_pos: IVec3) {
-        let mut frustum_aabb = Frustum::aabb(&self.view_frustum);
-        frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
-        frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
-
-        frustum_aabb.discrete_points(|ch_pos| {
-            if !Self::should_render(camera_pos, ch_pos, &self.view_frustum, self.render_max_sq) {
-                return;
-            }
-            if self.renderer.is_chunk_rendered(ch_pos) {
-                return;
-            }
-
-            if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
-                let throttle_idx = smallhash::u32x3_to_18_bits(ch_pos.to_array());
-                if self.chunk_request_throttler.request(throttle_idx as usize) {
-                    self.chunk_request_batch.push(ch_pos);
-                }
-            }
-        });
-    }
-
-    fn update_chunk_batches(
-        &mut self,
-        frustum_aabb: AABB,
-        camera_pos: IVec3,
-        to_remesh: FxHashSet<IVec3>,
-    ) {
-        self.chunk_request_batch.clear();
-        self.chunk_render_batch.clear();
-        self.chunk_request_throttler.set_now(Instant::now());
-        frustum_aabb.discrete_points(|ch_pos| {
-            // higher precision pass chunk aabb vs precise frustum
-            if !Self::should_render(camera_pos, ch_pos, &self.view_frustum, self.render_max_sq) {
-                return;
-            }
-            if let Some(chunk) = self.chunks.get(&ch_pos) {
-                if !self.renderer.is_chunk_rendered(ch_pos) || to_remesh.contains(&ch_pos) {
-                    self.chunk_render_batch.push(chunk.clone());
-                }
-            } else if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
-                let throttle_idx = smallhash::u32x3_to_18_bits(ch_pos.to_array());
-                if self.chunk_request_throttler.request(throttle_idx as usize) {
-                    self.chunk_request_batch.push(ch_pos);
-                }
-            }
-        });
-    }
+    // fn temp_req(&mut self, camera_pos: IVec3) {
+    //     let mut frustum_aabb = Frustum::aabb(&self.view_frustum);
+    //     frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
+    //     frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
+    //
+    //     frustum_aabb.discrete_points(|ch_pos| {
+    //         if !Self::should_render(camera_pos, ch_pos, &self.view_frustum, self.render_max_sq)
+    //             || self.renderer.is_chunk_cached(ch_pos)
+    //         {
+    //             return;
+    //         }
+    //
+    //         // match self.renderer.chunk_manager.gpu_chunk_cache.get(&ch_pos) {
+    //         //     Some(q) => {}
+    //         //     None => {}
+    //         // }
+    //
+    //         if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
+    //             let throttle_idx = smallhash::u32x3_to_18_bits(ch_pos.to_array());
+    //             if self.chunk_request_throttler.request(throttle_idx as usize) {
+    //                 self.chunk_request_batch.push(ch_pos);
+    //             }
+    //         }
+    //     });
+    // }
+    //
+    // fn update_chunk_batches(
+    //     &mut self,
+    //     frustum_aabb: AABB,
+    //     camera_pos: IVec3,
+    //     to_remesh: FxHashSet<IVec3>,
+    // ) {
+    //     self.chunk_request_batch.clear();
+    //     self.chunk_render_batch.clear();
+    //     self.chunk_request_throttler.set_now(Instant::now());
+    //     frustum_aabb.discrete_points(|ch_pos| {
+    //         // higher precision pass chunk aabb vs precise frustum
+    //         if !Self::should_render(camera_pos, ch_pos, &self.view_frustum, self.render_max_sq) {
+    //             return;
+    //         }
+    //         if let Some(chunk) = self.chunks.get(&ch_pos) {
+    //             if !self.renderer.is_chunk_cached(ch_pos) || to_remesh.contains(&ch_pos) {
+    //                 self.chunk_render_batch.push(chunk.clone());
+    //             }
+    //         } else if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
+    //             let throttle_idx = smallhash::u32x3_to_18_bits(ch_pos.to_array());
+    //             if self.chunk_request_throttler.request(throttle_idx as usize) {
+    //                 self.chunk_request_batch.push(ch_pos);
+    //             }
+    //         }
+    //     });
+    // }
 
     fn should_render(
         origin: IVec3,
@@ -178,10 +224,10 @@ impl<'window> ClientWorldSession<'window> {
     }
 
     fn retain_frustum_chunks(&mut self, camera_ch_position: IVec3) {
-        let vf = self.view_frustum.clone();
-        self.renderer.retain_chunk_positions(|&c_pos| {
-            Self::should_render(camera_ch_position, c_pos, &vf, self.render_max_sq)
-        });
+        // let vf = self.view_frustum.clone();
+        // self.renderer.retain_chunk_positions(|&c_pos| {
+        //     Self::should_render(camera_ch_position, c_pos, &vf, self.render_max_sq)
+        // });
     }
 
     fn process_chunk_remesh_batch(&mut self) -> FxHashSet<IVec3> {

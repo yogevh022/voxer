@@ -24,14 +24,14 @@ pub struct UniformCameraView {
 
 pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
-    chunk_manager: ChunkManager,
+    pub chunk_manager: ChunkManager, // fixme temp
     render_pipeline: RenderPipeline,
     atlas_bind_group: BindGroup,
     view_projection_buffer: VxBuffer,
 }
 
 impl AppRenderer<'_> {
-    pub fn new(window: Arc<Window>) -> Self {
+    pub fn new(window: Arc<Window>, rdist: i32) -> Self {
         let renderer = Renderer::new(window);
 
         let view_projection_buffer = renderer.device.create_vx_buffer::<UniformCameraView>(
@@ -42,9 +42,10 @@ impl AppRenderer<'_> {
 
         let max_chunk_write_count = 1 << 14; // fixme move to a config how many chunks can be written at once
         let max_chunk_count = 24 * 24 * 24; // fixme arbitrary number, move to a config
-        let max_face_count = max_chunk_count * 12288;
+        let max_face_count = max_chunk_count * 4096; // arbitrary...
         let chunk_manager = ChunkManager::new(
             &renderer,
+            rdist,
             &view_projection_buffer,
             max_face_count,
             max_chunk_count,
@@ -71,29 +72,29 @@ impl AppRenderer<'_> {
             view_projection_buffer,
         }
     }
-    pub fn update_new_chunks(&mut self, chunks: &[Chunk]) {
-        self.chunk_manager.update_gpu_chunk_writes(chunks);
+    // pub fn update_new_chunks(&mut self, chunks: &[Chunk]) {
+    //     self.chunk_manager.update_gpu_chunk_writes(chunks);
+    // }
+    //
+    // pub fn encode_new_chunks(&mut self, compute_pass: &mut ComputePass) {
+    //     self.chunk_manager.encode_gpu_chunk_writes(&self.renderer, compute_pass);
+    // }
+
+    // pub fn update_view_chunks(&mut self, view_planes: &[Plane; 6] ) {
+    //     self.chunk_manager.update_gpu_view_chunks(view_planes);
+    // }
+
+    // pub fn encode_view_chunks(&mut self, compute_pass: &mut ComputePass) {
+    //     self.chunk_manager.encode_gpu_view_chunks(&self.renderer, compute_pass);
+    // }
+
+    pub fn is_chunk_cached(&self, position: IVec3) -> bool {
+        self.chunk_manager.is_chunk_cached(&position)
     }
 
-    pub fn encode_new_chunks(&mut self, compute_pass: &mut ComputePass) {
-        self.chunk_manager.encode_gpu_chunk_writes(&self.renderer, compute_pass);
-    }
-
-    pub fn update_view_chunks(&mut self, view_planes: &[Plane; 6] ) {
-        self.chunk_manager.update_gpu_view_chunks(view_planes);
-    }
-
-    pub fn encode_view_chunks(&mut self, compute_pass: &mut ComputePass) {
-        self.chunk_manager.encode_gpu_view_chunks(&self.renderer, compute_pass);
-    }
-
-    pub fn is_chunk_rendered(&self, position: IVec3) -> bool {
-        self.chunk_manager.is_rendered(position)
-    }
-
-    pub fn retain_chunk_positions<F: FnMut(&IVec3) -> bool>(&mut self, func: F) {
-        self.chunk_manager.retain_chunk_positions(func);
-    }
+    // pub fn retain_chunk_positions<F: FnMut(&IVec3) -> bool>(&mut self, func: F) {
+    //     self.chunk_manager.retain_chunk_positions(func);
+    // }
 
     fn render_chunks(&mut self, render_pass: &mut wgpu::RenderPass, camera: &Camera) {
         render_pass.set_pipeline(&self.render_pipeline);

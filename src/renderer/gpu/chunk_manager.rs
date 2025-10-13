@@ -1,6 +1,6 @@
 use crate::compute::MIB;
-use crate::compute::geo::{Frustum, Plane};
-use crate::renderer::gpu::chunk_entry::{GPU4Bytes, GPUVoxelChunkHeader};
+use crate::compute::geo::{Frustum, Plane, chunk_to_world_pos};
+use crate::renderer::gpu::chunk_entry::{GPU4Bytes, GPUChunkMeshEntry, GPUVoxelChunkHeader};
 use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelFaceData};
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::{Renderer, VxDrawIndirectBatch, resources};
@@ -19,35 +19,23 @@ use wgpu::{
 
 type BufferDrawArgs = FxHashMap<usize, DrawIndirectArgs>;
 
-#[derive(Debug, Clone, Copy)]
-struct ChunkRenderMeta {
-    pub face_count: u32,
-    pub mesh_allocation: u32,
-}
-
-impl ChunkRenderMeta {
-    pub fn default() -> Self {
-        Self {
-            face_count: 0,
-            mesh_allocation: u32::MAX,
-        }
-    }
-
-    pub fn is_meshed(&self) -> bool {
-        self.mesh_allocation != u32::MAX
-    }
+#[derive(Debug, Clone)]
+pub enum ChunkMeshState {
+    Meshed { face_count: u32, allocation: u32 },
+    Unmeshed { face_count: u32 },
 }
 
 pub struct ChunkManager {
     gpu_chunks_mesh_allocator: SubAllocator,
-    gpu_chunks: SlabMap<IVec3, ChunkRenderMeta>,
+    pub gpu_chunk_cache: SlabMap<IVec3, ChunkMeshState>, //fixme temp
 
     gpu_active_draw: BufferDrawArgs,
     gpu_chunk_writes: Vec<GPUVoxelChunk>,
-    gpu_chunk_meshing_queue: Vec<u32>,
-    gpu_chunk_in_view: Vec<u32>,
+    gpu_chunk_meshing_queue: Vec<GPUChunkMeshEntry>,
+    gpu_chunk_in_view: Vec<GPUChunkMeshEntry>,
 
     max_write_count: usize,
+    render_max_sq: i32,
 
     draw_args_pipeline: ComputePipeline,
     draw_args_bind_group: BindGroup,
@@ -68,6 +56,7 @@ pub struct ChunkManager {
 impl ChunkManager {
     pub fn new(
         renderer: &Renderer<'_>,
+        render_distance: i32,
         camera_buffer: &VxBuffer,
         max_face_count: usize,
         max_chunk_count: usize,
@@ -91,13 +80,13 @@ impl ChunkManager {
             BufferUsages::VERTEX | BufferUsages::STORAGE,
         );
 
-        let voxel_mesh_queue_buffer = renderer.device.create_vx_buffer::<GPU4Bytes>(
+        let voxel_mesh_queue_buffer = renderer.device.create_vx_buffer::<GPUChunkMeshEntry>(
             "Voxel Mesh Queue Buffer",
             max_chunk_count, // fixme overkill but cheap anyway?
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
 
-        let aabb_visible_chunk_buffer = renderer.device.create_vx_buffer::<GPU4Bytes>(
+        let aabb_visible_chunk_buffer = renderer.device.create_vx_buffer::<GPUChunkMeshEntry>(
             "AABB Visible Voxel Chunk Buffer",
             max_chunk_count, // fixme overkill but cheap anyway?
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
@@ -161,7 +150,7 @@ impl ChunkManager {
 
         Self {
             gpu_chunks_mesh_allocator: SubAllocator::new(max_face_count as u32),
-            gpu_chunks: SlabMap::with_capacity(max_chunk_count),
+            gpu_chunk_cache: SlabMap::with_capacity(max_chunk_count),
             gpu_active_draw: FxHashMap::default(),
             gpu_chunk_writes: Vec::with_capacity(max_chunk_count),
             chunk_buffer: voxel_chunk_buffer,
@@ -171,6 +160,7 @@ impl ChunkManager {
             mesh_queue_buffer: voxel_mesh_queue_buffer,
             gpu_chunk_meshing_queue: Vec::with_capacity(max_chunk_count), // fixme change this if/when changing buffer size
             gpu_chunk_in_view: Vec::with_capacity(1024), // fixme arbitrary number and insufficient
+            render_max_sq: render_distance.pow(2),
             draw_args_pipeline,
             draw_args_bind_group,
             aabb_visible_chunk_buffer,
@@ -185,19 +175,17 @@ impl ChunkManager {
 
     fn insert_chunk(&mut self, chunk: &Chunk) -> GPUVoxelChunk {
         let face_count = chunk.face_count.unwrap() as u32;
-        let render_meta = ChunkRenderMeta::default();
-        let slab_index = self.gpu_chunks.insert(chunk.position, render_meta);
+        let render_meta = ChunkMeshState::Unmeshed { face_count };
+        let slab_index = self.gpu_chunk_cache.insert(chunk.position, render_meta);
         let header = GPUVoxelChunkHeader::new(
-            render_meta.mesh_allocation,
+            0, // fixme this represents the mesh allocation, which starts as 0 (no mesh, but can mean offs 0!!)
             face_count,
             slab_index as u32,
             chunk.position,
         );
 
-        let adjacent_blocks: GPUVoxelChunkAdjContent =
-            unsafe { std::mem::transmute(chunk.adjacent_blocks) };
-
-        GPUVoxelChunk::new(header, adjacent_blocks, chunk.blocks)
+        // fixme avoid copying until transmutation?
+        GPUVoxelChunk::new(header, &chunk.adjacent_blocks, &chunk.blocks)
     }
 
     pub fn update_gpu_chunk_writes(&mut self, chunks: &[Chunk]) {
@@ -206,18 +194,10 @@ impl ChunkManager {
         unsafe { self.gpu_chunk_writes.set_len(1) }; // index 0 is reserved for write_count
 
         for chunk in chunks {
-            // if chunk.face_count.unwrap() == 0 {
-            //     continue;
-            // }
-            // if self.is_rendered(chunk.position) {
-            //     // needs to be remeshed, dropping existing one first
-            //     self.drop_chunk(chunk.position);
-            // }
+            if self.is_chunk_cached(&chunk.position) {
+                self.drop_chunk(&chunk.position);
+            }
             let gpu_chunk = self.insert_chunk(chunk);
-            // self.gpu_chunks.insert(
-            //     gpu_chunk.header.slab_index as usize,
-            //     gpu_chunk.header.draw_indirect_args(),
-            // );
             self.gpu_chunk_writes.push(gpu_chunk);
         }
         self.gpu_chunk_writes[0].header.slab_index = self.gpu_chunk_writes.len() as u32 - 1;
@@ -244,35 +224,91 @@ impl ChunkManager {
         compute_pass.dispatch_workgroups(workgroup_count, 1, 1);
     }
 
-    pub fn update_gpu_view_chunks(&mut self, view_planes: &[Plane; 6]) {
+    fn should_chunk_render(&self, origin: IVec3, ch_pos: IVec3, view_planes: &[Plane; 6]) -> bool {
+        let min = chunk_to_world_pos(ch_pos);
+        Frustum::aabb_within_frustum(min, min + CHUNK_DIM as f32, view_planes)
+            && origin.distance_squared(ch_pos) < self.render_max_sq
+    }
+
+    pub fn update_gpu_view_chunks(
+        &mut self,
+        camera_ch_position: IVec3,
+        view_planes: &[Plane; 6],
+        mut missing_chunk: impl FnMut(IVec3),
+    ) {
         let mut frustum_aabb = Frustum::aabb(view_planes);
         frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
         frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
 
         self.gpu_chunk_meshing_queue.clear();
         self.gpu_chunk_in_view.clear();
+        unsafe { self.gpu_chunk_in_view.set_len(1) };
 
-        unsafe {
-            self.gpu_chunk_in_view.set_len(1);
-        }
-
-        frustum_aabb.discrete_points(|p| {
-            if let Some((slab_idx, render_meta)) = self.gpu_chunks.get_mut(&p) {
-                self.gpu_chunk_in_view.push(slab_idx as u32);
-                if !render_meta.is_meshed() {
-                    render_meta.mesh_allocation = if render_meta.face_count != 0 {
-                        self.gpu_chunks_mesh_allocator
-                            .allocate(render_meta.face_count)
-                            .unwrap()
-                    } else {
-                        0
-                    };
-                    self.gpu_chunk_meshing_queue.push(slab_idx as u32);
+        for (_, slab_idx, render_mesh_state) in self.gpu_chunk_cache.iter_mut() {
+            match render_mesh_state {
+                ChunkMeshState::Meshed {
+                    face_count,
+                    allocation,
+                } => {
+                    let mesh_entry =
+                        GPUChunkMeshEntry::new(slab_idx as u32, *face_count, *allocation);
+                    self.gpu_chunk_in_view.push(mesh_entry);
                 }
+                ChunkMeshState::Unmeshed { face_count } if *face_count != 0 => {
+                    let fc = *face_count;
+                    let allocation = self.gpu_chunks_mesh_allocator.allocate(fc).unwrap();
+                    *render_mesh_state = ChunkMeshState::Meshed {
+                        face_count: fc,
+                        allocation,
+                    };
+                    let mesh_entry = GPUChunkMeshEntry::new(slab_idx as u32, fc, allocation);
+                    println!("{} at {}, fc: {}", allocation, slab_idx, fc);
+                    self.gpu_chunk_meshing_queue.push(mesh_entry);
+                    self.gpu_chunk_in_view.push(mesh_entry);
+                }
+                _ => (),
+            }
+        }
+        frustum_aabb.discrete_points(|ch_pos| {
+            // if !self.should_chunk_render(camera_ch_position, ch_pos, view_planes) {
+            //     return;
+            // }
+            if let None = self.gpu_chunk_cache.get(&ch_pos) {
+                missing_chunk(ch_pos);
             }
         });
+        // frustum_aabb.discrete_points(|ch_pos| {
+        //     // fixme better enum here
+        //     match self.gpu_chunk_cache.get_mut(&ch_pos) {
+        //         Some((slab_idx, render_mesh_state)) => match render_mesh_state {
+        //             ChunkMeshState::Meshed {
+        //                 face_count,
+        //                 allocation,
+        //             } if *face_count != 0 => {
+        //                 let mesh_entry =
+        //                     GPUChunkMeshEntry::new(slab_idx as u32, *face_count, *allocation);
+        //                 self.gpu_chunk_in_view.push(mesh_entry);
+        //             }
+        //             ChunkMeshState::Unmeshed { face_count } if *face_count != 0 => {
+        //                 let fc = *face_count;
+        //                 let allocation = self.gpu_chunks_mesh_allocator.allocate(fc).unwrap();
+        //                 *render_mesh_state = ChunkMeshState::Meshed {
+        //                     face_count: fc,
+        //                     allocation,
+        //                 };
+        //                 let mesh_entry = GPUChunkMeshEntry::new(slab_idx as u32, fc, allocation);
+        //                 self.gpu_chunk_meshing_queue.push(mesh_entry);
+        //                 self.gpu_chunk_in_view.push(mesh_entry);
+        //             }
+        //             _ => (),
+        //         },
+        //         None => missing_chunk(ch_pos),
+        //     };
+        // });
 
-        self.gpu_chunk_in_view[0] = self.gpu_chunk_in_view.len() as u32 - 1;
+        println!("updating view chunks: {}", self.gpu_chunk_in_view.len());
+
+        self.gpu_chunk_in_view[0].index = self.gpu_chunk_in_view.len() as u32 - 1;
     }
 
     pub fn encode_gpu_view_chunks(
@@ -287,7 +323,8 @@ impl ChunkManager {
             bytemuck::cast_slice(&[0u32]),
         );
 
-        if !self.gpu_chunk_in_view.len() > 1 { // index 0 reserved
+        // index 0 reserved
+        if !self.gpu_chunk_in_view.len() > 1 {
             renderer.write_buffer(
                 &self.aabb_visible_chunk_buffer,
                 0,
@@ -311,25 +348,25 @@ impl ChunkManager {
         }
     }
 
-    pub fn drop_chunk(&mut self, position: IVec3) {
-        let slap_entry_opt = self.gpu_chunks.remove(&position);
-        let (slab_index, chunk_render_meta) = slap_entry_opt.unwrap();
-        self.gpu_active_draw.remove(&slab_index).unwrap();
-        self.gpu_chunks_mesh_allocator
-            .deallocate(chunk_render_meta.mesh_allocation)
-            .unwrap();
-    }
-
-    pub fn retain_chunk_positions<F: FnMut(&IVec3) -> bool>(&mut self, mut func: F) {
-        let to_drop = self
-            .gpu_chunks
-            .iter()
-            .filter_map(|(p, _)| (!func(p)).then_some(p).cloned())
-            .collect::<Vec<_>>();
-        for p in to_drop {
-            self.drop_chunk(p);
+    pub fn drop_chunk(&mut self, position: &IVec3) {
+        let (_, mesh_state) = self.gpu_chunk_cache.remove(position).unwrap();
+        if let ChunkMeshState::Meshed { allocation, .. } = mesh_state {
+            self.gpu_chunks_mesh_allocator
+                .deallocate(allocation)
+                .unwrap();
         }
     }
+    //
+    // pub fn retain_chunk_positions<F: FnMut(&IVec3) -> bool>(&mut self, mut func: F) {
+    //     let to_drop = self
+    //         .gpu_chunk_cache
+    //         .iter()
+    //         .filter_map(|(p, _)| (!func(p)).then_some(p).cloned())
+    //         .collect::<Vec<_>>();
+    //     for p in to_drop {
+    //         self.drop_chunk(p);
+    //     }
+    // }
 
     pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut RenderPass) {
         // fixme handle no chunks to render..
@@ -344,8 +381,8 @@ impl ChunkManager {
         // render_pass.multi_draw_indirect(&renderer.indirect_buffer, 0, render_count);
     }
 
-    pub fn is_rendered(&self, position: IVec3) -> bool {
-        self.gpu_chunks.get(&position).is_some()
+    pub fn is_chunk_cached(&self, position: &IVec3) -> bool {
+        self.gpu_chunk_cache.get(position).is_some()
     }
     //
     // fn allocate_chunk_mesh(&mut self, chunk: &Chunk) -> GPUVoxelChunk {
@@ -365,15 +402,15 @@ impl ChunkManager {
     //     GPUVoxelChunk::new(header, adjacent_blocks, chunk.blocks)
     // }
 
-    fn write_indirect_draw_args(&self, renderer: &Renderer<'_>, buffer_draw_args: &BufferDrawArgs) {
-        // todo encode batch on first iter?
-        let draw_indirect_batch = VxDrawIndirectBatch::from_iter(buffer_draw_args.values());
-        renderer.write_buffer(
-            &renderer.indirect_buffer,
-            0,
-            bytemuck::cast_slice(&draw_indirect_batch.encode(renderer.adapter_info().backend)),
-        );
-    }
+    // fn write_indirect_draw_args(&self, renderer: &Renderer<'_>, buffer_draw_args: &BufferDrawArgs) {
+    //     // todo encode batch on first iter?
+    //     let draw_indirect_batch = VxDrawIndirectBatch::from_iter(buffer_draw_args.values());
+    //     renderer.write_buffer(
+    //         &renderer.indirect_buffer,
+    //         0,
+    //         bytemuck::cast_slice(&draw_indirect_batch.encode(renderer.adapter_info().backend)),
+    //     );
+    // }
 
     pub fn mem_debug_throttled(&self) {
         use crate::call_every;

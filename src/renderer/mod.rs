@@ -52,6 +52,7 @@ impl<'window> Renderer<'window> {
                         dxc_path: Self::DXC_DLL_PATH.unwrap_or_default().to_string(),
                         max_shader_model: wgpu::DxcShaderModel::V6_0,
                     },
+                    presentation_system: Default::default(),
                     latency_waitable_object: Default::default(),
                 },
                 noop: Default::default(),
@@ -79,6 +80,7 @@ impl<'window> Renderer<'window> {
             label: None,
             memory_hints: Default::default(),
             trace: Default::default(),
+            experimental_features: Default::default(),
         }))
         .unwrap()
     }
@@ -100,14 +102,13 @@ impl<'window> Renderer<'window> {
     }
 
     pub fn new(window: Arc<Window>) -> Self {
-        let instance = Renderer::instance(Backends::DX12);
+        let instance = Renderer::instance(Backends::VULKAN); // fixme dx12?
         let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = Renderer::high_perf_adapter(&instance, &surface);
         let (device, queue) = Renderer::request_device(
             &adapter,
             Features::VERTEX_WRITABLE_STORAGE
                 | Features::INDIRECT_FIRST_INSTANCE
-                | Features::MULTI_DRAW_INDIRECT
                 | Features::MULTI_DRAW_INDIRECT_COUNT,
             Limits {
                 max_storage_buffer_binding_size: (compute::GIB * 2) as u32 - 1,

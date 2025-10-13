@@ -6,12 +6,12 @@ var<storage, read> chunks_buffer: array<GPUVoxelChunk>;
 @group(0) @binding(1)
 var<storage, read_write> face_data_buffer: array<GPUVoxelFaceData>;
 @group(0) @binding(2)
-var<storage, read> mesh_queue_buffer: array<u32>;
+var<storage, read> mesh_queue_buffer: array<GPUChunkMeshEntry>;
 
 var<workgroup> workgroup_buffer_write_offset: atomic<u32>;
 var<workgroup> workgroup_chunk_content: GPUVoxelChunkContent;
 var<workgroup> workgroup_chunk_adj_content: GPUVoxelChunkAdjContent;
-var<workgroup> workgroup_chunk_y_i16_low: u32;
+var<workgroup> workgroup_chunk_position: vec3<u32>;
 
 var<private> private_face_data: array<GPUVoxelFaceData, MAX_FACES_PER_THREAD>;
 var<private> private_face_count: u32 = 0u;
@@ -21,16 +21,21 @@ fn mesh_chunks_entry(
     @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
 ) {
-    let chunk_index = mesh_queue_buffer[wid.x];
-    let chunk_header = chunks_buffer[chunk_index].header;
 
     if (lid.x + lid.y == 0u) {
         // first thread initializes workgroup vars
+        let mesh_entry = mesh_queue_buffer[wid.x];
+        let chunk_index = mesh_entry.index;
         workgroup_chunk_content = chunks_buffer[chunk_index].content;
         workgroup_chunk_adj_content = chunks_buffer[chunk_index].adj_content;
-        workgroup_chunk_y_i16_low = bitcast<u32>(chunk_header.position.y & 0xFFFF);
+        let chunk_position = chunks_buffer[chunk_index].header.position;
+        workgroup_chunk_position = vec3<u32>(
+            bitcast<u32>(chunk_position.x),
+            bitcast<u32>(chunk_position.y & 0xFFFF),
+            bitcast<u32>(chunk_position.z),
+        );
 
-        atomicStore(&workgroup_buffer_write_offset, chunk_header.buffer_data.offset);
+        atomicStore(&workgroup_buffer_write_offset, mesh_entry.face_offset);
     }
     workgroupBarrier();
 

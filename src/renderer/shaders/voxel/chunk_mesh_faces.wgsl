@@ -11,8 +11,8 @@ fn pack_face_data(current_voxel: u32, packed_local_position: u32, fid: u32, illu
             | (fid << 12)
             | (illum << 15)
             | (ocl_count << 20);
-    let packed_voxel_ypos = (current_voxel << 16) | workgroup_chunk_y_i16_low;
-    return GPUVoxelFaceData(packed_face_data, packed_voxel_ypos);
+    let packed_voxel_ypos = (current_voxel << 16) | workgroup_chunk_position.y;
+    return GPUVoxelFaceData(packed_face_data, packed_voxel_ypos, workgroup_chunk_position.x, workgroup_chunk_position.z);
 }
 
 struct FaceDrawMask {

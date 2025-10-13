@@ -12,19 +12,21 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(
-    @builtin(vertex_index) vid: u32,
-    @builtin(instance_index) packed_xz: u32,
+    @builtin(vertex_index) draw_vertex_index: u32,
+    @builtin(instance_index) base_vertex: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
-    let face_index = vid / 6;
-    let vertex_index = QUAD_INDICES[vid % 6];
+    let current_vertex = base_vertex + draw_vertex_index;
+    let face_index = current_vertex / 6;
+    let vertex_index = QUAD_INDICES[current_vertex % 6];
 
     let face_data = face_data_buffer[face_index];
     let pfio = face_data.position_fid_illum_ocl;
-    let unpacked_xz: vec2<i32> = unpack_i16s(packed_xz);
-    let unpacked_y: i32 = unpack_i16_low(face_data.ypos_voxel);
+    let chunk_y = f32(unpack_i16_low(face_data.chy_voxel));
+    let chunk_x = f32(bitcast<i32>(face_data.chx));
+    let chunk_z = f32(bitcast<i32>(face_data.chz));
 
-    let chunk_translation = f32(CHUNK_DIM) * vec3<f32>(f32(unpacked_xz.x), f32(unpacked_y), f32(unpacked_xz.y));
+    let chunk_translation = vec3<f32>(chunk_x, chunk_y, chunk_z) * f32(CHUNK_DIM);
 
     let voxel_x: u32 = (pfio >> 8) & 0xF;
     let voxel_y: u32 = (pfio >> 4) & 0xF;
@@ -45,6 +47,7 @@ fn vs_main(
     let quad = QUAD_VERTICES[face_id];
     let vertex_position = voxel_position + quad[vertex_index];
 
+//    out.position = vec4<f32>(f32(base_vertex),1.0,1.0,1.0);
     out.position = camera_view.view_proj * vec4<f32>(chunk_translation + vertex_position, 1.0);
     out.tex_coords = TEX_COORDS[vertex_index];
     out.ao = occlusion_count_to_ao(ao[vertex_index]);

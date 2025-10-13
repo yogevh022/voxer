@@ -1,6 +1,7 @@
-use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, ChunkBlocks};
-use bytemuck::{Pod, Zeroable};
+use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, ChunkAdjacentBlocks, ChunkBlocks};
+use bytemuck::{Pod, Zeroable, bytes_of};
 use glam::IVec3;
+use std::mem::{MaybeUninit, size_of};
 use voxer_macros::ShaderType;
 use wgpu::wgt::DrawIndirectArgs;
 
@@ -10,7 +11,27 @@ pub struct GPU4Bytes {
     pub data: u32,
 }
 
-#[repr(C)]
+#[repr(C, align(16))]
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUChunkMeshEntry {
+    pub index: u32,
+    pub face_count: u32,
+    pub face_offset: u32,
+    _padding: u32,
+}
+
+impl GPUChunkMeshEntry {
+    pub fn new(index: u32, face_count: u32, face_offset: u32) -> Self {
+        Self {
+            index,
+            face_count,
+            face_offset,
+            _padding: 0,
+        }
+    }
+}
+
+#[repr(C, align(16))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUDrawIndirectArgs {
     vertex_count: u32,
@@ -19,20 +40,20 @@ pub struct GPUDrawIndirectArgs {
     first_instance: u32,
 }
 
-#[repr(C, align(8))]
+#[repr(C, align(32))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkContent {
     blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; CHUNK_DIM],
 }
 
-#[repr(C, align(8))]
+#[repr(C, align(32))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkAdjContent {
     next_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
     prev_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
 }
 
-#[repr(C, align(8))]
+#[repr(C, align(16))]
 #[derive(ShaderType)]
 pub struct GPUVoxelFaceData {
     position_fid_illum_ocl: u32,
@@ -41,9 +62,11 @@ pub struct GPUVoxelFaceData {
     // illumination 5b
     // occlusion count 8b
     // 1b free
-    ypos_voxel: u32,
+    chy_voxel: u32,
     // y pos i16 16b
     // voxel_type 16b
+    chx: u32,
+    chz: u32,
 }
 
 #[repr(C, align(8))]
@@ -53,13 +76,13 @@ pub struct GPUVoxelChunkBufferData {
     pub face_count: u32,
 }
 
-#[repr(C, align(16))]
+#[repr(C, align(32))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkHeader {
-    pub position: IVec3,
-    pub slab_index: u32,
     pub buffer_data: GPUVoxelChunkBufferData,
+    pub slab_index: u32,
     _padding: u32,
+    pub position: IVec3,
     _cpu_padding: u32,
 }
 
@@ -86,25 +109,29 @@ impl GPUVoxelChunkHeader {
     }
 }
 
-#[repr(C, align(16))]
+#[repr(C, align(32))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunk {
-    pub header: GPUVoxelChunkHeader,
-    pub adj_content: GPUVoxelChunkAdjContent,
-    pub content: GPUVoxelChunkContent,
+    pub header: GPUVoxelChunkHeader,          // 32 bytes
+    pub adj_content: GPUVoxelChunkAdjContent, // 3072 bytes
+    pub content: GPUVoxelChunkContent,        // 8192 bytes
+                                              // 11296 bytes total
 }
 
 impl GPUVoxelChunk {
     pub fn new(
         header: GPUVoxelChunkHeader,
-        adj: GPUVoxelChunkAdjContent,
-        blocks: ChunkBlocks,
+        adj: &ChunkAdjacentBlocks,
+        blocks: &ChunkBlocks,
     ) -> Self {
-        let gpu_chunk_content: GPUVoxelChunkContent = unsafe { std::mem::transmute(blocks) };
+        // alignment safe transmutation
+        // fixme implement this in a better way
+        let gpu_content: GPUVoxelChunkContent = bytemuck::pod_read_unaligned(bytes_of(blocks));
+        let gpu_adj_content: GPUVoxelChunkAdjContent = bytemuck::pod_read_unaligned(bytes_of(adj));
         Self {
             header,
-            adj_content: adj,
-            content: gpu_chunk_content,
+            adj_content: gpu_adj_content,
+            content: gpu_content,
         }
     }
 }
