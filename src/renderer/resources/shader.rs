@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use wgpu::ShaderSource;
 use crate::app::app_renderer::UniformCameraView;
 use crate::compute::geo::Plane;
-use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkBufferData, GPUVoxelChunkContent, GPUVoxelFaceData, GPUVoxelChunkHeader, GPUDrawIndirectArgs, GPUChunkMeshEntry};
+use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry};
 use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF};
 
 macro_rules! include_shaders {
@@ -97,8 +97,6 @@ fn voxel_common() -> (String, String) {
         GPUVoxelChunkContent,
         GPUVoxelChunkAdjContent,
         GPUVoxelChunk,
-        GPUVoxelChunkHeader,
-        GPUVoxelChunkBufferData,
         GPUVoxelFaceData,
 
         GPUChunkMeshEntry,

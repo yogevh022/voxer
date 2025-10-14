@@ -28,7 +28,7 @@ fn mesh_chunks_entry(
         let chunk_index = mesh_entry.index;
         workgroup_chunk_content = chunks_buffer[chunk_index].content;
         workgroup_chunk_adj_content = chunks_buffer[chunk_index].adj_content;
-        let chunk_position = chunks_buffer[chunk_index].header.position;
+        let chunk_position = chunks_buffer[chunk_index].position_index.xyz;
         workgroup_chunk_world_position = chunk_position * i32(CHUNK_DIM);
 
         atomicStore(&workgroup_buffer_write_offset, mesh_entry.face_offset);

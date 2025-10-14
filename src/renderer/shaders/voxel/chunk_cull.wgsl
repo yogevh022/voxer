@@ -34,7 +34,7 @@ fn write_chunk_indirect_draw_entry(
     let ch_vertex_count = chunks_in_view_buffer[draw_arg_index].face_count * 6u;
     let ch_vertex_offset = chunks_in_view_buffer[draw_arg_index].face_offset * 6u;
 
-    let ch_position = chunks_buffer[ch_idx].header.position;
+    let ch_position = chunks_buffer[ch_idx].position_index.xyz;
     let ch_world_min = vec3<f32>(ch_position) * f32(CHUNK_DIM);
     let ch_world_max = ch_world_min + f32(CHUNK_DIM);
 
@@ -59,12 +59,12 @@ fn frustum_check_chunk(ch_world_min: vec3<f32>, ch_world_max: vec3<f32>) -> bool
         let p = camera_view.view_planes[i];
 
         let pv = vec3<f32>(
-            select(ch_world_min.x, ch_world_max.x, p.normal.x >= 0.0),
-            select(ch_world_min.y, ch_world_max.y, p.normal.y >= 0.0),
-            select(ch_world_min.z, ch_world_max.z, p.normal.z >= 0.0)
+            select(ch_world_min.x, ch_world_max.x, p.equation.x >= 0.0),
+            select(ch_world_min.y, ch_world_max.y, p.equation.y >= 0.0),
+            select(ch_world_min.z, ch_world_max.z, p.equation.z >= 0.0)
         );
 
-        if (dot(p.normal, pv) + p.distance < 0.0) {
+        if (dot(p.equation.xyz, pv) + p.equation.w < 0.0) {
             return false;
         }
     }

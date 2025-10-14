@@ -16,7 +16,7 @@ fn chunk_write_entry(
     if (lid.x == 0u) {
         // first thread initializes workgroup vars
         // slab_index of chunk 0 in src buffer is the write_count (chunks start at index 1)
-        workgroup_write_count = chunks_buffer_src[0].header.slab_index;
+        workgroup_write_count = bitcast<u32>(chunks_buffer_src[0].position_index.w);
     }
     workgroupBarrier();
 
@@ -39,7 +39,7 @@ fn add_new_chunk(write_mapping: vec2<u32>) {
     let src_index = src_index_from_mapping(write_mapping);
     if (src_exists(src_index)) {
         let chunk = chunks_buffer_src[src_index];
-        let dst_index = chunk.header.slab_index;
+        let dst_index = bitcast<u32>(chunk.position_index.w);
         chunks_buffer_dst[dst_index] = chunk;
     }
 }

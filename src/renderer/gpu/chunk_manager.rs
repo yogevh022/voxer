@@ -1,6 +1,6 @@
 use crate::compute::MIB;
 use crate::compute::geo::{Frustum, Plane, chunk_to_world_pos};
-use crate::renderer::gpu::chunk_entry::{GPU4Bytes, GPUChunkMeshEntry, GPUVoxelChunkHeader};
+use crate::renderer::gpu::chunk_entry::{GPU4Bytes, GPUChunkMeshEntry};
 use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelFaceData};
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::{Renderer, VxDrawIndirectBatch, resources};
@@ -176,16 +176,11 @@ impl ChunkManager {
     fn insert_chunk(&mut self, chunk: &Chunk) -> GPUVoxelChunk {
         let face_count = chunk.face_count.unwrap() as u32;
         let render_meta = ChunkMeshState::Unmeshed { face_count };
-        let slab_index = self.gpu_chunk_cache.insert(chunk.position, render_meta);
-        let header = GPUVoxelChunkHeader::new(
-            0, // fixme this represents the mesh allocation, which starts as 0 (no mesh, but can mean offs 0!!)
-            face_count,
-            slab_index as u32,
-            chunk.position,
-        );
+        let chunk_index = self.gpu_chunk_cache.insert(chunk.position, render_meta);
+        let position_index = chunk.position.extend(chunk_index as i32);
 
         // fixme avoid copying until transmutation?
-        GPUVoxelChunk::new(header, &chunk.adjacent_blocks, &chunk.blocks)
+        GPUVoxelChunk::new(position_index, &chunk.adjacent_blocks, &chunk.blocks)
     }
 
     pub fn update_gpu_chunk_writes(&mut self, chunks: &[Chunk]) {
@@ -200,7 +195,8 @@ impl ChunkManager {
             let gpu_chunk = self.insert_chunk(chunk);
             self.gpu_chunk_writes.push(gpu_chunk);
         }
-        self.gpu_chunk_writes[0].header.slab_index = self.gpu_chunk_writes.len() as u32 - 1;
+        let write_count = self.gpu_chunk_writes.len() as u32 - 1;
+        self.gpu_chunk_writes[0].set_chunk_index(write_count);
     }
 
     pub fn encode_gpu_chunk_writes(
@@ -337,6 +333,7 @@ impl ChunkManager {
         }
 
         if !self.gpu_chunk_meshing_queue.is_empty() {
+            println!("{:?}", self.gpu_chunk_meshing_queue);
             renderer.write_buffer(
                 &self.mesh_queue_buffer,
                 0,

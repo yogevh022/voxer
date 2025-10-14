@@ -72,29 +72,6 @@ impl AppRenderer<'_> {
             view_projection_buffer,
         }
     }
-    // pub fn update_new_chunks(&mut self, chunks: &[Chunk]) {
-    //     self.chunk_manager.update_gpu_chunk_writes(chunks);
-    // }
-    //
-    // pub fn encode_new_chunks(&mut self, compute_pass: &mut ComputePass) {
-    //     self.chunk_manager.encode_gpu_chunk_writes(&self.renderer, compute_pass);
-    // }
-
-    // pub fn update_view_chunks(&mut self, view_planes: &[Plane; 6] ) {
-    //     self.chunk_manager.update_gpu_view_chunks(view_planes);
-    // }
-
-    // pub fn encode_view_chunks(&mut self, compute_pass: &mut ComputePass) {
-    //     self.chunk_manager.encode_gpu_view_chunks(&self.renderer, compute_pass);
-    // }
-
-    pub fn is_chunk_cached(&self, position: IVec3) -> bool {
-        self.chunk_manager.is_chunk_cached(&position)
-    }
-
-    // pub fn retain_chunk_positions<F: FnMut(&IVec3) -> bool>(&mut self, func: F) {
-    //     self.chunk_manager.retain_chunk_positions(func);
-    // }
 
     fn render_chunks(&mut self, render_pass: &mut wgpu::RenderPass, camera: &Camera) {
         render_pass.set_pipeline(&self.render_pipeline);
