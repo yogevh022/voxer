@@ -99,7 +99,7 @@ fn write_xyz_faces(
     write_z_face(neighbors, face_position);
 }
 
-fn mesh_chunk_position(x: u32, y: u32) {
+fn meshing_pass_at(x: u32, y: u32) {
     let px = min(x + 1, CHUNK_DIM - 1);
     let py = min(y + 1, CHUNK_DIM - 1);
     let mx = max(x, 1) - 1;

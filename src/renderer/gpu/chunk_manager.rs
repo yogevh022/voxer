@@ -10,12 +10,7 @@ use rustc_hash::FxHashMap;
 use slabmap::SlabMap;
 use suballoc::SubAllocator;
 use wgpu::wgt::DrawIndirectArgs;
-use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, BufferUsages, CommandEncoder,
-    ComputePass, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device,
-    PipelineLayoutDescriptor, RenderPass, ShaderStages,
-};
+use wgpu::{BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, BufferUsages, CommandEncoder, ComputePass, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, IndexFormat, PipelineLayoutDescriptor, RenderPass, ShaderStages};
 
 type BufferDrawArgs = FxHashMap<usize, DrawIndirectArgs>;
 
@@ -91,6 +86,18 @@ impl ChunkManager {
             max_chunk_count, // fixme overkill but cheap anyway?
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
+        //
+        // let dummy_buffer_a = renderer.device.create_vx_buffer::<GPU4Bytes>(
+        //     "Dummy Buffer A",
+        //     1 << 14,
+        //     BufferUsages::INDEX | BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        // );
+        //
+        // let dummy_buffer_b = renderer.device.create_vx_buffer::<GPU4Bytes>(
+        //     "Dummy Buffer B",
+        //     1 << 14,
+        //     BufferUsages::VERTEX | BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        // );
 
         let draw_args_bgl = chunk_draw_args_bgl(
             &renderer.device,
@@ -161,6 +168,7 @@ impl ChunkManager {
             gpu_chunk_meshing_queue: Vec::with_capacity(max_chunk_count), // fixme change this if/when changing buffer size
             gpu_chunk_in_view: Vec::with_capacity(1024), // fixme arbitrary number and insufficient
             render_max_sq: render_distance.pow(2),
+
             draw_args_pipeline,
             draw_args_bind_group,
             aabb_visible_chunk_buffer,
@@ -353,17 +361,6 @@ impl ChunkManager {
                 .unwrap();
         }
     }
-    //
-    // pub fn retain_chunk_positions<F: FnMut(&IVec3) -> bool>(&mut self, mut func: F) {
-    //     let to_drop = self
-    //         .gpu_chunk_cache
-    //         .iter()
-    //         .filter_map(|(p, _)| (!func(p)).then_some(p).cloned())
-    //         .collect::<Vec<_>>();
-    //     for p in to_drop {
-    //         self.drop_chunk(p);
-    //     }
-    // }
 
     pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut RenderPass) {
         // fixme handle no chunks to render..

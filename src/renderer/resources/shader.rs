@@ -74,6 +74,7 @@ include_shaders!(
 include_shaders!(
     F_WORLD => "functions/world.wgsl",
     F_BITWISE => "functions/bitwise.wgsl",
+    F_THREAD_MAPPING => "functions/thread_mapping.wgsl",
 );
 
 // voxel
@@ -91,6 +92,7 @@ fn voxel_common() -> (String, String) {
         CHUNK_DIM: u32 = CHUNK_DIM;
         CHUNK_DIM_HALF: u32 = CHUNK_DIM_HALF;
         MAX_WORKGROUP_DIM_2D: u32 = 16;
+        MAX_WORKGROUP_DIM_1D: u32 = 16 * 16;
         CFG_VAO_FACTOR: f32 = 0.35;
     );
     let types = include_shader_types!(
@@ -149,6 +151,7 @@ pub fn chunk_draw_args() -> String {
         &types,
         &uniform_camera_view,
         F_BITWISE,
+        F_THREAD_MAPPING,
         VOXEL_CHUNK_CULL_ENTRY,
     )
 }
@@ -159,6 +162,7 @@ pub fn chunk_write() -> String {
         GLOBAL,
         &consts,
         &types,
+        F_THREAD_MAPPING,
         VOXEL_CHUNK_WRITE_ENTRY,
     )
 }

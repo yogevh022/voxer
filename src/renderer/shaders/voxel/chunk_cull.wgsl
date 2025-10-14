@@ -10,37 +10,45 @@ var<storage, read> chunks_in_view_buffer: array<GPUChunkMeshEntry>;
 @group(0) @binding(4)
 var<uniform> camera_view: UniformCameraView;
 
-const MAX_DRAW_ARGS_PER_WORKGROUP: u32 = MAX_WORKGROUP_DIM_2D * MAX_WORKGROUP_DIM_2D;
-var<workgroup> workgroup_indirect_draw_args: array<GPUDrawIndirectArgs, MAX_DRAW_ARGS_PER_WORKGROUP>;
+var<workgroup> workgroup_indirect_draw_args: array<GPUDrawIndirectArgs, MAX_WORKGROUP_DIM_1D>;
 var<workgroup> workgroup_indirect_draw_args_count: atomic<u32>;
 var<workgroup> workgroup_max_entries: u32;
 
-@compute @workgroup_size(MAX_DRAW_ARGS_PER_WORKGROUP, 1, 1)
+@compute @workgroup_size(MAX_WORKGROUP_DIM_1D, 1, 1)
 fn write_chunk_indirect_draw_entry(
     @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
 ) {
-    let wg_offset = wid.x * MAX_DRAW_ARGS_PER_WORKGROUP;
-    let x_offset = lid.x;
-    let draw_arg_index = 1 + wg_offset + x_offset;
-
     if (lid.x == 0) {
         atomicStore(&workgroup_indirect_draw_args_count, 0);
         workgroup_max_entries = chunks_in_view_buffer[0].index;
     }
     workgroupBarrier();
 
-    let ch_idx = chunks_in_view_buffer[draw_arg_index].index;
-    let ch_vertex_count = chunks_in_view_buffer[draw_arg_index].face_count * 6u;
-    let ch_vertex_offset = chunks_in_view_buffer[draw_arg_index].face_offset * 6u;
+    let draw_arg_index = 1 + thread_index_1d(lid.x, wid.x, MAX_WORKGROUP_DIM_1D);
 
-    let ch_position = chunks_buffer[ch_idx].position_index.xyz;
-    let ch_world_min = vec3<f32>(ch_position) * f32(CHUNK_DIM);
-    let ch_world_max = ch_world_min + f32(CHUNK_DIM);
+    let mesh_entry = chunks_in_view_buffer[draw_arg_index];
+    let chunk_index = mesh_entry.index;
+    let chunk_vertex_count = mesh_entry.face_count * 6u;
+    let chunk_vertex_offset = mesh_entry.face_offset * 6u;
 
-    if (draw_arg_index <= workgroup_max_entries) && (true || frustum_check_chunk(ch_world_min, ch_world_max)) {
+    let chunk_position = chunks_buffer[chunk_index].position_index.xyz;
+    let chunk_world_min = vec3<f32>(chunk_position) * f32(CHUNK_DIM);
+    let chunk_world_max = chunk_world_min + f32(CHUNK_DIM);
+
+    let chunk_exists = draw_arg_index <= workgroup_max_entries;
+    let chunk_within_frustum = frustum_check_chunk(chunk_world_min, chunk_world_max);
+
+    if chunk_exists && chunk_within_frustum {
         let arg_idx = atomicAdd(&workgroup_indirect_draw_args_count, 1);
-        let draw_args = GPUDrawIndirectArgs(ch_vertex_count, 1, 0, ch_vertex_offset);
+        const INSTANCE_COUNT = 1u;
+        const FIRST_VERTEX = 0u;
+        let draw_args = GPUDrawIndirectArgs(
+            chunk_vertex_count,
+            INSTANCE_COUNT,
+            FIRST_VERTEX,
+            chunk_vertex_offset
+        );
         workgroup_indirect_draw_args[arg_idx] = draw_args;
     }
     workgroupBarrier();

@@ -72,7 +72,7 @@ impl GPUVoxelChunk {
     }
 
     pub(crate) fn set_chunk_index(&mut self, chunk_index: u32) {
-        // hack private function
+        // fixme hack private function
         self.position_index.w = chunk_index as i32;
     }
 }

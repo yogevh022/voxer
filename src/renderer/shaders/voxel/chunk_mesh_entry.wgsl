@@ -21,19 +21,17 @@ fn mesh_chunks_entry(
     @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
 ) {
-
     if (lid.x + lid.y == 0u) {
-        // first thread initializes workgroup vars
         let mesh_entry = mesh_queue_buffer[wid.x];
-        let chunk_index = mesh_entry.index;
-        workgroup_chunk_content = chunks_buffer[chunk_index].content;
-        workgroup_chunk_adj_content = chunks_buffer[chunk_index].adj_content;
-        let chunk_position = chunks_buffer[chunk_index].position_index.xyz;
+
+        workgroup_chunk_content = chunks_buffer[mesh_entry.index].content;
+        workgroup_chunk_adj_content = chunks_buffer[mesh_entry.index].adj_content;
+        let chunk_position = chunks_buffer[mesh_entry.index].position_index.xyz;
         workgroup_chunk_world_position = chunk_position * i32(CHUNK_DIM);
 
         atomicStore(&workgroup_buffer_write_offset, mesh_entry.face_offset);
     }
     workgroupBarrier();
 
-    mesh_chunk_position(lid.x, lid.y);
+    meshing_pass_at(lid.x, lid.y);
 }
