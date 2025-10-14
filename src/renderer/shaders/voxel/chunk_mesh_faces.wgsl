@@ -51,7 +51,7 @@ fn face_write_args(
 
 fn write_face(face_write_args: VoxelFaceWriteArgs) {
     private_face_data[face_write_args.private_face_idx] = face_write_args.data;
-    private_face_count += 1u * face_write_args.mask.draw;
+    private_face_count += face_write_args.mask.draw;
 }
 
 fn write_x_face(
@@ -61,6 +61,7 @@ fn write_x_face(
     let draw_mask: FaceDrawMask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[2][1][1]);
     let fid: u32 = FACE_ID_BASE_X + draw_mask.dir; // + instead of - because x is inversed
     let ocl_count = occlusion_count_x(neighbors)[draw_mask.dir];
+    // fixme current voxel is wrong, neighbors contains opaque bit not entire voxel
     let current_voxel = (*neighbors)[1][1][1];
     let write_args: VoxelFaceWriteArgs = face_write_args(current_voxel, draw_mask, fid, ocl_count, face_position);
     write_face(write_args);

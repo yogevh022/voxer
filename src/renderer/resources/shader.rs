@@ -65,7 +65,6 @@ macro_rules! include_shader_consts {
 
 // general
 include_shaders!(
-    GLOBAL => "global.wgsl",
     VERTEX_SHADER_ENTRY => "vert.wgsl",
     FRAGMENT_SHADER_ENTRY => "frag.wgsl",
 );
@@ -83,41 +82,52 @@ include_shaders!(
     VOXEL_CHUNK_MESH_ENTRY => "voxel/chunk_mesh_entry.wgsl",
     VOXEL_CHUNK_MESH_FACES => "voxel/chunk_mesh_faces.wgsl",
     VOXEL_CHUNK_MESH_VAO => "voxel/chunk_mesh_vao.wgsl",
-    VOXEL_CHUNK_WRITE_ENTRY => "voxel/chunk_write.wgsl",
-    VOXEL_CHUNK_CULL_ENTRY => "voxel/chunk_cull.wgsl",
+    VOXEL_CHUNK_WRITE_ENTRY => "voxel/chunk_scattered_write.wgsl",
+    VOXEL_CHUNK_CULL_ENTRY => "voxel/chunk_culled_mdi_args.wgsl",
 );
 
-fn voxel_common() -> (String, String) {
+fn cfg_constants() -> String {
+    include_shader_consts!(
+        CFG_MAX_WORKGROUP_DIM_2D: u32 = 16;
+        CFG_MAX_WORKGROUP_DIM_1D: u32 = 16 * 16;
+        CFG_VAO_FACTOR: f32 = 0.35;
+    )
+}
+
+fn geo_types() -> String {
+    include_shader_types!(
+        Plane
+    )
+}
+
+fn meta_types() -> String {
+    include_shader_types!(
+        UniformCameraView,
+        GPUDrawIndirectArgs,
+    )
+}
+
+fn voxel_common() -> String {
     let consts = include_shader_consts!(
         CHUNK_DIM: u32 = CHUNK_DIM;
         CHUNK_DIM_HALF: u32 = CHUNK_DIM_HALF;
-        MAX_WORKGROUP_DIM_2D: u32 = 16;
-        MAX_WORKGROUP_DIM_1D: u32 = 16 * 16;
-        CFG_VAO_FACTOR: f32 = 0.35;
     );
     let types = include_shader_types!(
         GPUVoxelChunkContent,
         GPUVoxelChunkAdjContent,
         GPUVoxelChunk,
         GPUVoxelFaceData,
-
         GPUChunkMeshEntry,
-        GPUDrawIndirectArgs,
-        Plane
     );
-    (consts, types)
+    concat_shaders!(&consts, &types)
 }
 
-pub fn main_shader() -> String {
-    let uniform_camera_view = include_shader_types!(
-        UniformCameraView
-    );
-    let (consts, types) = voxel_common();
+pub fn render_wgsl() -> String {
     concat_shaders!(
-        GLOBAL,
-        &uniform_camera_view,
-        &consts,
-        &types,
+        &cfg_constants(),
+        &meta_types(),
+        &geo_types(),
+        &voxel_common(),
         VOXEL_CONST,
         VOXEL_CHUNK_MESH_VAO,
         VERTEX_SHADER_ENTRY,
@@ -126,12 +136,10 @@ pub fn main_shader() -> String {
     )
 }
 
-pub fn chunk_meshing() -> String {
-    let (consts, types) = voxel_common();
+pub fn chunk_meshing_wgsl() -> String {
     concat_shaders!(
-        GLOBAL,
-        &consts,
-        &types,
+        &cfg_constants(),
+        &voxel_common(),
         VOXEL_CHUNK_MESH_ENTRY,
         VOXEL_CHUNK_MESH_FACES,
         VOXEL_CHUNK_MESH_VAO,
@@ -140,34 +148,29 @@ pub fn chunk_meshing() -> String {
     )
 }
 
-pub fn chunk_draw_args() -> String {
-    let uniform_camera_view = include_shader_types!(
-        UniformCameraView
-    );
-    let (consts, types) = voxel_common();
+pub fn chunk_draw_args_wgsl() -> String {
     concat_shaders!(
-        GLOBAL,
-        &consts,
-        &types,
-        &uniform_camera_view,
+        &cfg_constants(),
+        &meta_types(),
+        &geo_types(),
+        &voxel_common(),
         F_BITWISE,
         F_THREAD_MAPPING,
         VOXEL_CHUNK_CULL_ENTRY,
     )
 }
 
-pub fn chunk_write() -> String {
-    let (consts, types) = voxel_common();
+pub fn chunk_write_wgsl() -> String {
     concat_shaders!(
-        GLOBAL,
-        &consts,
-        &types,
+        &cfg_constants(),
+        &voxel_common(),
         F_THREAD_MAPPING,
         VOXEL_CHUNK_WRITE_ENTRY,
     )
 }
 
-pub fn create(device: &wgpu::Device, source: Cow<str>, label: &'static str) -> wgpu::ShaderModule {
+// fixme better place for this
+pub fn create_shader(device: &wgpu::Device, source: Cow<str>, label: &'static str) -> wgpu::ShaderModule {
     device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label),
         source: ShaderSource::Wgsl(source),

@@ -14,7 +14,7 @@ use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
 fn run_app() {
-    const SIMULATION_AND_RENDER_DISTANCE: usize = 5;
+    const SIMULATION_AND_RENDER_DISTANCE: usize = 8;
 
     let server_config = ServerWorldConfig {
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
@@ -49,7 +49,7 @@ fn main() {
 
 fn debug() {
     use crate::compute::geo::IVec3Iter;
-    use crate::renderer::gpu::GPUVoxelChunk;
+    use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelFaceData, GPUVoxelChunkContent};
     use glam::IVec3;
     use rustc_hash::{FxHashMap, FxHashSet};
     use smallhash;
@@ -58,16 +58,10 @@ fn debug() {
     use std::time::Duration;
     use std::time::Instant;
 
-    let count = 1usize << 19;
-
-    let mut slabmap = slabmap::SlabMap::<IVec3, usize>::with_capacity(count);
-
-    let slabmap_time = timed!({
-        for i in 0..count {
-            let p = IVec3::new(i as i32, i as i32, i as i32);
-            slabmap.insert(p, i);
-        }
-    });
-
-    println!("slabmap: {:?}", slabmap_time);
+    dbg!(
+        size_of::<GPUVoxelChunk>(),
+        size_of::<GPUVoxelChunkAdjContent>(),
+        size_of::<GPUVoxelChunkContent>(),
+        size_of::<GPUVoxelFaceData>(),
+    );
 }

@@ -6,7 +6,7 @@ var<storage, read> chunks_buffer_src: array<GPUVoxelChunk>;
 
 var<workgroup> workgroup_write_count: u32;
 
-@compute @workgroup_size(MAX_WORKGROUP_DIM_1D)
+@compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_1D)
 fn chunk_write_entry(
     @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
@@ -17,7 +17,7 @@ fn chunk_write_entry(
     }
     workgroupBarrier();
 
-    let src_index = 1 + thread_index_1d(lid.x, wid.x, MAX_WORKGROUP_DIM_1D);
+    let src_index = 1 + thread_index_1d(lid.x, wid.x, CFG_MAX_WORKGROUP_DIM_1D);
     if (src_index <= workgroup_write_count) {
         let chunk = chunks_buffer_src[src_index];
         let dst_index = bitcast<u32>(chunk.position_index.w);

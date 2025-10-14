@@ -29,7 +29,7 @@ fn mesh_chunks_entry(
         let chunk_position = chunks_buffer[mesh_entry.index].position_index.xyz;
         workgroup_chunk_world_position = chunk_position * i32(CHUNK_DIM);
 
-        atomicStore(&workgroup_buffer_write_offset, mesh_entry.face_offset);
+        atomicStore(&workgroup_buffer_write_offset, mesh_entry.face_alloc);
     }
     workgroupBarrier();
 

@@ -40,7 +40,7 @@ impl<'window> ClientWorldSession<'window> {
         chunks.reserve(config.render_distance.pow(3));
         Self {
             player,
-            renderer: AppRenderer::new(window, config.render_distance as i32),
+            renderer: AppRenderer::new(window),
             view_frustum: [Plane::default(); 6],
             chunks,
             render_max_sq: (config.render_distance as i32).pow(2),
@@ -100,14 +100,9 @@ impl<'window> ClientWorldSession<'window> {
         self.chunk_request_batch.clear();
         self.chunk_request_throttler.set_now(Instant::now());
 
-        let camera_ch_position = world_to_chunk_pos(self.player.location.position);
         self.renderer.chunk_manager.update_gpu_view_chunks(
-            camera_ch_position,
             &self.view_frustum,
             |ch_pos| {
-                if ch_pos != IVec3::ZERO {
-                    return;
-                }
                 if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
                     let throttle_idx = smallhash::u32x3_to_18_bits(ch_pos.to_array());
                     if self.chunk_request_throttler.request(throttle_idx as usize) {

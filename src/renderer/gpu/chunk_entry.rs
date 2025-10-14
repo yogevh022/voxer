@@ -14,15 +14,15 @@ pub struct GPU4Bytes {
 pub struct GPUChunkMeshEntry {
     pub index: u32,
     pub face_count: u32,
-    pub face_offset: u32,
+    pub face_alloc: u32,
 }
 
 impl GPUChunkMeshEntry {
-    pub fn new(index: u32, face_count: u32, face_offset: u32) -> Self {
+    pub fn new(index: u32, face_count: u32, face_alloc: u32) -> Self {
         Self {
             index,
             face_count,
-            face_offset,
+            face_alloc,
         }
     }
 }
@@ -69,11 +69,6 @@ impl GPUVoxelChunk {
             adj_content: gpu_adj_content,
             content: gpu_content,
         }
-    }
-
-    pub(crate) fn set_chunk_index(&mut self, chunk_index: u32) {
-        // fixme hack private function
-        self.position_index.w = chunk_index as i32;
     }
 }
 

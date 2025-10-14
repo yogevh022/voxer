@@ -27,7 +27,12 @@ pub struct App<'a> {
 }
 
 impl<'a> App<'a> {
-    pub fn new(v: Voxer, server: ServerWorld, scene: Scene, client_config: ClientWorldConfig) -> Self {
+    pub fn new(
+        v: Voxer,
+        server: ServerWorld,
+        scene: Scene,
+        client_config: ClientWorldConfig,
+    ) -> Self {
         Self {
             window: None,
             v,
@@ -49,6 +54,9 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
             let arc_window = Arc::new(event_loop.create_window(attributes).unwrap());
             self.window = Some(arc_window.clone());
 
+            self.v
+                .camera
+                .set_render_distance(self.client_config.render_distance as u32);
             self.v.camera.set_aspect_ratio(
                 arc_window.inner_size().width as f32 / arc_window.inner_size().height as f32,
             );
