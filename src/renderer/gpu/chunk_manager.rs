@@ -1,5 +1,6 @@
 use crate::compute::geo::{Frustum, Plane};
-use crate::renderer::gpu::chunk_entry::GPUChunkMeshEntry;
+use crate::renderer::gpu::chunk_entry::{GPUChunkMeshEntry, GPUVoxelChunkHeader};
+use crate::renderer::gpu::gpu_state_types::{ChunkMeshState, GPUList};
 use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelFaceData};
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::{Renderer, resources};
@@ -14,31 +15,6 @@ use wgpu::{
     ShaderStages,
 };
 
-#[derive(Debug, Clone)]
-pub enum ChunkMeshState {
-    Meshed(GPUChunkMeshEntry),
-    Unmeshed(u32),
-}
-
-impl ChunkMeshState {
-    pub fn set_meshed(&mut self, index: u32, allocation: u32) {
-        match self {
-            ChunkMeshState::Unmeshed(face_count) => {
-                let mesh_entry = GPUChunkMeshEntry::new(index, *face_count, allocation);
-                *self = ChunkMeshState::Meshed(mesh_entry);
-            }
-            ChunkMeshState::Meshed(_) => unreachable!(),
-        }
-    }
-
-    pub fn mesh_entry(&self) -> &GPUChunkMeshEntry {
-        match self {
-            ChunkMeshState::Meshed(entry) => entry,
-            ChunkMeshState::Unmeshed(_) => unreachable!(),
-        }
-    }
-}
-
 pub struct ChunkManagerConfig {
     pub max_chunks: usize,
     pub max_write_count: usize,
@@ -52,9 +28,9 @@ pub struct ChunkManager {
     gpu_mesh_allocator: SubAllocator,
     gpu_cached: SlabMap<IVec3, ChunkMeshState>,
 
-    write_batch: Vec<GPUVoxelChunk>,
+    write_batch: GPUList<GPUVoxelChunk>,
+    aabb_visible_batch: GPUList<GPUChunkMeshEntry>,
     meshing_batch: Vec<GPUChunkMeshEntry>,
-    aabb_visible_batch: Vec<GPUChunkMeshEntry>,
 
     // buffers
     chunk_buffer: VxBuffer,
@@ -169,13 +145,23 @@ impl ChunkManager {
         let (render_bind_group_layout, render_bind_group) =
             chunk_render_bind_group(&renderer.device, camera_buffer, &voxel_face_buffer);
 
+        let aabb_visible_batch: GPUList<GPUChunkMeshEntry> =
+            GPUList::with_capacity(1024, |first_entry, len| {
+                first_entry.index = len;
+            });
+
+        let write_batch: GPUList<GPUVoxelChunk> =
+            GPUList::with_capacity(config.max_chunks, |first_entry, len| {
+                first_entry.header.index = len;
+            });
+
         Self {
             gpu_mesh_allocator: SubAllocator::new(config.max_face_count as u32),
             gpu_cached: SlabMap::with_capacity(config.max_chunks),
 
-            write_batch: Vec::with_capacity(config.max_chunks),
+            write_batch,
+            aabb_visible_batch,
             meshing_batch: Vec::with_capacity(config.max_write_count),
-            aabb_visible_batch: Vec::with_capacity(1024), // todo initialize with proper capacity?
 
             chunk_buffer,
             write_batch_buffer,
@@ -200,16 +186,14 @@ impl ChunkManager {
         let face_count = chunk.face_count.unwrap() as u32;
         let render_meta = ChunkMeshState::Unmeshed(face_count);
         let chunk_index = self.gpu_cached.insert(chunk.position, render_meta);
-        let position_index = chunk.position.extend(chunk_index as i32);
+        let header = GPUVoxelChunkHeader::new(chunk_index as u32, chunk.position);
 
-        // fixme avoid copying until transmutation?
-        GPUVoxelChunk::new(position_index, &chunk.adjacent_blocks, &chunk.blocks)
+        GPUVoxelChunk::new(header, chunk.adjacent_blocks, chunk.blocks)
     }
 
     pub fn update_gpu_chunk_writes(&mut self, chunks: &[Chunk]) {
         debug_assert!(chunks.len() <= self.config.max_write_count);
         self.write_batch.clear();
-        unsafe { self.write_batch.set_len(1) }; // index 0 is reserved for write_count
 
         for chunk in chunks {
             if self.is_chunk_cached(&chunk.position) {
@@ -218,8 +202,7 @@ impl ChunkManager {
             let gpu_chunk = self.insert_chunk(chunk);
             self.write_batch.push(gpu_chunk);
         }
-        let write_count = self.write_batch.len() as u32 - 1;
-        self.write_batch[0].position_index.w = write_count as i32;
+        self.write_batch.done();
     }
 
     pub fn encode_gpu_chunk_writes(
@@ -227,14 +210,14 @@ impl ChunkManager {
         renderer: &Renderer<'_>,
         compute_pass: &mut ComputePass,
     ) {
-        let write_count = self.write_batch[0].position_index.w as u32;
+        let write_count = self.write_batch.len();
         if write_count == 0 {
             return;
         }
         renderer.write_buffer(
             &self.write_batch_buffer,
             0,
-            bytemuck::cast_slice(&self.write_batch),
+            bytemuck::cast_slice(self.write_batch.inner_slice()),
         );
         compute_pass.set_pipeline(&self.write_pipeline);
         compute_pass.set_bind_group(0, &self.write_bind_group, &[]);
@@ -254,7 +237,6 @@ impl ChunkManager {
 
         self.meshing_batch.clear();
         self.aabb_visible_batch.clear();
-        unsafe { self.aabb_visible_batch.set_len(1) };
 
         frustum_aabb.discrete_points(|ch_pos| {
             match self.gpu_cached.get_mut(&ch_pos) {
@@ -278,7 +260,7 @@ impl ChunkManager {
             };
         });
 
-        self.aabb_visible_batch[0].index = self.aabb_visible_batch.len() as u32 - 1;
+        self.aabb_visible_batch.done();
     }
 
     pub fn encode_gpu_view_chunks(
@@ -293,12 +275,12 @@ impl ChunkManager {
             bytemuck::cast_slice(&[0u32]),
         );
 
-        let in_view_count = self.aabb_visible_batch[0].index;
+        let in_view_count = self.aabb_visible_batch.len();
         if in_view_count != 0 {
             renderer.write_buffer(
                 &self.aabb_visible_buffer,
                 0,
-                bytemuck::cast_slice(&self.aabb_visible_batch),
+                bytemuck::cast_slice(self.aabb_visible_batch.inner_slice()),
             );
             compute_pass.set_pipeline(&self.culled_mdi_args_pipeline);
             compute_pass.set_bind_group(0, &self.culled_mdi_args_bind_group, &[]);
@@ -306,7 +288,7 @@ impl ChunkManager {
             compute_pass.dispatch_workgroups(wg_count as u32, 1, 1);
         }
 
-        let to_mesh_count = self.meshing_batch.len() as u32;
+        let to_mesh_count = self.meshing_batch.len();
         if to_mesh_count != 0 {
             renderer.write_buffer(
                 &self.meshing_batch_buffer,
@@ -315,7 +297,7 @@ impl ChunkManager {
             );
             compute_pass.set_pipeline(&self.meshing_pipeline);
             compute_pass.set_bind_group(0, &self.meshing_bind_group, &[]);
-            compute_pass.dispatch_workgroups(to_mesh_count, 1, 1);
+            compute_pass.dispatch_workgroups(to_mesh_count as u32, 1, 1);
         }
     }
 
@@ -338,7 +320,6 @@ impl ChunkManager {
             0,
             32000, // fixme arbitrary number
         );
-        // render_pass.multi_draw_indirect(&renderer.indirect_buffer, 0, render_count);
     }
 
     pub fn is_chunk_cached(&self, position: &IVec3) -> bool {

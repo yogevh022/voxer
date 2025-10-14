@@ -32,8 +32,13 @@ fn write_culled_mdi(
     let chunk_vertex_count = mesh_entry.face_count * 6u;
     let chunk_vertex_offset = mesh_entry.face_alloc * 6u;
 
-    let chunk_position = chunks_buffer[chunk_index].position_index.xyz;
-    let chunk_world_min = vec3<f32>(chunk_position) * f32(CHUNK_DIM);
+    let chunk_header = chunks_buffer[chunk_index].header;
+    let chunk_position = vec3<f32>(
+        f32(chunk_header.chunk_x),
+        f32(chunk_header.chunk_y),
+        f32(chunk_header.chunk_z),
+    );
+    let chunk_world_min = chunk_position * f32(CHUNK_DIM);
     let chunk_world_max = chunk_world_min + f32(CHUNK_DIM);
 
     let chunk_exists = draw_arg_index <= workgroup_max_entries;

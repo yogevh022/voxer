@@ -1,6 +1,6 @@
 use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, ChunkAdjacentBlocks, ChunkBlocks};
 use bytemuck::{Pod, Zeroable, bytes_of};
-use glam::IVec4;
+use glam::{IVec3, IVec4};
 use voxer_macros::ShaderType;
 
 #[repr(C)]
@@ -36,36 +36,54 @@ pub struct GPUDrawIndirectArgs {
     first_instance: u32,
 }
 
-#[repr(C, align(16))]
+#[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkContent {
     blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; CHUNK_DIM],
 }
 
-#[repr(C, align(16))]
+#[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkAdjContent {
     next_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
     prev_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
 }
 
-#[repr(C, align(16))]
+#[repr(C, align(4))]
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUVoxelChunkHeader {
+    pub(crate) index: u32,
+    chunk_x: i32,
+    chunk_y: i32,
+    chunk_z: i32,
+}
+
+impl GPUVoxelChunkHeader {
+    pub fn new(chunk_index: u32, chunk_position: IVec3) -> Self {
+        Self {
+            index: chunk_index,
+            chunk_x: chunk_position.x,
+            chunk_y: chunk_position.y,
+            chunk_z: chunk_position.z,
+        }
+    }
+}
+
+#[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunk {
     // 11,280 bytes total
-    pub position_index: IVec4,                // 16 bytes
+    pub header: GPUVoxelChunkHeader,          // 16 bytes
     pub adj_content: GPUVoxelChunkAdjContent, // 3072 bytes
     pub content: GPUVoxelChunkContent,        // 8192 bytes
 }
 
 impl GPUVoxelChunk {
-    pub fn new(position_index: IVec4, adj: &ChunkAdjacentBlocks, blocks: &ChunkBlocks) -> Self {
-        // alignment safe transmutation
-        // fixme implement this in a better way
-        let gpu_content: GPUVoxelChunkContent = bytemuck::pod_read_unaligned(bytes_of(blocks));
-        let gpu_adj_content: GPUVoxelChunkAdjContent = bytemuck::pod_read_unaligned(bytes_of(adj));
+    pub fn new(header: GPUVoxelChunkHeader, adj: ChunkAdjacentBlocks, blocks: ChunkBlocks) -> Self {
+        let gpu_content: GPUVoxelChunkContent = unsafe { std::mem::transmute(blocks) };
+        let gpu_adj_content: GPUVoxelChunkAdjContent = unsafe { std::mem::transmute(adj) };
         Self {
-            position_index,
+            header,
             adj_content: gpu_adj_content,
             content: gpu_content,
         }
