@@ -58,11 +58,11 @@ impl AppRenderer<'_> {
         );
 
         // fixme move to a config
-        let t = 24 * 24 * 24;
+        let near_chunks = ((36.0 * 36.0 * 36.0) / 1.8) as usize;
         let cm_config = ChunkManagerConfig {
-            max_chunks: t,
+            max_chunks: near_chunks,
             max_write_count: 1 << 14,
-            max_face_count: t * 4096, // fixme arbitrary number
+            max_face_count: (near_chunks as f32 * 0.4f32) as usize * 4096, // rough temp fov + face estimate
         };
         let chunk_manager = ChunkManager::new(&renderer, &view_projection_buffer, cm_config);
 

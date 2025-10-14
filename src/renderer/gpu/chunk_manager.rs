@@ -184,14 +184,13 @@ impl ChunkManager {
 
     fn insert_chunk(&mut self, chunk: &Chunk) -> GPUVoxelChunk {
         let face_count = chunk.face_count.unwrap() as u32;
-        let render_meta = ChunkMeshState::Unmeshed(face_count);
-        let chunk_index = self.gpu_cached.insert(chunk.position, render_meta);
+        let mesh_state = ChunkMeshState::Unmeshed(face_count);
+        let chunk_index = self.gpu_cached.insert(chunk.position, mesh_state);
         let header = GPUVoxelChunkHeader::new(chunk_index as u32, chunk.position);
-
         GPUVoxelChunk::new(header, chunk.adjacent_blocks, chunk.blocks)
     }
 
-    pub fn update_gpu_chunk_writes(&mut self, chunks: &[Chunk]) {
+    pub fn update_chunk_writes(&mut self, chunks: &[Chunk]) {
         debug_assert!(chunks.len() <= self.config.max_write_count);
         self.write_batch.clear();
 
@@ -226,7 +225,7 @@ impl ChunkManager {
         compute_pass.dispatch_workgroups(workgroup_count, 1, 1);
     }
 
-    pub fn update_gpu_view_chunks(
+    pub fn update_view_chunks(
         &mut self,
         view_planes: &[Plane; 6],
         mut missing_chunk: impl FnMut(IVec3),
@@ -249,11 +248,14 @@ impl ChunkManager {
                         if face_count == 0 {
                             return;
                         }
-                        let allocation = self.gpu_mesh_allocator.allocate(face_count).unwrap();
-                        render_mesh_state.set_meshed(chunk_index as u32, allocation);
-                        let mesh_entry = render_mesh_state.mesh_entry();
-                        self.meshing_batch.push(*mesh_entry);
-                        self.aabb_visible_batch.push(*mesh_entry);
+                        let allocation = self.gpu_mesh_allocator.allocate(face_count);
+                        // err means no space in mesh buffer
+                        if let Ok(allocation) = allocation {
+                            render_mesh_state.set_meshed(chunk_index as u32, allocation);
+                            let mesh_entry = render_mesh_state.mesh_entry();
+                            self.meshing_batch.push(*mesh_entry);
+                            self.aabb_visible_batch.push(*mesh_entry);
+                        }
                     }
                 },
                 None => missing_chunk(ch_pos),
@@ -268,15 +270,14 @@ impl ChunkManager {
         renderer: &Renderer<'_>,
         compute_pass: &mut ComputePass,
     ) {
-        // fixme temp
-        renderer.write_buffer(
-            &renderer.indirect_count_buffer,
-            0,
-            bytemuck::cast_slice(&[0u32]),
-        );
-
         let in_view_count = self.aabb_visible_batch.len();
         if in_view_count != 0 {
+            // fixme temp
+            renderer.write_buffer(
+                &renderer.indirect_count_buffer,
+                0,
+                bytemuck::cast_slice(&[0u32]),
+            );
             renderer.write_buffer(
                 &self.aabb_visible_buffer,
                 0,
@@ -311,7 +312,9 @@ impl ChunkManager {
     }
 
     pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut RenderPass) {
-        // fixme handle no chunks to render..
+        if self.aabb_visible_batch.len() == 0 {
+            return;
+        }
         render_pass.set_bind_group(1, &self.render_bind_group, &[]);
         render_pass.multi_draw_indirect_count(
             &renderer.indirect_buffer,
@@ -326,12 +329,24 @@ impl ChunkManager {
         self.gpu_cached.get(position).is_some()
     }
 
-    pub fn mem_debug_throttled(&self) {
+    pub fn gpu_mesh_mem_debug_throttled(&self) {
         use crate::call_every;
 
         // the blob clears cli
         let capacity = self.gpu_mesh_allocator.capacity();
         let free_percent = (self.gpu_mesh_allocator.free() as f32 / capacity as f32) * 100.0;
+        call_every!(ALLOC_DBG, 50, || println!(
+            "\x1B[2J\x1B[1;1Hfree: {:>3.1}% capacity: {}",
+            free_percent, capacity,
+        ));
+    }
+
+    pub fn gpu_cache_mem_debug_throttled(&self) {
+        use crate::call_every;
+
+        // the blob clears cli
+        let capacity = self.gpu_cached.capacity();
+        let free_percent = (self.gpu_cached.free() as f32 / capacity as f32) * 100.0;
         call_every!(ALLOC_DBG, 50, || println!(
             "\x1B[2J\x1B[1;1Hfree: {:>3.1}% capacity: {}",
             free_percent, capacity,
