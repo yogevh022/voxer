@@ -4,9 +4,9 @@ fn occlusion_count_to_ao(ocl_count: u32) -> f32 {
     return 1.0 - (f32(ocl_count) * CFG_VAO_FACTOR);
 }
 
-fn occlusion_count_x(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u32, 2> {
-    var vao_front: u32;
-    var vao_back: u32;
+fn occlusion_count_x(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<vec4<u32>, 2> {
+    var vao_front: vec4<u32>;
+    var vao_back: vec4<u32>;
 
     let px_top = (*neighbors)[2][2][1];
     let px_bottom = (*neighbors)[2][0][1];
@@ -58,22 +58,22 @@ fn occlusion_count_x(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>
     let sx_bottomr_ao = sx_bottom & (any_right | any_br);
     let sx_bottoml_ao = sx_bottom & (any_left | any_bl);
 
-    vao_front = max(px_topl_ao + px_tleft_ao, px_top_left)
-        | (max(px_topr_ao + px_tright_ao, px_top_right) << 2)
-        | (max(px_bottomr_ao + px_bright_ao, px_bottom_right) << 4)
-        | (max(px_bottoml_ao + px_bleft_ao, px_bottom_left) << 6);
+    vao_front.x = max(px_topl_ao + px_tleft_ao, px_top_left);
+    vao_front.y = max(px_topr_ao + px_tright_ao, px_top_right);
+    vao_front.z = max(px_bottomr_ao + px_bright_ao, px_bottom_right);
+    vao_front.w = max(px_bottoml_ao + px_bleft_ao, px_bottom_left);
 
-    vao_back = max(sx_topr_ao + sx_tright_ao, sx_top_right)
-        | (max(sx_topl_ao + sx_tleft_ao, sx_top_left) << 2)
-        | (max(sx_bottoml_ao + sx_bleft_ao, sx_bottom_left) << 4)
-        | (max(sx_bottomr_ao + sx_bright_ao, sx_bottom_right) << 6);
+    vao_back.x = max(sx_topr_ao + sx_tright_ao, sx_top_right);
+    vao_back.y = max(sx_topl_ao + sx_tleft_ao, sx_top_left);
+    vao_back.z = max(sx_bottoml_ao + sx_bleft_ao, sx_bottom_left);
+    vao_back.w = max(sx_bottomr_ao + sx_bright_ao, sx_bottom_right);
 
-    return array<u32, 2>(vao_back, vao_front);
+    return array<vec4<u32>, 2>(vao_back, vao_front);
 }
 
-fn occlusion_count_y(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u32, 2> {
-    var vao_front: u32;
-    var vao_back: u32;
+fn occlusion_count_y(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<vec4<u32>, 2> {
+    var vao_front: vec4<u32>;
+    var vao_back: vec4<u32>;
 
     let py_top = (*neighbors)[2][2][1];
     let py_bottom = (*neighbors)[0][2][1];
@@ -125,22 +125,22 @@ fn occlusion_count_y(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>
     let sy_bottomr_ao = sy_bottom & (any_right | any_br);
     let sy_bottoml_ao = sy_bottom & (any_left | any_bl);
 
-    vao_front = max(py_topr_ao + py_tright_ao, py_top_right)
-        | (max(py_topl_ao + py_tleft_ao, py_top_left) << 2)
-        | (max(py_bottoml_ao + py_bleft_ao, py_bottom_left) << 4)
-        | (max(py_bottomr_ao + py_bright_ao, py_bottom_right) << 6);
+    vao_front.x = max(py_topr_ao + py_tright_ao, py_top_right);
+    vao_front.y = max(py_topl_ao + py_tleft_ao, py_top_left);
+    vao_front.z = max(py_bottoml_ao + py_bleft_ao, py_bottom_left);
+    vao_front.w = max(py_bottomr_ao + py_bright_ao, py_bottom_right);
 
-    vao_back = max(sy_topl_ao + sy_tleft_ao, sy_top_left)
-        | (max(sy_topr_ao + sy_tright_ao, sy_top_right) << 2)
-        | (max(sy_bottomr_ao + sy_bright_ao, sy_bottom_right) << 4)
-        | (max(sy_bottoml_ao + sy_bleft_ao, sy_bottom_left) << 6);
+    vao_back.x = max(sy_topl_ao + sy_tleft_ao, sy_top_left);
+    vao_back.y = max(sy_topr_ao + sy_tright_ao, sy_top_right);
+    vao_back.z = max(sy_bottomr_ao + sy_bright_ao, sy_bottom_right);
+    vao_back.w = max(sy_bottoml_ao + sy_bleft_ao, sy_bottom_left);
 
-    return array<u32, 2>(vao_back, vao_front);
+    return array<vec4<u32>, 2>(vao_back, vao_front);
 }
 
-fn occlusion_count_z(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<u32, 2> {
-    var vao_front: u32;
-    var vao_back: u32;
+fn occlusion_count_z(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>) -> array<vec4<u32>, 2> {
+    var vao_front: vec4<u32>;
+    var vao_back: vec4<u32>;
 
     let pz_top = (*neighbors)[1][2][2];
     let pz_bottom = (*neighbors)[1][0][2];
@@ -192,15 +192,15 @@ fn occlusion_count_z(neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>
     let sz_bottomr_ao = sz_bottom & (any_right | any_br);
     let sz_bottoml_ao = sz_bottom & (any_left | any_bl);
 
-    vao_front = max(pz_bottoml_ao + pz_bleft_ao, pz_bottom_left)
-        | (max(pz_bottomr_ao + pz_bright_ao, pz_bottom_right) << 2)
-        | (max(pz_topr_ao + pz_tright_ao, pz_top_right) << 4)
-        | (max(pz_topl_ao + pz_tleft_ao, pz_top_left) << 6);
+    vao_front.x = max(pz_bottoml_ao + pz_bleft_ao, pz_bottom_left);
+    vao_front.y = max(pz_bottomr_ao + pz_bright_ao, pz_bottom_right);
+    vao_front.z = max(pz_topr_ao + pz_tright_ao, pz_top_right);
+    vao_front.w = max(pz_topl_ao + pz_tleft_ao, pz_top_left);
 
-    vao_back = max(sz_bottomr_ao + sz_bright_ao, sz_bottom_right)
-        | (max(sz_bottoml_ao + sz_bleft_ao, sz_bottom_left) << 2)
-        | (max(sz_topl_ao + sz_tleft_ao, sz_top_left) << 4)
-        | (max(sz_topr_ao + sz_tright_ao, sz_top_right) << 6);
+    vao_back.x = max(sz_bottomr_ao + sz_bright_ao, sz_bottom_right);
+    vao_back.y = max(sz_bottoml_ao + sz_bleft_ao, sz_bottom_left);
+    vao_back.z = max(sz_topl_ao + sz_tleft_ao, sz_top_left);
+    vao_back.w = max(sz_topr_ao + sz_tright_ao, sz_top_right);
 
-    return array<u32, 2>(vao_back, vao_front);
+    return array<vec4<u32>, 2>(vao_back, vao_front);
 }

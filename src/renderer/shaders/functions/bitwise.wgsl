@@ -2,6 +2,28 @@ fn pack_u16s(a: u32, b: u32) -> u32 {
     return (a & 0xFFFFu) | (b << 16u);
 }
 
+fn unpack_i24_low(packed: u32) -> i32 {
+    let low = packed & 0xFFFFFFu;
+    let extended = low | select(0u, 0xFF000000u, (low & 0x800000u) != 0u);
+    return bitcast<i32>(extended);
+}
+
+fn unpack_i12_low(packed: u32) -> i32 {
+    let low = packed & 0xFFFu;
+    let extended = low | select(0u, 0xFFFFF000u, (low & 0x800u) != 0u);
+    return bitcast<i32>(extended);
+}
+
+fn cast_i24_to_u32(a: i32) -> u32 {
+    let casted = bitcast<u32>(a);
+    return casted & 0xFFFFFFu;
+}
+
+fn cast_i12_to_u32(a: i32) -> u32 {
+    let casted = bitcast<u32>(a);
+    return casted & 0xFFFu;
+}
+
 fn unpack_u16_low(packed: u32) -> u32 {
     return packed & 0xFFFFu;
 }

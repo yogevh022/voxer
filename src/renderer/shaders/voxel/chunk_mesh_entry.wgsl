@@ -11,7 +11,7 @@ var<storage, read> mesh_queue_buffer: array<GPUChunkMeshEntry>;
 var<workgroup> workgroup_buffer_write_offset: atomic<u32>;
 var<workgroup> workgroup_chunk_content: GPUVoxelChunkContent;
 var<workgroup> workgroup_chunk_adj_content: GPUVoxelChunkAdjContent;
-var<workgroup> workgroup_chunk_position: vec3<u32>;
+var<workgroup> workgroup_chunk_world_position: vec3<i32>;
 
 var<private> private_face_data: array<GPUVoxelFaceData, MAX_FACES_PER_THREAD>;
 var<private> private_face_count: u32 = 0u;
@@ -29,11 +29,7 @@ fn mesh_chunks_entry(
         workgroup_chunk_content = chunks_buffer[chunk_index].content;
         workgroup_chunk_adj_content = chunks_buffer[chunk_index].adj_content;
         let chunk_position = chunks_buffer[chunk_index].header.position;
-        workgroup_chunk_position = vec3<u32>(
-            bitcast<u32>(chunk_position.x),
-            bitcast<u32>(chunk_position.y & 0xFFFF),
-            bitcast<u32>(chunk_position.z),
-        );
+        workgroup_chunk_world_position = chunk_position * i32(CHUNK_DIM);
 
         atomicStore(&workgroup_buffer_write_offset, mesh_entry.face_offset);
     }

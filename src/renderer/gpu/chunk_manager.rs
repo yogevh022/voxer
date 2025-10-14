@@ -306,7 +306,7 @@ impl ChunkManager {
         //     };
         // });
 
-        println!("updating view chunks: {}", self.gpu_chunk_in_view.len());
+        // println!("updating view chunks: {}", self.gpu_chunk_in_view.len());
 
         self.gpu_chunk_in_view[0].index = self.gpu_chunk_in_view.len() as u32 - 1;
     }

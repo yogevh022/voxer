@@ -2,17 +2,22 @@ const FACE_ID_BASE_X: u32 = 0u;
 const FACE_ID_BASE_Y: u32 = 3u;
 const FACE_ID_BASE_Z: u32 = 5u;
 
-fn pack_xyz_to_15_bits(pos: vec3<u32>) -> u32 {
-    return (pos.x << 8) | (pos.y << 4) | pos.z;
-}
+fn face_data(
+    current_voxel: u32,
+    face_position: vec3<u32>,
+    fid: u32,
+    ocl_count: vec4<u32>,
+    draw_mask: FaceDrawMask,
+) -> GPUVoxelFaceData {
+    let global_position = workgroup_chunk_world_position + vec3<i32>(face_position);
 
-fn pack_face_data(current_voxel: u32, packed_local_position: u32, fid: u32, illum: u32, ocl_count: u32) -> GPUVoxelFaceData {
-    let packed_face_data = (packed_local_position & 0xFFF)
-            | (fid << 12)
-            | (illum << 15)
-            | (ocl_count << 20);
-    let packed_voxel_ypos = (current_voxel << 16) | workgroup_chunk_position.y;
-    return GPUVoxelFaceData(packed_face_data, packed_voxel_ypos, workgroup_chunk_position.x, workgroup_chunk_position.z);
+    let word_a = cast_i24_to_u32(global_position.x) | (ocl_count.x << 30);
+    let word_b = cast_i24_to_u32(global_position.z) | (ocl_count.y << 30);
+    let word_c = cast_i12_to_u32(global_position.y) | (ocl_count.w << 30);
+    let word_d = (ocl_count.z << 30);
+    let word_e = current_voxel | (fid << 28);
+
+    return GPUVoxelFaceData(word_a, word_b, word_c, word_d, word_e);
 }
 
 struct FaceDrawMask {
@@ -26,18 +31,6 @@ fn face_draw_mask(current_voxel: u32, next_voxel: u32) -> FaceDrawMask {
     return FaceDrawMask(face_draw, face_dir);
 }
 
-fn face_data(
-    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
-    packed_local_position: u32,
-    fid: u32,
-    ocl_count: u32,
-    draw_mask: FaceDrawMask,
-) -> GPUVoxelFaceData {
-    let illum = 0u;
-    let current_voxel = (*neighbors)[1][1][1];
-    return pack_face_data(current_voxel, packed_local_position, fid, illum, ocl_count);
-}
-
 struct VoxelFaceWriteArgs {
     mask: FaceDrawMask,
     data: GPUVoxelFaceData,
@@ -45,13 +38,13 @@ struct VoxelFaceWriteArgs {
 }
 
 fn face_write_args(
-    neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
+    current_voxel: u32,
     draw_mask: FaceDrawMask,
     fid: u32,
-    ocl_count: u32,
-    packed_local_position: u32,
+    ocl_count: vec4<u32>,
+    face_position: vec3<u32>,
 ) -> VoxelFaceWriteArgs {
-    let face_data = face_data(neighbors, packed_local_position, fid, ocl_count, draw_mask);
+    let face_data = face_data(current_voxel, face_position, fid, ocl_count, draw_mask);
     let private_face_idx = draw_mask.draw * (private_face_count + FACE_DATA_VOID_OFFSET);
     return VoxelFaceWriteArgs(draw_mask, face_data, private_face_idx);
 }
@@ -65,11 +58,11 @@ fn write_x_face(
     neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
     face_position: vec3<u32>,
 ) {
-    let packed_face_pos: u32 = pack_xyz_to_15_bits(face_position);
     let draw_mask: FaceDrawMask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[2][1][1]);
     let fid: u32 = FACE_ID_BASE_X + draw_mask.dir; // + instead of - because x is inversed
     let ocl_count = occlusion_count_x(neighbors)[draw_mask.dir];
-    let write_args: VoxelFaceWriteArgs = face_write_args(neighbors, draw_mask, fid, ocl_count, packed_face_pos);
+    let current_voxel = (*neighbors)[1][1][1];
+    let write_args: VoxelFaceWriteArgs = face_write_args(current_voxel, draw_mask, fid, ocl_count, face_position);
     write_face(write_args);
 }
 
@@ -77,11 +70,11 @@ fn write_y_face(
     neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
     face_position: vec3<u32>,
 ) {
-    let packed_face_pos: u32 = pack_xyz_to_15_bits(face_position);
     let draw_mask: FaceDrawMask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[1][2][1]);
     let fid: u32 = FACE_ID_BASE_Y - draw_mask.dir;
     let ocl_count = occlusion_count_y(neighbors)[draw_mask.dir];
-    let write_args: VoxelFaceWriteArgs = face_write_args(neighbors, draw_mask, fid, ocl_count, packed_face_pos);
+    let current_voxel = (*neighbors)[1][1][1];
+    let write_args: VoxelFaceWriteArgs = face_write_args(current_voxel, draw_mask, fid, ocl_count, face_position);
     write_face(write_args);
 }
 
@@ -89,11 +82,11 @@ fn write_z_face(
     neighbors: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
     face_position: vec3<u32>,
 ) {
-    let packed_face_pos: u32 = pack_xyz_to_15_bits(face_position);
     let draw_mask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[1][1][2]);
     let fid = FACE_ID_BASE_Z - draw_mask.dir;
     let ocl_count = occlusion_count_z(neighbors)[draw_mask.dir];
-    let write_args = face_write_args(neighbors, draw_mask, fid, ocl_count, packed_face_pos);
+    let current_voxel = (*neighbors)[1][1][1];
+    let write_args = face_write_args(current_voxel, draw_mask, fid, ocl_count, face_position);
     write_face(write_args);
 }
 

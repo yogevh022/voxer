@@ -1,6 +1,6 @@
 use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, ChunkAdjacentBlocks, ChunkBlocks};
 use bytemuck::{Pod, Zeroable, bytes_of};
-use glam::IVec3;
+use glam::{IVec3, IVec4};
 use std::mem::{MaybeUninit, size_of};
 use voxer_macros::ShaderType;
 use wgpu::wgt::DrawIndirectArgs;
@@ -53,20 +53,38 @@ pub struct GPUVoxelChunkAdjContent {
     prev_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
 }
 
-#[repr(C, align(16))]
+#[repr(C, align(4))]
 #[derive(ShaderType)]
 pub struct GPUVoxelFaceData {
-    position_fid_illum_ocl: u32,
-    // position 12b
-    // face id 3b
-    // illumination 5b
-    // occlusion count 8b
+    word_a: u32,
+    // world_x: 24b
+    // top_left_R: 6b
+    // top_left_AO: 2b
+    word_b: u32,
+    // world_z: 24b
+    // top_right_R: 6b
+    // top_right_AO: 2b
+    word_c: u32,
+    // world_y: 12b
+    // bot_left_R: 6b
+    // bot_left_G: 6b
+    // bot_left_B: 6b
+    // bot_left_AO: 2b
+    word_d: u32,
+    // bot_right_R: 6b
+    // bot_right_G: 6b
+    // bot_right_B: 6b
+    // top_left_G: 6b
+    // top_left_B: 6b
+    // bot_right_AO: 2b
+    word_e: u32,
+    // voxel: 16b
+    // top_right_G: 6b
+    // top_right_B: 6b
+    // face_id: 3b
     // 1b free
-    chy_voxel: u32,
-    // y pos i16 16b
-    // voxel_type 16b
-    chx: u32,
-    chz: u32,
+
+    // total: 20 bytes
 }
 
 #[repr(C, align(8))]

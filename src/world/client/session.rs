@@ -105,6 +105,9 @@ impl<'window> ClientWorldSession<'window> {
             camera_ch_position,
             &self.view_frustum,
             |ch_pos| {
+                if ch_pos != IVec3::ZERO {
+                    return;
+                }
                 if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
                     let throttle_idx = smallhash::u32x3_to_18_bits(ch_pos.to_array());
                     if self.chunk_request_throttler.request(throttle_idx as usize) {
