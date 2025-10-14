@@ -22,8 +22,18 @@ pub struct GPUDrawIndirectArgs {
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkMeshEntry {
     pub index: u32,
-    pub face_count: u32,
-    pub face_alloc: u32,
+    positive_face_count: u32,
+    // x: 11b,
+    // y: 11b,
+    // z: 10b,
+    negative_face_count: u32,
+    // x: 11b,
+    // y: 11b,
+    // z: 10b,
+    face_alloc: u32,
+    // positive_z_last_bit: 1b
+    // negative_z_last_bit: 1b
+    // face_alloc: 30b
 }
 
 impl GPUChunkMeshEntry {
@@ -33,6 +43,10 @@ impl GPUChunkMeshEntry {
             face_count,
             face_alloc,
         }
+    }
+
+    pub fn face_alloc(&self) -> u32 {
+        self.face_alloc >> 2
     }
 }
 
