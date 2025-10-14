@@ -28,7 +28,6 @@ fn vs_main(
 
     let vertex_position = face_position + QUAD_VERTICES[face_voxel.face_id][vertex_index];
 
-//    out.position = vec4<f32>(f32(current_vertex),f32(vertex_index),1.0,1.0);
     out.position = camera_view.view_proj * vec4<f32>(vertex_position, 1.0);
     out.tex_coords = TEX_COORDS[vertex_index];
     out.ao = occlusion_count_to_ao(face_ao[vertex_index]);

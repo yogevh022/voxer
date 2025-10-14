@@ -14,7 +14,7 @@ var<workgroup> workgroup_indirect_draw_args: array<GPUDrawIndirectArgs, CFG_MAX_
 var<workgroup> workgroup_indirect_draw_args_count: atomic<u32>;
 var<workgroup> workgroup_max_entries: u32;
 
-@compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_1D, 1, 1)
+@compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_1D)
 fn write_culled_mdi(
     @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,

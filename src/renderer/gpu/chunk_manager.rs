@@ -145,6 +145,7 @@ impl ChunkManager {
         let (render_bind_group_layout, render_bind_group) =
             chunk_render_bind_group(&renderer.device, camera_buffer, &voxel_face_buffer);
 
+        // todo decent approximation for max visible chunks
         let aabb_visible_batch: GPUList<GPUChunkMeshEntry> =
             GPUList::with_capacity(1024, |first_entry, len| {
                 first_entry.index = len;
@@ -272,11 +273,11 @@ impl ChunkManager {
     ) {
         let in_view_count = self.aabb_visible_batch.len();
         if in_view_count != 0 {
-            // fixme temp
+            // maybe somehow reset the count buffer without a separate write call?
             renderer.write_buffer(
                 &renderer.indirect_count_buffer,
                 0,
-                bytemuck::cast_slice(&[0u32]),
+                bytemuck::bytes_of(&0u32),
             );
             renderer.write_buffer(
                 &self.aabb_visible_buffer,

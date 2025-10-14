@@ -1,12 +1,21 @@
 use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, ChunkAdjacentBlocks, ChunkBlocks};
-use bytemuck::{Pod, Zeroable, bytes_of};
-use glam::{IVec3, IVec4};
+use bytemuck::{Pod, Zeroable};
+use glam::IVec3;
 use voxer_macros::ShaderType;
 
 #[repr(C)]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPU4Bytes {
     pub data: u32,
+}
+
+#[repr(C, align(16))]
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUDrawIndirectArgs {
+    vertex_count: u32,
+    instance_count: u32,
+    first_vertex: u32,
+    first_instance: u32,
 }
 
 #[repr(C, align(4))]
@@ -25,15 +34,6 @@ impl GPUChunkMeshEntry {
             face_alloc,
         }
     }
-}
-
-#[repr(C, align(16))]
-#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
-pub struct GPUDrawIndirectArgs {
-    vertex_count: u32,
-    instance_count: u32,
-    first_vertex: u32,
-    first_instance: u32,
 }
 
 #[repr(C, align(4))]

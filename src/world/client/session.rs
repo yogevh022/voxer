@@ -1,14 +1,12 @@
 use crate::app::app_renderer::AppRenderer;
 use crate::compute;
 use crate::compute::array::Array3D;
-use crate::compute::geo::{
-    AABB, Frustum, Plane, chunk_to_world_pos, ivec3_with_adjacent_positions, world_to_chunk_pos,
-};
+use crate::compute::geo::{Plane, ivec3_with_adjacent_positions, world_to_chunk_pos};
 use crate::compute::throttler::Throttler;
 use crate::world::ClientWorldConfig;
 use crate::world::network::MAX_CHUNKS_PER_BATCH;
 use crate::world::session::PlayerSession;
-use crate::world::types::{CHUNK_DIM, Chunk};
+use crate::world::types::Chunk;
 use glam::IVec3;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
@@ -36,7 +34,7 @@ pub struct ClientWorldSession<'window> {
 impl<'window> ClientWorldSession<'window> {
     pub fn new(window: Arc<Window>, player: PlayerSession, config: ClientWorldConfig) -> Self {
         let mut chunks = FxHashMap::default();
-        chunks.reserve(config.render_distance.pow(3));
+        chunks.reserve((config.render_distance * 2).pow(3));
         Self {
             player,
             renderer: AppRenderer::new(window),
