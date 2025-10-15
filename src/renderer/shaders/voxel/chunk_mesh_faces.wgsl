@@ -35,7 +35,6 @@ struct VoxelFaceWriteArgs {
     fid: u32,
     mask: FaceDrawMask,
     data: GPUVoxelFaceData,
-    idx_pr_face_data: u32,
 }
 
 fn face_write_args(
@@ -46,8 +45,7 @@ fn face_write_args(
     face_position: vec3<u32>,
 ) -> VoxelFaceWriteArgs {
     let face_data = face_data(voxel, face_position, fid, ocl_count, draw_mask);
-    let idx_pr_face_data = draw_mask.draw * (pr_face_counts[fid] + VOID_OFFSET);
-    return VoxelFaceWriteArgs(fid, draw_mask, face_data, idx_pr_face_data);
+    return VoxelFaceWriteArgs(fid, draw_mask, face_data);
 }
 
 fn x_face_write_args(
@@ -84,7 +82,8 @@ fn z_face_write_args(
 }
 
 fn write_face(face_write_args: VoxelFaceWriteArgs) {
-    pr_face_data[face_write_args.fid][face_write_args.idx_pr_face_data] = face_write_args.data;
+    let face_data_idx = face_write_args.mask.draw * (pr_face_counts[face_write_args.fid] + VOID_OFFSET);
+    pr_face_data[face_write_args.fid][face_data_idx] = face_write_args.data;
     pr_face_counts[face_write_args.fid] += face_write_args.mask.draw;
 }
 

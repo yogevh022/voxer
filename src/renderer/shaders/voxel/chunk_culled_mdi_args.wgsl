@@ -41,17 +41,17 @@ fn write_culled_mdi(
     );
     let chunk_world_position = chunk_position_f32 * f32(CHUNK_DIM);
 
-    let visible_fids = visible_face_ids(camera_position, chunk_position_f32);
+    let fids_facing_camera = face_ids_facing_camera(camera_position, chunk_position_f32);
     let exists = draw_arg_index <= wg_max_entries;
     let within_render_distance = distance_within_threshold(chunk_world_position, camera_position, render_distance_voxels_f32);
     let within_view_frustum = frustum_check_chunk(chunk_world_position, chunk_world_position + f32(CHUNK_DIM));
 
-    if true || (exists && within_render_distance && within_view_frustum) {
+    if exists && within_render_distance && within_view_frustum {
         let face_counts = unpack_mesh_face_counts(mesh_entry);
         let face_offsets = mesh_face_counts_to_offsets(face_counts);
-        var arg_idx = atomicAdd(&wg_indirect_draw_args_count, visible_fids.count);
+        var arg_idx = atomicAdd(&wg_indirect_draw_args_count, fids_facing_camera.count);
         for (var fid = 0u; fid < 6u; fid++) {
-            if (visible_fids.draw_fid[fid]) {
+            if (fids_facing_camera.ids[fid] && face_counts[fid] > 0u) {
                 let draw_args = GPUDrawIndirectArgs(
                     face_counts[fid] * 6u,                              // vertex_count
                     1u,                                                 // instance_count
@@ -75,11 +75,11 @@ fn write_culled_mdi(
 }
 
 struct VisibleFaceIDs {
-    draw_fid: array<bool, 6>,
+    ids: array<bool, 6>,
     count: u32,
 }
 
-fn visible_face_ids(camera_position: vec3<f32>, chunk_position_f32: vec3<f32>) -> VisibleFaceIDs {
+fn face_ids_facing_camera(camera_position: vec3<f32>, chunk_position_f32: vec3<f32>) -> VisibleFaceIDs {
     let camera_chunk_position_f32: vec3<f32> = floor(camera_position / f32(CHUNK_DIM));
     let draw_px = chunk_position_f32.x <= camera_chunk_position_f32.x;
     let draw_mx = chunk_position_f32.x >= camera_chunk_position_f32.x;
@@ -88,12 +88,12 @@ fn visible_face_ids(camera_position: vec3<f32>, chunk_position_f32: vec3<f32>) -
     let draw_pz = chunk_position_f32.z <= camera_chunk_position_f32.z;
     let draw_mz = chunk_position_f32.z >= camera_chunk_position_f32.z;
 
-//    let masks = array<bool, 6>(draw_px, draw_mx, draw_py, draw_my, draw_pz, draw_mz);
-    let draw_fid = array<bool, 6>(false, false, true, false, false, false);
+//    let ids = array<bool, 6>(draw_px, draw_mx, draw_py, draw_my, draw_pz, draw_mz);
+    let ids = array<bool, 6>(false, false, true, false, true, false);
 //    let count = u32(draw_px) + u32(draw_mx) + u32(draw_py) + u32(draw_my) + u32(draw_pz) + u32(draw_mz);
-    let count = 1u;
+    let count = 2u;
 
-    return VisibleFaceIDs(draw_fid, count);
+    return VisibleFaceIDs(ids, count);
 }
 
 // fixme move to modular place

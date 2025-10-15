@@ -59,7 +59,7 @@ fn face_count_from_packed(
     }
     prep_adj_y(&packed_blocks, packed_adj_blocks[LAST_Y], ya, yb, LAST_X);
     prep_adj_z(packed_adj_blocks[LAST_Z], xb, zb);
-    let adj_x = as_sized_slice(&packed_adj_blocks[0..CHUNK_DIM]);
+    let adj_x = into_array_slice(&packed_adj_blocks[0..CHUNK_DIM]);
 
     let x_face_counts = bi_direction_face_counts(xb, adj_x);
     mesh_meta.negative_face_count.x += x_face_counts.0 as u16;
@@ -90,11 +90,8 @@ fn bi_direction_face_counts(a: &[u16; CHUNK_DIM], b: &[u16; CHUNK_DIM]) -> (u32,
     )
 }
 
-fn as_sized_slice<T, const N: usize>(slice: &[T]) -> &[T; N] {
-    unsafe {
-        let src = slice;
-        &*(src.as_ptr() as *const _)
-    }
+fn into_array_slice<T, const N: usize>(slice: &[T]) -> &[T; N] {
+    slice.try_into().unwrap()
 }
 
 #[inline(always)]
@@ -104,10 +101,8 @@ fn prep_adj_x(
     xb: &mut [u16; CHUNK_DIM],
     x: usize,
 ) {
-    let xa_slice = &packed_blocks[x * CHUNK_DIM..(x + 1) * CHUNK_DIM];
-    *xa = *as_sized_slice(xa_slice);
-    let xb_slice = &packed_blocks[(x + 1) * CHUNK_DIM..(x + 2) * CHUNK_DIM];
-    *xb = *as_sized_slice(xb_slice);
+    *xa = *into_array_slice(&packed_blocks[x * CHUNK_DIM..(x + 1) * CHUNK_DIM]);
+    *xb = *into_array_slice(&packed_blocks[(x + 1) * CHUNK_DIM..(x + 2) * CHUNK_DIM]);
 }
 
 #[inline(always)]
