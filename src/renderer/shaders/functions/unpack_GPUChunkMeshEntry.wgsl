@@ -1,27 +1,4 @@
-fn unpack_mesh_face_offsets(mesh_entry: GPUChunkMeshEntry) -> array<u32, 6> {
-    let px_count = mesh_entry.positive_face_count & 0x3FF;
-    let py_count = (mesh_entry.positive_face_count >> 10) & 0x3FF;
-    let pz_count = (mesh_entry.positive_face_count >> 20) & 0x3FF;
-
-    let mx_count = mesh_entry.negative_face_count & 0x3FF;
-    let my_count = (mesh_entry.negative_face_count >> 10) & 0x3FF;
-
-    let px = mesh_entry.face_alloc;
-    let mx = px + px_count;
-    let py = mx + mx_count;
-    let my = py + py_count;
-    let pz = my + my_count;
-    let mz = pz + pz_count;
-
-    return array<u32, 6>(px, mx, py, my, pz, mz);
-}
-
-struct UnpackedGPUChunkMeshFaceMeta {
-    offsets: array<u32, 6>,
-    counts: array<u32, 6>,
-}
-
-fn unpack_mesh_face_offsets_with_counts(mesh_entry: GPUChunkMeshEntry) -> UnpackedGPUChunkMeshFaceMeta {
+fn unpack_mesh_face_counts(mesh_entry: GPUChunkMeshEntry) -> array<u32, 6> {
     let px_count = mesh_entry.positive_face_count & 0x3FF;
     let py_count = (mesh_entry.positive_face_count >> 10) & 0x3FF;
     let pz_count = (mesh_entry.positive_face_count >> 20) & 0x3FF;
@@ -30,15 +7,16 @@ fn unpack_mesh_face_offsets_with_counts(mesh_entry: GPUChunkMeshEntry) -> Unpack
     let my_count = (mesh_entry.negative_face_count >> 10) & 0x3FF;
     let mz_count = (mesh_entry.negative_face_count >> 20) & 0x3FF;
 
-    let px = mesh_entry.face_alloc;
-    let mx = px + px_count;
-    let py = mx + mx_count;
-    let my = py + py_count;
-    let pz = my + my_count;
-    let mz = pz + pz_count;
+    return array<u32, 6>(px_count, mx_count, py_count, my_count, pz_count, mz_count);
+}
 
-    let offsets = array<u32, 6>(px, mx, py, my, pz, mz);
-    let counts = array<u32, 6>(px_count, mx_count, py_count, my_count, pz_count, mz_count);
+fn mesh_face_counts_to_offsets(counts: array<u32, 6>) -> array<u32, 6> {
+    let px_offset = 0u;
+    let mx_offset = counts[0];
+    let py_offset = mx_offset + counts[1];
+    let my_offset = py_offset + counts[2];
+    let pz_offset = my_offset + counts[3];
+    let mz_offset = pz_offset + counts[4];
 
-    return UnpackedGPUChunkMeshFaceMeta(offsets, counts);
+    return array<u32, 6>(px_offset, mx_offset, py_offset, my_offset, pz_offset, mz_offset);
 }

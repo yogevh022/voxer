@@ -126,7 +126,7 @@ impl<'window> Renderer<'window> {
 
         let indirect_buffer = vx_device.create_vx_buffer::<Shader20Bytes>(
             "Indirect Buffer",
-            (256 * compute::KIB as u64).try_into().unwrap(),
+            (8 * compute::MIB as u64).try_into().unwrap(),
             BufferUsages::INDIRECT | BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
 

@@ -80,19 +80,27 @@ impl<'window> ClientWorldSession<'window> {
         // fixme temp
         // fixme no enforcement of max_new_chunks
 
-        let q = IVec3::new(0, 0, 0);
-        let adj_blocks = Array3D(compute::chunk::get_adj_blocks(q, &self.chunks));
-        if let Some(chunk) = self.chunks.get(&q) {
-            let z = compute::chunk::face_count(&chunk.blocks, &adj_blocks);
-            println!("{:?}:", q);
-            let t = z.positive_face_count.element_sum() + z.negative_face_count.element_sum();
-            println!("P: {:?} N: {:?} T: {:?}", z.positive_face_count, z.negative_face_count, t);
-        }
-
         let player_ch_position = world_to_chunk_pos(self.player.location.position);
         self.lazy_chunk_gc(player_ch_position);
 
         let to_remesh = self.process_chunk_remesh_batch();
+
+        let cs = vec![
+            IVec3::new(-1, -1, 2),
+            IVec3::new(0, -1, 2),
+            IVec3::new(1, -1, 2),
+            IVec3::new(2, -1, 2),
+            IVec3::new(3, -1, 2),
+        ];
+        for c in cs {
+            if let Some(chunk) = self.chunks.get_mut(&c) {
+                let qq = compute::chunk::face_count(&chunk.blocks, &chunk.adjacent_blocks);
+                let qqa = qq.negative_face_count;
+                let qqb = qq.positive_face_count;
+                let qqc = qqa.as_uvec3().element_sum() + qqb.as_uvec3().element_sum();
+                println!("{:?}: N: {:?} P: {:?}: T: {}", c, qqa, qqb, qqc);
+            }
+        }
 
         let new_chunks = self
             .new_chunks
@@ -110,6 +118,14 @@ impl<'window> ClientWorldSession<'window> {
             .chunk_manager
             .update_view_chunks(&self.view_frustum, |ch_pos| {
                 if player_ch_position.distance_squared(ch_pos) > self.render_max_sq {
+                    return;
+                }
+                if ch_pos != IVec3::new(-1, -1, 2)
+                    && ch_pos != IVec3::new(0, -1, 2)
+                    && ch_pos != IVec3::new(1, -1, 2)
+                    && ch_pos != IVec3::new(2, -1, 2)
+                    && ch_pos != IVec3::new(3, -1, 2)
+                {
                     return;
                 }
                 if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {

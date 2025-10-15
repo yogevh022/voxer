@@ -3,7 +3,7 @@ const FACE_ID_BASE_Y: u32 = 3u;
 const FACE_ID_BASE_Z: u32 = 5u;
 
 fn face_data(
-    current_voxel: u32,
+    voxel: u32,
     face_position: vec3<u32>,
     fid: u32,
     ocl_count: vec4<u32>,
@@ -15,7 +15,7 @@ fn face_data(
     let word_b = cast_i24_to_u32(global_position.z) | (ocl_count.y << 30);
     let word_c = cast_i12_to_u32(global_position.y) | (ocl_count.w << 30);
     let word_d = (ocl_count.z << 30);
-    let word_e = current_voxel | (fid << 28);
+    let word_e = voxel | (fid << 28);
 
     return GPUVoxelFaceData(word_a, word_b, word_c, word_d, word_e);
 }
@@ -139,7 +139,7 @@ fn meshing_pass_at(x: u32, y: u32) {
     write_xyz_faces(this_voxel, &neighbors, face_position);
 
     for (var fid = 0u; fid < 6u; fid++) {
-        let offset: u32 = atomicAdd(&wg_buffer_write_offsets[fid], pr_face_counts[fid]);
+        let offset: u32 = atomicAdd(&wg_face_buffer_write_offsets[fid], pr_face_counts[fid]);
         for (var i = 0u; i < pr_face_counts[fid]; i++) {
             face_data_buffer[offset + i] = pr_face_data[fid][VOID_OFFSET + i];
         }

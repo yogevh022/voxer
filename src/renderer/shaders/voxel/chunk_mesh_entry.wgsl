@@ -7,7 +7,7 @@ var<storage, read_write> face_data_buffer: array<GPUVoxelFaceData>;
 @group(0) @binding(2)
 var<storage, read> mesh_queue_buffer: array<GPUChunkMeshEntry>;
 
-var<workgroup> wg_buffer_write_offsets: array<atomic<u32>, 6>;
+var<workgroup> wg_face_buffer_write_offsets: array<atomic<u32>, 6>;
 var<workgroup> wg_chunk_content: GPUVoxelChunkContent;
 var<workgroup> wg_chunk_adj_content: GPUVoxelChunkAdjContent;
 var<workgroup> wg_chunk_world_position: vec3<i32>;
@@ -23,13 +23,14 @@ fn mesh_chunks_entry(
     if (lid.x + lid.y == 0u) {
         let mesh_entry = mesh_queue_buffer[wid.x];
 
-        let face_offsets = unpack_mesh_face_offsets(mesh_entry);
-        atomicStore(&wg_buffer_write_offsets[0], face_offsets[0]);
-        atomicStore(&wg_buffer_write_offsets[1], face_offsets[1]);
-        atomicStore(&wg_buffer_write_offsets[2], face_offsets[2]);
-        atomicStore(&wg_buffer_write_offsets[3], face_offsets[3]);
-        atomicStore(&wg_buffer_write_offsets[4], face_offsets[4]);
-        atomicStore(&wg_buffer_write_offsets[5], face_offsets[5]);
+        let face_counts = unpack_mesh_face_counts(mesh_entry);
+        let face_offsets = mesh_face_counts_to_offsets(face_counts);
+        atomicStore(&wg_face_buffer_write_offsets[0], mesh_entry.face_alloc + face_offsets[0]);
+        atomicStore(&wg_face_buffer_write_offsets[1], mesh_entry.face_alloc + face_offsets[1]);
+        atomicStore(&wg_face_buffer_write_offsets[2], mesh_entry.face_alloc + face_offsets[2]);
+        atomicStore(&wg_face_buffer_write_offsets[3], mesh_entry.face_alloc + face_offsets[3]);
+        atomicStore(&wg_face_buffer_write_offsets[4], mesh_entry.face_alloc + face_offsets[4]);
+        atomicStore(&wg_face_buffer_write_offsets[5], mesh_entry.face_alloc + face_offsets[5]);
 
         wg_chunk_content = chunks_buffer[mesh_entry.index].content;
         wg_chunk_adj_content = chunks_buffer[mesh_entry.index].adj_content;

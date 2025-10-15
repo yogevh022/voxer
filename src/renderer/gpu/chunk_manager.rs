@@ -323,7 +323,7 @@ impl ChunkManager {
             0,
             &renderer.indirect_count_buffer,
             0,
-            32000, // fixme arbitrary number
+            1 << 16, // fixme arbitrary number
         );
     }
 
