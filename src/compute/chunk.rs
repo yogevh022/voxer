@@ -1,97 +1,117 @@
-use crate::compute;
-use crate::compute::array::Array3D;
+use crate::compute::array::{Array3D, array_and, array_not, array_pop_count_u16, array_xor};
 use crate::compute::bytes::bit_at;
-use crate::world::types::{VoxelBlock, BlockBytewise, CHUNK_DIM, CHUNK_SLICE, Chunk, ChunkBlocks, ChunkAdjacentBlocks};
-use glam::IVec3;
+use crate::world::types::{
+    BlockBytewise, CHUNK_DIM, CHUNK_SLICE, Chunk, ChunkAdjBlocks, ChunkBlocks, VoxelBlock,
+};
+use glam::{IVec3, U16Vec3};
 use rustc_hash::FxHashMap;
 use std::array;
 
-pub const TRANSPARENT_LAYER_BITS: [u16; CHUNK_DIM] = [0u16; CHUNK_DIM];
-pub const TRANSPARENT_LAYER_BLOCKS: [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] =
-    [[VoxelBlock { value: 0 }; CHUNK_DIM]; CHUNK_DIM];
-
-pub fn face_count(blocks: &ChunkBlocks, adjacent_blocks: &ChunkAdjacentBlocks) -> usize {
-    let next_adj_blocks = unsafe {
-        *adjacent_blocks.as_ptr().cast::<Array3D<VoxelBlock, 3, CHUNK_DIM, CHUNK_DIM>>()
-    };
-    let packed_blocks = pack_solid_blocks(blocks);
-    let packed_adjacent_blocks = pack_solid_blocks(&next_adj_blocks);
-
-    let faces = faces(packed_blocks, packed_adjacent_blocks);
-    faces.iter().map(|b| b.count_ones() as usize).sum::<usize>()
+#[derive(Debug, Default, Clone, Copy)]
+pub struct VoxelChunkMeshMeta {
+    pub positive_face_count: U16Vec3,
+    pub negative_face_count: U16Vec3,
 }
 
-fn faces(
-    packed_blocks: [u16; CHUNK_SLICE],
-    packed_adjacent_blocks: [u16; CHUNK_DIM * 3],
-) -> [u16; CHUNK_SLICE * 3] {
-    let mut result = [0u16; CHUNK_SLICE * 3];
-    let result_layers: &mut [[u16; CHUNK_DIM]; CHUNK_DIM * 3] =
-        unsafe { &mut *(result.as_mut_ptr() as *mut [[u16; CHUNK_DIM]; CHUNK_DIM * 3]) };
+pub fn face_count(blocks: &ChunkBlocks, adj_blocks: &ChunkAdjBlocks) -> VoxelChunkMeshMeta {
+    type ChunkPositiveAdjBlocks = Array3D<VoxelBlock, 3, CHUNK_DIM, CHUNK_DIM>;
+    let positive_adj_blocks = unsafe { *adj_blocks.as_ptr().cast::<ChunkPositiveAdjBlocks>() };
+    let packed_blocks = pack_solid_blocks(blocks);
+    let packed_adj_blocks = pack_solid_blocks(&positive_adj_blocks);
 
-    let mut xa = [0u16; CHUNK_DIM];
-    let mut xb = [0u16; CHUNK_DIM];
-    let mut ya = [0u16; CHUNK_DIM];
-    let mut yb = [0u16; CHUNK_DIM];
-    let mut zb = [0u16; CHUNK_DIM];
+    face_count_from_packed(packed_blocks, packed_adj_blocks)
+}
+
+fn face_count_from_packed(
+    packed_blocks: [u16; CHUNK_SLICE],
+    packed_adj_blocks: [u16; CHUNK_DIM * 3],
+) -> VoxelChunkMeshMeta {
+    let xa = &mut [0u16; CHUNK_DIM];
+    let xb = &mut [0u16; CHUNK_DIM];
+    let ya = &mut [0u16; CHUNK_DIM];
+    let yb = &mut [0u16; CHUNK_DIM];
+    let zb = &mut [0u16; CHUNK_DIM];
+
+    const Y_OFFSET: usize = CHUNK_DIM + CHUNK_DIM;
+    const Z_OFFSET: usize = CHUNK_DIM + CHUNK_DIM + CHUNK_DIM;
+    const LAST_X: usize = CHUNK_DIM - 1;
+    const LAST_Y: usize = Y_OFFSET - 1;
+    const LAST_Z: usize = Z_OFFSET - 1;
+
+    let mut mesh_meta = VoxelChunkMeshMeta::default();
 
     for i in 0..CHUNK_DIM - 1 {
-        adjacent_x(&packed_blocks, &mut xa, &mut xb, i);
-        adjacent_y(
-            &packed_blocks,
-            packed_adjacent_blocks[CHUNK_DIM + i],
-            &mut ya,
-            &mut yb,
-            i,
-        );
-        adjacent_z(
-            packed_adjacent_blocks[CHUNK_DIM + CHUNK_DIM + i],
-            &xa,
-            &mut zb,
-        );
+        prep_adj_x(&packed_blocks, xa, xb, i);
+        prep_adj_y(&packed_blocks, packed_adj_blocks[CHUNK_DIM + i], ya, yb, i);
+        prep_adj_z(packed_adj_blocks[Y_OFFSET + i], xa, zb);
 
-        result_layers[i] = compute::array::array_xor(&xa, &xb);
-        result_layers[CHUNK_DIM + i] = compute::array::array_xor(&ya, &yb);
-        result_layers[CHUNK_DIM + CHUNK_DIM + i] = compute::array::array_xor(&xa, &zb);
+        let x_face_counts = direction_face_counts(xa, xb);
+        mesh_meta.negative_face_count.x += x_face_counts.0 as u16;
+        mesh_meta.positive_face_count.x += x_face_counts.1 as u16;
+
+        let y_face_counts = direction_face_counts(ya, yb);
+        mesh_meta.negative_face_count.y += y_face_counts.0 as u16;
+        mesh_meta.positive_face_count.y += y_face_counts.1 as u16;
+
+        let z_face_counts = direction_face_counts(xa, zb);
+        mesh_meta.negative_face_count.z += z_face_counts.0 as u16;
+        mesh_meta.positive_face_count.z += z_face_counts.1 as u16;
     }
-    adjacent_y(
-        &packed_blocks,
-        packed_adjacent_blocks[CHUNK_DIM + CHUNK_DIM - 1],
-        &mut ya,
-        &mut yb,
-        CHUNK_DIM - 1,
-    );
-    adjacent_z(
-        packed_adjacent_blocks[CHUNK_DIM + CHUNK_DIM + CHUNK_DIM - 1],
-        &xb,
-        &mut zb,
-    );
-    result_layers[CHUNK_DIM - 1] = compute::array::array_xor(
-        &xb,
-        &packed_adjacent_blocks[0..CHUNK_DIM].try_into().unwrap(),
-    );
-    result_layers[CHUNK_DIM + CHUNK_DIM - 1] = compute::array::array_xor(&ya, &yb);
-    result_layers[CHUNK_DIM + CHUNK_DIM + CHUNK_DIM - 1] = compute::array::array_xor(&xb, &zb);
-    result
+    prep_adj_y(&packed_blocks, packed_adj_blocks[LAST_Y], ya, yb, LAST_X);
+    prep_adj_z(packed_adj_blocks[LAST_Z], xb, zb);
+    let adj_x = as_sized_slice(&packed_adj_blocks[0..CHUNK_DIM]);
+
+    let x_face_counts = direction_face_counts(xb, adj_x);
+    mesh_meta.negative_face_count.x += x_face_counts.0 as u16;
+    mesh_meta.positive_face_count.x += x_face_counts.1 as u16;
+
+    let y_face_counts = direction_face_counts(ya, yb);
+    mesh_meta.negative_face_count.y += y_face_counts.0 as u16;
+    mesh_meta.positive_face_count.y += y_face_counts.1 as u16;
+
+    let z_face_counts = direction_face_counts(xb, zb);
+    mesh_meta.negative_face_count.z += z_face_counts.0 as u16;
+    mesh_meta.positive_face_count.z += z_face_counts.1 as u16;
+
+    mesh_meta
+}
+
+fn direction_face_counts(a: &[u16; CHUNK_DIM], b: &[u16; CHUNK_DIM]) -> (u32, u32) {
+    let faces = array_xor(a, b);
+    let not_b = array_not(b);
+    let dirs = array_and(a, &not_b);
+    let not_dirs = array_not(&dirs);
+    let positive_faces = array_and(&faces, &dirs);
+    let negative_faces = array_and(&faces, &not_dirs);
+
+    (
+        array_pop_count_u16(&negative_faces),
+        array_pop_count_u16(&positive_faces),
+    )
+}
+
+fn as_sized_slice<T, const N: usize>(slice: &[T]) -> &[T; N] {
+    unsafe {
+        let src = slice;
+        &*(src.as_ptr() as *const _)
+    }
 }
 
 #[inline(always)]
-fn adjacent_x(
+fn prep_adj_x(
     packed_blocks: &[u16; CHUNK_SLICE],
     xa: &mut [u16; CHUNK_DIM],
     xb: &mut [u16; CHUNK_DIM],
     x: usize,
 ) {
-    *xa = packed_blocks[x * CHUNK_DIM..(x + 1) * CHUNK_DIM]
-        .try_into()
-        .unwrap();
-    *xb = packed_blocks[(x + 1) * CHUNK_DIM..(x + 2) * CHUNK_DIM]
-        .try_into()
-        .unwrap();
+    let xa_slice = &packed_blocks[x * CHUNK_DIM..(x + 1) * CHUNK_DIM];
+    *xa = *as_sized_slice(xa_slice);
+    let xb_slice = &packed_blocks[(x + 1) * CHUNK_DIM..(x + 2) * CHUNK_DIM];
+    *xb = *as_sized_slice(xb_slice);
 }
 
 #[inline(always)]
-fn adjacent_y(
+fn prep_adj_y(
     packed_blocks: &[u16; CHUNK_SLICE],
     packed_adjacent_blocks: u16,
     ya: &mut [u16; CHUNK_DIM],
@@ -107,7 +127,7 @@ fn adjacent_y(
 }
 
 #[inline(always)]
-fn adjacent_z(packed_adjacent_blocks: u16, xa: &[u16; CHUNK_DIM], zb: &mut [u16; CHUNK_DIM]) {
+fn prep_adj_z(packed_adjacent_blocks: u16, xa: &[u16; CHUNK_DIM], zb: &mut [u16; CHUNK_DIM]) {
     *zb = array::from_fn(|i| bit_at(packed_adjacent_blocks, i) << 15 | (xa[i] >> 1));
 }
 
@@ -129,6 +149,10 @@ fn pack_solid_blocks<const X: usize, const Y: usize, const Z: usize, const XY: u
 
     bytes
 }
+
+pub const TRANSPARENT_LAYER_BITS: [u16; CHUNK_DIM] = [0u16; CHUNK_DIM];
+pub const TRANSPARENT_LAYER_BLOCKS: [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] =
+    [[VoxelBlock { value: 0 }; CHUNK_DIM]; CHUNK_DIM];
 
 fn get_mx_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
     blocks[0]

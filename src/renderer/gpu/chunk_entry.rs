@@ -1,4 +1,4 @@
-use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, ChunkAdjacentBlocks, ChunkBlocks};
+use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, ChunkAdjBlocks, ChunkBlocks};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
 use voxer_macros::ShaderType;
@@ -22,31 +22,27 @@ pub struct GPUDrawIndirectArgs {
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkMeshEntry {
     pub index: u32,
-    positive_face_count: u32,
-    // x: 11b,
-    // y: 11b,
+    pub negative_face_count: u32,
+    // x: 10b,
+    // y: 10b,
     // z: 10b,
-    negative_face_count: u32,
-    // x: 11b,
-    // y: 11b,
+    // free :2b,
+    pub positive_face_count: u32,
+    // x: 10b,
+    // y: 10b,
     // z: 10b,
-    face_alloc: u32,
-    // positive_z_last_bit: 1b
-    // negative_z_last_bit: 1b
-    // face_alloc: 30b
+    // free :2b,
+    pub face_alloc: u32,
 }
 
 impl GPUChunkMeshEntry {
-    pub fn new(index: u32, face_count: u32, face_alloc: u32) -> Self {
+    pub fn new(index: u32, negative_face_count: u32, positive_face_count: u32, face_alloc: u32) -> Self {
         Self {
             index,
-            face_count,
+            negative_face_count,
+            positive_face_count,
             face_alloc,
         }
-    }
-
-    pub fn face_alloc(&self) -> u32 {
-        self.face_alloc >> 2
     }
 }
 
@@ -93,7 +89,7 @@ pub struct GPUVoxelChunk {
 }
 
 impl GPUVoxelChunk {
-    pub fn new(header: GPUVoxelChunkHeader, adj: ChunkAdjacentBlocks, blocks: ChunkBlocks) -> Self {
+    pub fn new(header: GPUVoxelChunkHeader, adj: ChunkAdjBlocks, blocks: ChunkBlocks) -> Self {
         let gpu_content: GPUVoxelChunkContent = unsafe { std::mem::transmute(blocks) };
         let gpu_adj_content: GPUVoxelChunkAdjContent = unsafe { std::mem::transmute(adj) };
         Self {

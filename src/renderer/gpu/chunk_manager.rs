@@ -184,8 +184,8 @@ impl ChunkManager {
     }
 
     fn insert_chunk(&mut self, chunk: &Chunk) -> GPUVoxelChunk {
-        let face_count = chunk.face_count.unwrap() as u32;
-        let mesh_state = ChunkMeshState::Unmeshed(face_count);
+        let mesh_meta = chunk.mesh_meta.unwrap();
+        let mesh_state = ChunkMeshState::new_unmeshed(mesh_meta);
         let chunk_index = self.gpu_cached.insert(chunk.position, mesh_state);
         let header = GPUVoxelChunkHeader::new(chunk_index as u32, chunk.position);
         GPUVoxelChunk::new(header, chunk.adjacent_blocks, chunk.blocks)
@@ -244,15 +244,15 @@ impl ChunkManager {
                     ChunkMeshState::Meshed(mesh_entry) => {
                         self.aabb_visible_batch.push(*mesh_entry);
                     }
-                    ChunkMeshState::Unmeshed(face_count) => {
-                        let face_count = *face_count;
+                    ChunkMeshState::Unmeshed {
+                        total_face_count, ..
+                    } => {
+                        let face_count = *total_face_count;
                         if face_count == 0 {
                             return;
                         }
-                        let allocation = self.gpu_mesh_allocator.allocate(face_count);
-                        // err means no space in mesh buffer
-                        if let Ok(allocation) = allocation {
-                            render_mesh_state.set_meshed(chunk_index as u32, allocation);
+                        if let Ok(allocation) = self.gpu_mesh_allocator.allocate(face_count) {
+                            render_mesh_state.set_as_meshed(chunk_index as u32, allocation);
                             let mesh_entry = render_mesh_state.mesh_entry();
                             self.meshing_batch.push(*mesh_entry);
                             self.aabb_visible_batch.push(*mesh_entry);
@@ -306,9 +306,10 @@ impl ChunkManager {
     pub fn drop_chunk(&mut self, position: &IVec3) {
         let (_, mesh_state) = self.gpu_cached.remove(position).unwrap();
         if let ChunkMeshState::Meshed(mesh_entry) = mesh_state {
-            self.gpu_mesh_allocator
-                .deallocate(mesh_entry.face_alloc)
-                .unwrap();
+            // fixme
+            // self.gpu_mesh_allocator
+            //     .deallocate(mesh_entry.face_alloc)
+            //     .unwrap();
         }
     }
 
@@ -330,29 +331,29 @@ impl ChunkManager {
         self.gpu_cached.get(position).is_some()
     }
 
-    pub fn gpu_mesh_mem_debug_throttled(&self) {
-        use crate::call_every;
-
-        // the blob clears cli
-        let capacity = self.gpu_mesh_allocator.capacity();
-        let free_percent = (self.gpu_mesh_allocator.free() as f32 / capacity as f32) * 100.0;
-        call_every!(ALLOC_DBG, 50, || println!(
-            "\x1B[2J\x1B[1;1Hfree: {:>3.1}% capacity: {}",
-            free_percent, capacity,
-        ));
-    }
-
-    pub fn gpu_cache_mem_debug_throttled(&self) {
-        use crate::call_every;
-
-        // the blob clears cli
-        let capacity = self.gpu_cached.capacity();
-        let free_percent = (self.gpu_cached.free() as f32 / capacity as f32) * 100.0;
-        call_every!(ALLOC_DBG, 50, || println!(
-            "\x1B[2J\x1B[1;1Hfree: {:>3.1}% capacity: {}",
-            free_percent, capacity,
-        ));
-    }
+    // pub fn gpu_mesh_mem_debug_throttled(&self) {
+    //     use crate::call_every;
+    //
+    //     // the blob clears cli
+    //     let capacity = self.gpu_mesh_allocator.capacity();
+    //     let free_percent = (self.gpu_mesh_allocator.free() as f32 / capacity as f32) * 100.0;
+    //     call_every!(ALLOC_DBG, 50, || println!(
+    //         "\x1B[2J\x1B[1;1Hfree: {:>3.1}% capacity: {}",
+    //         free_percent, capacity,
+    //     ));
+    // }
+    //
+    // pub fn gpu_cache_mem_debug_throttled(&self) {
+    //     use crate::call_every;
+    //
+    //     // the blob clears cli
+    //     let capacity = self.gpu_cached.capacity();
+    //     let free_percent = (self.gpu_cached.free() as f32 / capacity as f32) * 100.0;
+    //     call_every!(ALLOC_DBG, 50, || println!(
+    //         "\x1B[2J\x1B[1;1Hfree: {:>3.1}% capacity: {}",
+    //         free_percent, capacity,
+    //     ));
+    // }
 }
 
 fn chunk_render_bind_group(
@@ -521,7 +522,7 @@ fn culled_mdi_args_pipeline(
 ) -> ComputePipeline {
     let shader = resources::shader::create_shader(
         device,
-        resources::shader::chunk_draw_args_wgsl().into(),
+        resources::shader::chunk_culled_mdi_args_wgsl().into(),
         "Chunk Culled MDI Args Pipeline Shader",
     );
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {

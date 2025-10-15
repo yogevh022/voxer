@@ -80,6 +80,15 @@ impl<'window> ClientWorldSession<'window> {
         // fixme temp
         // fixme no enforcement of max_new_chunks
 
+        let q = IVec3::new(0, 0, 0);
+        let adj_blocks = Array3D(compute::chunk::get_adj_blocks(q, &self.chunks));
+        if let Some(chunk) = self.chunks.get(&q) {
+            let z = compute::chunk::face_count(&chunk.blocks, &adj_blocks);
+            println!("{:?}:", q);
+            let t = z.positive_face_count.element_sum() + z.negative_face_count.element_sum();
+            println!("P: {:?} N: {:?} T: {:?}", z.positive_face_count, z.negative_face_count, t);
+        }
+
         let player_ch_position = world_to_chunk_pos(self.player.location.position);
         self.lazy_chunk_gc(player_ch_position);
 
@@ -137,7 +146,7 @@ impl<'window> ClientWorldSession<'window> {
     fn update_chunk_mesh_data(&mut self, position: IVec3) -> bool {
         let adj_blocks = Array3D(compute::chunk::get_adj_blocks(position, &self.chunks));
         if let Some(chunk) = self.chunks.get_mut(&position) {
-            chunk.face_count = Some(compute::chunk::face_count(&chunk.blocks, &adj_blocks));
+            chunk.mesh_meta = Some(compute::chunk::face_count(&chunk.blocks, &adj_blocks));
             chunk.adjacent_blocks = adj_blocks;
             return true;
         }

@@ -1,16 +1,49 @@
+use crate::compute::chunk::VoxelChunkMeshMeta;
 use crate::renderer::gpu::GPUChunkMeshEntry;
 
 #[derive(Debug, Clone)]
 pub enum ChunkMeshState {
     Meshed(GPUChunkMeshEntry),
-    Unmeshed(u32),
+    Unmeshed {
+        negative_face_counts: u32,
+        positive_face_counts: u32,
+        total_face_count: u32,
+    },
 }
 
 impl ChunkMeshState {
-    pub fn set_meshed(&mut self, index: u32, allocation: u32) {
+    pub fn new_unmeshed(mesh_meta: VoxelChunkMeshMeta) -> Self {
+        let negative_uvec3 = mesh_meta.negative_face_count.as_uvec3();
+        let positive_uvec3 = mesh_meta.positive_face_count.as_uvec3();
+
+        let total_face_count = negative_uvec3.element_sum() + positive_uvec3.element_sum();
+
+        let negative_face_counts: u32 =
+            negative_uvec3.x | negative_uvec3.y << 10 | negative_uvec3.z << 20;
+
+        let positive_face_counts: u32 =
+            positive_uvec3.x | positive_uvec3.y << 10 | positive_uvec3.z << 20;
+
+        Self::Unmeshed {
+            negative_face_counts,
+            positive_face_counts,
+            total_face_count,
+        }
+    }
+
+    pub fn set_as_meshed(&mut self, index: u32, allocation: u32) {
         match self {
-            ChunkMeshState::Unmeshed(face_count) => {
-                let mesh_entry = GPUChunkMeshEntry::new(index, *face_count, allocation);
+            ChunkMeshState::Unmeshed {
+                negative_face_counts,
+                positive_face_counts,
+                ..
+            } => {
+                let mesh_entry = GPUChunkMeshEntry::new(
+                    index,
+                    *negative_face_counts,
+                    *positive_face_counts,
+                    allocation,
+                );
                 *self = ChunkMeshState::Meshed(mesh_entry);
             }
             ChunkMeshState::Meshed(_) => unreachable!(),
@@ -20,7 +53,7 @@ impl ChunkMeshState {
     pub fn mesh_entry(&self) -> &GPUChunkMeshEntry {
         match self {
             ChunkMeshState::Meshed(entry) => entry,
-            ChunkMeshState::Unmeshed(_) => unreachable!(),
+            ChunkMeshState::Unmeshed { .. } => unreachable!(),
         }
     }
 }
