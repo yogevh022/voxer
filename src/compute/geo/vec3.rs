@@ -44,12 +44,12 @@ impl Iterator for IVec3Iter {
 
 pub fn ivec3_with_adjacent_positions(origin: IVec3) -> [IVec3; 7] {
     const ADJ_OFFSETS: [IVec3; 6] = [
-        IVec3::new(-1, 0, 0),
-        IVec3::new(0, -1, 0),
-        IVec3::new(0, 0, -1),
         IVec3::new(1, 0, 0),
         IVec3::new(0, 1, 0),
         IVec3::new(0, 0, 1),
+        IVec3::new(-1, 0, 0),
+        IVec3::new(0, -1, 0),
+        IVec3::new(0, 0, -1),
     ];
     let mut result: [MaybeUninit<IVec3>; 7] = unsafe { MaybeUninit::uninit().assume_init() };
     for i in 0..6 {

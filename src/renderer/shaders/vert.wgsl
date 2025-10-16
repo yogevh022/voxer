@@ -18,7 +18,7 @@ fn vs_main(
     var out: VertexOutput;
     let current_vertex = base_vertex + draw_vertex_index;
     let face_index = current_vertex / 6;
-    let vertex_index = QUAD_INDICES[current_vertex % 6];
+    let vertex_index = QUAD_INDICES[draw_vertex_index % 6];
 
     let face_data = face_data_buffer[face_index];
     let face_voxel = unpack_face_voxel(face_data);

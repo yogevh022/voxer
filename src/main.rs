@@ -14,7 +14,7 @@ use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
 fn run_app() {
-    const SIMULATION_AND_RENDER_DISTANCE: usize = 8;
+    const SIMULATION_AND_RENDER_DISTANCE: usize = 16;
 
     let server_config = ServerWorldConfig {
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
@@ -49,6 +49,7 @@ fn main() {
 
 fn debug() {
     use crate::compute::geo::IVec3Iter;
+    use crate::compute;
     use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelFaceData, GPUVoxelChunkContent};
     use glam::IVec3;
     use rustc_hash::{FxHashMap, FxHashSet};
@@ -58,10 +59,4 @@ fn debug() {
     use std::time::Duration;
     use std::time::Instant;
 
-    dbg!(
-        size_of::<GPUVoxelChunk>(),
-        size_of::<GPUVoxelChunkAdjContent>(),
-        size_of::<GPUVoxelChunkContent>(),
-        size_of::<GPUVoxelFaceData>(),
-    );
 }

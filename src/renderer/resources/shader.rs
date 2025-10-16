@@ -74,6 +74,7 @@ include_shaders!(
     F_WORLD => "functions/world.wgsl",
     F_BITWISE => "functions/bitwise.wgsl",
     F_THREAD_MAPPING => "functions/thread_mapping.wgsl",
+    F_UNPACK_GPU_CHUNK_MESH_ENTRY => "functions/unpack_GPUChunkMeshEntry.wgsl",
 );
 
 // voxel
@@ -85,6 +86,12 @@ include_shaders!(
     VOXEL_CHUNK_WRITE_ENTRY => "voxel/chunk_scattered_write.wgsl",
     VOXEL_CHUNK_CULL_ENTRY => "voxel/chunk_culled_mdi_args.wgsl",
 );
+
+fn globals() -> String {
+    include_shader_consts!(
+        VOID_OFFSET: u32 = 1;
+    )
+}
 
 fn cfg_constants() -> String {
     include_shader_consts!(
@@ -141,23 +148,27 @@ pub fn chunk_meshing_wgsl() -> String {
     concat_shaders!(
         &cfg_constants(),
         &voxel_common(),
+        &globals(),
         VOXEL_CHUNK_MESH_ENTRY,
         VOXEL_CHUNK_MESH_FACES,
         VOXEL_CHUNK_MESH_VAO,
         F_WORLD,
         F_BITWISE,
+        F_UNPACK_GPU_CHUNK_MESH_ENTRY,
     )
 }
 
-pub fn chunk_draw_args_wgsl() -> String {
+pub fn chunk_culled_mdi_args_wgsl() -> String {
     concat_shaders!(
         &cfg_constants(),
         &meta_types(),
         &geo_types(),
         &voxel_common(),
+        &globals(),
+        VOXEL_CHUNK_CULL_ENTRY,
         F_BITWISE,
         F_THREAD_MAPPING,
-        VOXEL_CHUNK_CULL_ENTRY,
+        F_UNPACK_GPU_CHUNK_MESH_ENTRY,
     )
 }
 

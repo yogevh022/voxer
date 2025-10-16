@@ -137,7 +137,7 @@ impl<'window> ClientWorldSession<'window> {
     fn update_chunk_mesh_data(&mut self, position: IVec3) -> bool {
         let adj_blocks = Array3D(compute::chunk::get_adj_blocks(position, &self.chunks));
         if let Some(chunk) = self.chunks.get_mut(&position) {
-            chunk.face_count = Some(compute::chunk::face_count(&chunk.blocks, &adj_blocks));
+            chunk.mesh_meta = Some(compute::chunk::face_count(&chunk.blocks, &adj_blocks));
             chunk.adjacent_blocks = adj_blocks;
             return true;
         }
