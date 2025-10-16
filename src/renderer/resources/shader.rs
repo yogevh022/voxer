@@ -89,7 +89,7 @@ include_shaders!(
 
 fn globals() -> String {
     include_shader_consts!(
-        VOID_OFFSET: u32 = 0;
+        VOID_OFFSET: u32 = 1;
     )
 }
 

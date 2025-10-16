@@ -76,15 +76,17 @@ fn z_face_write_args(
     face_position: vec3<u32>,
 ) -> VoxelFaceWriteArgs {
     let draw_mask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[1][1][2]);
-    let fid = FACE_ID_BASE_Z - draw_mask.dir;
+    let fid: u32 = FACE_ID_BASE_Z - draw_mask.dir;
     let ocl_count = occlusion_count_z(neighbors)[draw_mask.dir];
     return face_write_args(voxel, draw_mask, fid, ocl_count, face_position);
 }
 
 fn write_face(face_write_args: VoxelFaceWriteArgs) {
-    let face_data_idx = face_write_args.mask.draw * (pr_face_counts[face_write_args.fid] + VOID_OFFSET);
-    pr_face_data[face_write_args.fid][face_data_idx] = face_write_args.data;
-    pr_face_counts[face_write_args.fid] += face_write_args.mask.draw;
+    let fid = face_write_args.fid;
+    let draw = face_write_args.mask.draw;
+    let fid_data_idx = draw * (pr_face_counts[fid] + VOID_OFFSET);
+    pr_face_data[fid][fid_data_idx] = face_write_args.data;
+    pr_face_counts[fid] += draw;
 }
 
 fn write_xyz_faces(
@@ -107,8 +109,8 @@ fn meshing_pass_at(x: u32, y: u32) {
     let my = max(y, 1) - 1;
     var neighbors: array<array<array<u32, 3>, 3>, 3>;
 
-    var first_voxel = vec3<bool>(x == 0, y == 0, false);
-    var last_voxel = vec3<bool>(x == CHUNK_DIM - 1, y == CHUNK_DIM - 1, false);
+    var first_voxel = vec2<bool>(x == 0, y == 0);
+    var last_voxel = vec2<bool>(x == CHUNK_DIM - 1, y == CHUNK_DIM - 1);
     var face_position = vec3<u32>(x, y, 0);
     var this_voxel: u32;
 
@@ -124,17 +126,14 @@ fn meshing_pass_at(x: u32, y: u32) {
 
     // xy at first z
     face_position.z = 0;
-    first_voxel.z = true;
     neighbors = voxel_neighbors_first_z(first_voxel, last_voxel, mx, x, px, my, y, py);
     this_voxel = get_u16(wg_chunk_content.blocks[x][y][0], 0);
     write_xyz_faces(this_voxel, &neighbors, face_position);
 
     // xy at last z
     face_position.z = CHUNK_DIM - 1;
-    first_voxel.z = false;
-    last_voxel.z = true;
     neighbors = voxel_neighbors_last_z(first_voxel, last_voxel, mx, x, px, my, y, py);
-    this_voxel = get_u16(wg_chunk_content.blocks[x][y][(CHUNK_DIM - 1) / 2], 1);
+    this_voxel = get_u16(wg_chunk_content.blocks[x][y][CHUNK_DIM_HALF - 1], 1);
     write_xyz_faces(this_voxel, &neighbors, face_position);
 
     for (var fid = 0u; fid < 6u; fid++) {
@@ -210,8 +209,8 @@ fn opaque_bit_of_packed(voxel: u32, packed_bit_pos: u32) -> u32 {
 }
 
 fn voxel_neighbors_safe_z(
-    first_voxel: vec3<bool>,
-    last_voxel: vec3<bool>,
+    first_voxel: vec2<bool>,
+    last_voxel: vec2<bool>,
     mx: u32,
     x: u32,
     px: u32,
@@ -264,8 +263,8 @@ fn voxel_neighbors_safe_z(
 }
 
 fn voxel_neighbors_first_z(
-    first_voxel: vec3<bool>,
-    last_voxel: vec3<bool>,
+    first_voxel: vec2<bool>,
+    last_voxel: vec2<bool>,
     mx: u32,
     x: u32,
     px: u32,
@@ -313,8 +312,8 @@ fn voxel_neighbors_first_z(
 }
 
 fn voxel_neighbors_last_z(
-    first_voxel: vec3<bool>,
-    last_voxel: vec3<bool>,
+    first_voxel: vec2<bool>,
+    last_voxel: vec2<bool>,
     mx: u32,
     x: u32,
     px: u32,
