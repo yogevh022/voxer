@@ -5,13 +5,13 @@ use crate::renderer::resources;
 use crate::renderer::resources::texture::get_atlas_image;
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::vtypes::Camera;
-use crate::world::types::{Chunk, CHUNK_DIM};
+use crate::world::types::CHUNK_DIM;
 use bytemuck::{Pod, Zeroable};
-use glam::{IVec3, Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec4};
 use std::borrow::Cow;
 use std::sync::Arc;
 use voxer_macros::ShaderType;
-use wgpu::{BindGroup, BufferUsages, CommandEncoder, ComputePass, RenderPipeline};
+use wgpu::{BindGroup, BufferUsages, CommandEncoder, RenderPipeline};
 use winit::window::Window;
 use crate::renderer::resources::shader::{MAX_WORKGROUP_DIM_1D, MAX_WORKGROUP_DIM_2D};
 
@@ -95,7 +95,7 @@ impl AppRenderer<'_> {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.atlas_bind_group, &[]);
 
-        self.chunk_manager.draw(&self.renderer, render_pass);
+        self.chunk_manager.render_chunks(&self.renderer, render_pass);
     }
 
     pub fn submit_render_pass(

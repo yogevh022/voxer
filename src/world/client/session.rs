@@ -24,11 +24,10 @@ pub struct ClientWorldSession<'window> {
 
     chunk_request_throttler: Throttler,
     chunk_request_batch: Vec<IVec3>,
-    chunk_render_batch: Vec<Chunk>,
 
     lazy_chunk_positions: Vec<IVec3>,
 
-    new_chunks: Vec<IVec3>,
+    chunk_meshing_batch: FxHashSet<IVec3>,
 }
 
 impl<'window> ClientWorldSession<'window> {
@@ -43,14 +42,14 @@ impl<'window> ClientWorldSession<'window> {
             render_max_sq: (config.render_distance as i32).pow(2),
             chunk_request_throttler: Throttler::new((1 << 18) + 1, Duration::from_millis(200)),
             chunk_request_batch: Vec::new(),
-            chunk_render_batch: Vec::new(),
             lazy_chunk_positions: Vec::new(),
-            new_chunks: Vec::new(),
+            chunk_meshing_batch: FxHashSet::default(),
         }
     }
 
     pub fn add_new_chunk(&mut self, chunk: Chunk) {
-        self.new_chunks.push(chunk.position);
+        self.chunk_meshing_batch
+            .extend(ivec3_with_adjacent_positions(chunk.position));
         self.chunks.insert(chunk.position, chunk);
     }
 
@@ -77,29 +76,24 @@ impl<'window> ClientWorldSession<'window> {
     }
 
     pub fn tick(&mut self, encoder: &mut CommandEncoder) {
-        // fixme temp
-        // fixme no enforcement of max_new_chunks
-
         let player_ch_position = world_to_chunk_pos(self.player.location.position);
         self.lazy_chunk_gc(player_ch_position);
 
-        let to_remesh = self.process_chunk_remesh_batch();
-
-        let new_chunks = self
-            .new_chunks
-            .drain(..)
-            .chain(to_remesh.into_iter())
-            .map(|p| self.chunks.get(&p).unwrap().clone())
-            .collect::<Vec<_>>();
-
-        self.renderer.chunk_manager.prepare_gpu_chunk_writes(&new_chunks);
-
-        self.chunk_request_batch.clear();
-        self.chunk_request_throttler.set_now(Instant::now());
+        let max_write = self.renderer.chunk_manager.config.max_write_count;
+        let mesh_positions = self.prepare_meshing_positions(max_write);
+        let mesh_chunks_refs = mesh_positions
+            .into_iter()
+            .map(|p| self.chunks.get(&p).unwrap());
 
         self.renderer
             .chunk_manager
-            .prepare_visible_chunks(&self.view_frustum, |ch_pos| {
+            .prepare_chunk_writes(mesh_chunks_refs);
+
+        self.chunk_request_batch.clear();
+        self.chunk_request_throttler.set_now(Instant::now());
+        self.renderer
+            .chunk_manager
+            .prepare_chunk_visibility(&self.view_frustum, |ch_pos| {
                 if player_ch_position.distance_squared(ch_pos) > self.render_max_sq {
                     return;
                 }
@@ -117,21 +111,18 @@ impl<'window> ClientWorldSession<'window> {
         });
         self.renderer
             .chunk_manager
-            .encode_gpu_chunk_writes(&self.renderer.renderer, &mut compute_pass);
+            .compute_chunk_writes(&self.renderer.renderer, &mut compute_pass);
         self.renderer
             .chunk_manager
-            .encode_gpu_view_chunks(&self.renderer.renderer, &mut compute_pass);
+            .compute_chunk_visibility_and_meshing(&self.renderer.renderer, &mut compute_pass);
     }
 
-    fn process_chunk_remesh_batch(&mut self) -> FxHashSet<IVec3> {
-        let mut positions: FxHashSet<_> = self
-            .new_chunks
-            .drain(..)
-            .map(|p| ivec3_with_adjacent_positions(p))
-            .flatten()
-            .collect();
-        positions.retain(|p| self.update_chunk_mesh_data(*p));
-        positions
+    fn prepare_meshing_positions(&mut self, count: usize) -> Vec<IVec3> {
+        let meshing_positions: Vec<IVec3> = self.chunk_meshing_batch.drain().take(count).collect();
+        meshing_positions
+            .into_iter()
+            .filter(|p| self.update_chunk_mesh_data(*p))
+            .collect()
     }
 
     fn update_chunk_mesh_data(&mut self, position: IVec3) -> bool {

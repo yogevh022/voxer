@@ -93,7 +93,7 @@ impl<'window> Renderer<'window> {
     }
 
     pub fn new(window: Arc<Window>) -> Self {
-        let instance = Renderer::instance(Backends::VULKAN); // fixme dx12?
+        let instance = Renderer::instance(Backends::VULKAN);
         let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = Renderer::high_perf_adapter(&instance, &surface);
         let (device, queue) = Renderer::request_device(

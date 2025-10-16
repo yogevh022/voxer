@@ -27,7 +27,7 @@ pub struct ChunkManagerConfig {
 }
 
 pub struct ChunkManager {
-    config: ChunkManagerConfig,
+    pub config: ChunkManagerConfig,
 
     // gpu state
     gpu_mesh_allocator: SubAllocator,
@@ -187,6 +187,10 @@ impl ChunkManager {
         }
     }
 
+    fn is_chunk_cached(&self, position: &IVec3) -> bool {
+        self.gpu_cached.get(position).is_some()
+    }
+
     fn cache_chunk(&mut self, chunk: &Chunk) -> GPUVoxelChunk {
         let mesh_meta = chunk.mesh_meta.unwrap();
         let mesh_state = ChunkMeshState::new_unmeshed(mesh_meta);
@@ -195,44 +199,7 @@ impl ChunkManager {
         GPUVoxelChunk::new(header, chunk.adjacent_blocks, chunk.blocks)
     }
 
-    fn is_chunk_cached(&self, position: &IVec3) -> bool {
-        self.gpu_cached.get(position).is_some()
-    }
-
-    pub fn prepare_gpu_chunk_writes(&mut self, chunks: &[Chunk]) {
-        debug_assert!(chunks.len() <= self.config.max_write_count);
-        self.write_batch.clear();
-        for chunk in chunks {
-            if self.is_chunk_cached(&chunk.position) {
-                self.drop_chunk(&chunk.position);
-            }
-            let gpu_chunk = self.cache_chunk(chunk);
-            self.write_batch.push(gpu_chunk);
-        }
-    }
-
-    pub fn encode_gpu_chunk_writes(
-        &mut self,
-        renderer: &Renderer<'_>,
-        compute_pass: &mut ComputePass,
-    ) {
-        if self.write_batch.is_empty() {
-            return;
-        }
-        renderer.write_buffer(
-            &self.write_batch_buffer,
-            0,
-            bytemuck::cast_slice(&self.write_batch),
-        );
-        compute_pass.set_pipeline(&self.write_pipeline);
-        compute_pass.set_bind_group(0, &self.write_bind_group, &[]);
-        let batch_size = self.write_batch.len() as u32;
-        compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
-        let wg_count = dispatch_count_1d(batch_size, self.config.max_workgroup_size_1d);
-        compute_pass.dispatch_workgroups(wg_count, 1, 1);
-    }
-
-    fn chunk_mesh_entry(
+    fn prepare_chunk_mesh_entry(
         &mut self,
         chunk_position: &IVec3,
     ) -> Result<GPUChunkMeshEntry, MeshStateError> {
@@ -253,7 +220,18 @@ impl ChunkManager {
         }
     }
 
-    pub fn prepare_visible_chunks(
+    pub fn prepare_chunk_writes<'a>(&mut self, chunks: impl Iterator<Item = &'a Chunk>) {
+        self.write_batch.clear();
+        for chunk in chunks.take(self.config.max_write_count) {
+            if self.is_chunk_cached(&chunk.position) {
+                self.drop_chunk(&chunk.position);
+            }
+            let gpu_chunk = self.cache_chunk(chunk);
+            self.write_batch.push(gpu_chunk);
+        }
+    }
+
+    pub fn prepare_chunk_visibility(
         &mut self,
         view_planes: &[Plane; 6],
         mut missing_chunk: impl FnMut(IVec3),
@@ -264,7 +242,7 @@ impl ChunkManager {
 
         self.aabb_visible_batch.clear();
         frustum_aabb.discrete_points(|ch_pos| {
-            match self.chunk_mesh_entry(&ch_pos) {
+            match self.prepare_chunk_mesh_entry(&ch_pos) {
                 Ok(chunk_mesh_entry) => {
                     self.aabb_visible_batch.push(chunk_mesh_entry);
                 }
@@ -274,7 +252,28 @@ impl ChunkManager {
         });
     }
 
-    pub fn encode_gpu_view_chunks(
+    pub fn compute_chunk_writes(
+        &mut self,
+        renderer: &Renderer<'_>,
+        compute_pass: &mut ComputePass,
+    ) {
+        if self.write_batch.is_empty() {
+            return;
+        }
+        renderer.write_buffer(
+            &self.write_batch_buffer,
+            0,
+            bytemuck::cast_slice(&self.write_batch),
+        );
+        compute_pass.set_pipeline(&self.write_pipeline);
+        compute_pass.set_bind_group(0, &self.write_bind_group, &[]);
+        let batch_size = self.write_batch.len() as u32;
+        compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
+        let wg_count = dispatch_count_1d(batch_size, self.config.max_workgroup_size_1d);
+        compute_pass.dispatch_workgroups(wg_count, 1, 1);
+    }
+
+    pub fn compute_chunk_visibility_and_meshing(
         &mut self,
         renderer: &Renderer<'_>,
         compute_pass: &mut ComputePass,
@@ -318,7 +317,7 @@ impl ChunkManager {
         }
     }
 
-    pub fn draw(&mut self, renderer: &Renderer<'_>, render_pass: &mut RenderPass) {
+    pub fn render_chunks(&mut self, renderer: &Renderer<'_>, render_pass: &mut RenderPass) {
         if self.aabb_visible_batch.is_empty() {
             return;
         }
