@@ -1,28 +1,48 @@
+use crate::compute::geo::{Frustum, Plane};
 use crate::renderer::Renderer;
-use crate::renderer::gpu::chunk_manager::ChunkManager;
+use crate::renderer::gpu::chunk_manager::{ChunkManager, ChunkManagerConfig};
 use crate::renderer::resources;
 use crate::renderer::resources::texture::get_atlas_image;
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::vtypes::Camera;
-use crate::world::types::Chunk;
+use crate::world::types::{Chunk, CHUNK_DIM};
 use bytemuck::{Pod, Zeroable};
-use glam::{IVec3, Mat4};
+use glam::{IVec3, Mat4, Vec3, Vec4};
 use std::borrow::Cow;
 use std::sync::Arc;
 use voxer_macros::ShaderType;
-use wgpu::{BindGroup, BufferUsages, CommandEncoder, RenderPipeline};
+use wgpu::{BindGroup, BufferUsages, CommandEncoder, ComputePass, RenderPipeline};
 use winit::window::Window;
+use crate::renderer::resources::shader::{MAX_WORKGROUP_DIM_1D, MAX_WORKGROUP_DIM_2D};
 
 #[repr(C, align(16))]
 #[derive(ShaderType, Copy, Clone, Debug, Pod, Zeroable)]
 pub struct UniformCameraView {
     // todo move from here
     view_proj: Mat4,
+    view_planes: [Plane; 6],
+    origin: Vec4, // w = render_distance
+}
+
+impl UniformCameraView {
+    pub fn new(camera: &Camera) -> Self {
+        let view_proj = camera.view_projection();
+        let view_planes = Frustum::planes(view_proj);
+        let origin = camera
+            .transform
+            .position
+            .extend((camera.render_distance * CHUNK_DIM as u32) as f32);
+        Self {
+            view_proj,
+            view_planes,
+            origin,
+        }
+    }
 }
 
 pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
-    chunk_manager: ChunkManager,
+    pub chunk_manager: ChunkManager, // fixme temp
     render_pipeline: RenderPipeline,
     atlas_bind_group: BindGroup,
     view_projection_buffer: VxBuffer,
@@ -38,21 +58,24 @@ impl AppRenderer<'_> {
             BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         );
 
-        let max_chunk_count = 24 * 24 * 24; // fixme arbitrary number
-        let max_face_count = max_chunk_count * 12288;
-        let chunk_manager = ChunkManager::new(
-            &renderer,
-            &view_projection_buffer,
-            max_face_count,
-            max_chunk_count,
-        );
+        // fixme move to a config and fix arbitrary numbers
+        let near_chunks = ((36.0 * 36.0 * 36.0) / 1.8) as usize;
+        let cm_config = ChunkManagerConfig {
+            max_chunks: near_chunks,
+            max_write_count: 1 << 14, // arbitrary
+            max_face_count: (near_chunks as f32 * 0.4f32) as usize * 4096, // rough temp fov + face estimate
+            max_workgroup_size_1d: MAX_WORKGROUP_DIM_1D,
+            max_workgroup_size_2d: MAX_WORKGROUP_DIM_2D,
+            max_indirect_count: 1 << 16, // arbitrary
+        };
+        let chunk_manager = ChunkManager::new(&renderer, &view_projection_buffer, cm_config);
 
         let (atlas_layout, atlas_bind_group) =
             renderer.texture_sampler("Texture Sampler Atlas", get_atlas_image());
 
         let render_pipeline = make_render_pipeline(
             &renderer,
-            resources::shader::main_shader().into(),
+            resources::shader::render_wgsl().into(),
             &[
                 &atlas_layout,                           // 0
                 &chunk_manager.render_bind_group_layout, // 1
@@ -67,20 +90,8 @@ impl AppRenderer<'_> {
             view_projection_buffer,
         }
     }
-    pub fn encode_new_chunks(&mut self, encoder: &mut CommandEncoder, chunks: &[Chunk]) {
-        self.chunk_manager
-            .encode_new_chunks(&self.renderer, encoder, chunks);
-    }
 
-    pub fn is_chunk_rendered(&self, position: IVec3) -> bool {
-        self.chunk_manager.is_rendered(position)
-    }
-
-    pub fn retain_chunk_positions<F: FnMut(&IVec3) -> bool>(&mut self, func: F) {
-        self.chunk_manager.retain_chunk_positions(func);
-    }
-
-    fn render_chunks(&mut self, render_pass: &mut wgpu::RenderPass, camera: &Camera) {
+    fn render_chunks(&mut self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.atlas_bind_group, &[]);
 
@@ -95,21 +106,19 @@ impl AppRenderer<'_> {
         let frame = self.renderer.surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
 
-        let cam_view = UniformCameraView {
-            view_proj: camera.view_projection(),
-        };
+        let camera_view = UniformCameraView::new(camera);
 
         self.renderer.write_buffer(
             &self.view_projection_buffer,
             0,
-            bytemuck::bytes_of(&cam_view),
+            bytemuck::bytes_of(&camera_view),
         );
 
         {
             let mut render_pass =
                 self.renderer
                     .begin_render_pass(&mut encoder, "Main Render Pass", &view);
-            self.render_chunks(&mut render_pass, camera);
+            self.render_chunks(&mut render_pass);
         }
 
         self.renderer.queue.submit(Some(encoder.finish()));
@@ -123,8 +132,9 @@ pub fn make_render_pipeline(
     renderer: &Renderer<'_>,
     shader_source: Cow<str>,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
-) -> wgpu::RenderPipeline {
-    let shader = resources::shader::create(&renderer.device, shader_source);
+) -> RenderPipeline {
+    let shader =
+        resources::shader::create_shader(&renderer.device, shader_source, "render pipeline shader");
     let render_pipeline_layout =
         &renderer
             .device

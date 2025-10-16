@@ -1,7 +1,9 @@
 mod chunk_entry;
 pub mod chunk_manager;
+mod gpu_state_types;
 
 pub use chunk_entry::{
-    GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkBufferData, GPUVoxelChunkContent,
-    GPUVoxelChunkHeader, GPUVoxelFaceData,
+    GPU4Bytes, GPUChunkMeshEntry, GPUDispatchIndirectArgsAtomic, GPUDrawIndirectArgs,
+    GPUPackedIndirectArgsAtomic, GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent,
+    GPUVoxelChunkHeader, GPUVoxelFaceData
 };
