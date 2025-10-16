@@ -67,7 +67,7 @@ impl ChunkManager {
         let write_batch_buffer = renderer.device.create_vx_buffer::<GPUVoxelChunk>(
             "Voxel Chunk Write Buffer",
             config.max_write_count,
-            BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+            BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
 
         let voxel_face_buffer = renderer.device.create_vx_buffer::<GPUVoxelFaceData>(
@@ -194,7 +194,6 @@ impl ChunkManager {
     pub fn update_chunk_writes(&mut self, chunks: &[Chunk]) {
         debug_assert!(chunks.len() <= self.config.max_write_count);
         self.write_batch.clear();
-
         for chunk in chunks {
             if self.is_chunk_cached(&chunk.position) {
                 self.drop_chunk(&chunk.position);
@@ -306,10 +305,9 @@ impl ChunkManager {
     pub fn drop_chunk(&mut self, position: &IVec3) {
         let (_, mesh_state) = self.gpu_cached.remove(position).unwrap();
         if let ChunkMeshState::Meshed(mesh_entry) = mesh_state {
-            // fixme
-            // self.gpu_mesh_allocator
-            //     .deallocate(mesh_entry.face_alloc)
-            //     .unwrap();
+            self.gpu_mesh_allocator
+                .deallocate(mesh_entry.face_alloc)
+                .unwrap();
         }
     }
 

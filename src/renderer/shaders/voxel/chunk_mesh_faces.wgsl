@@ -1,4 +1,4 @@
-const FACE_ID_BASE_X: u32 = 0u;
+const FACE_ID_BASE_X: u32 = 1u;
 const FACE_ID_BASE_Y: u32 = 3u;
 const FACE_ID_BASE_Z: u32 = 5u;
 
@@ -54,7 +54,7 @@ fn x_face_write_args(
     face_position: vec3<u32>,
 ) -> VoxelFaceWriteArgs {
     let draw_mask: FaceDrawMask = face_draw_mask((*neighbors)[1][1][1], (*neighbors)[2][1][1]);
-    let fid: u32 = FACE_ID_BASE_X + draw_mask.dir; // + instead of - because x is inversed
+    let fid: u32 = FACE_ID_BASE_X - draw_mask.dir;
     let ocl_count = occlusion_count_x(neighbors)[draw_mask.dir];
     return face_write_args(voxel, draw_mask, fid, ocl_count, face_position);
 }

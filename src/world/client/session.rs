@@ -85,23 +85,6 @@ impl<'window> ClientWorldSession<'window> {
 
         let to_remesh = self.process_chunk_remesh_batch();
 
-        // let cs = vec![
-        //     IVec3::new(-1, -1, 2),
-        //     IVec3::new(0, -1, 2),
-        //     IVec3::new(1, -1, 2),
-        //     IVec3::new(2, -1, 2),
-        //     IVec3::new(3, -1, 2),
-        // ];
-        // for c in cs {
-        //     if let Some(chunk) = self.chunks.get_mut(&c) {
-        //         let qq = compute::chunk::face_count(&chunk.blocks, &chunk.adjacent_blocks);
-        //         let qqa = qq.negative_face_count;
-        //         let qqb = qq.positive_face_count;
-        //         let qqc = qqa.as_uvec3().element_sum() + qqb.as_uvec3().element_sum();
-        //         println!("{:?}: N: {:?} P: {:?}: T: {}", c, qqa, qqb, qqc);
-        //     }
-        // }
-
         let new_chunks = self
             .new_chunks
             .drain(..)
@@ -120,14 +103,6 @@ impl<'window> ClientWorldSession<'window> {
                 if player_ch_position.distance_squared(ch_pos) > self.render_max_sq {
                     return;
                 }
-                // if ch_pos != IVec3::new(-1, -1, 2)
-                //     && ch_pos != IVec3::new(0, -1, 2)
-                //     && ch_pos != IVec3::new(1, -1, 2)
-                //     && ch_pos != IVec3::new(2, -1, 2)
-                //     && ch_pos != IVec3::new(3, -1, 2)
-                // {
-                //     return;
-                // }
                 if self.chunk_request_batch.len() < MAX_CHUNKS_PER_BATCH {
                     let throttle_idx = smallhash::u32x3_to_18_bits(ch_pos.to_array());
                     if self.chunk_request_throttler.request(throttle_idx as usize) {

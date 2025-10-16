@@ -11,19 +11,19 @@ const TEX_COORDS = array<vec2<f32>, 4>(
 const QUAD_INDICES = array<u32, 6>(0, 1, 2, 0, 2, 3);
 
 const QUAD_VERTICES = array<array<vec3<f32>, 4>, 6>(
-    // +X
-    array<vec3<f32>, 4>(
-        vec3<f32>(1.0,  1.0,  1.0),
-        vec3<f32>(1.0, 1.0,  0.0),
-        vec3<f32>(1.0, 0.0, 0.0),
-        vec3<f32>(1.0,  0.0, 1.0),
-    ),
     // -X
     array<vec3<f32>, 4>(
         vec3<f32>(1.0,  1.0,  0.0),
         vec3<f32>(1.0, 1.0,  1.0),
         vec3<f32>(1.0, 0.0, 1.0),
         vec3<f32>(1.0,  0.0, 0.0),
+    ),
+    // +X
+    array<vec3<f32>, 4>(
+        vec3<f32>(1.0,  1.0,  1.0),
+        vec3<f32>(1.0, 1.0,  0.0),
+        vec3<f32>(1.0, 0.0, 0.0),
+        vec3<f32>(1.0,  0.0, 1.0),
     ),
     // +Y
     array<vec3<f32>, 4>(

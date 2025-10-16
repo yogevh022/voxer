@@ -10,9 +10,9 @@ fn unpack_mesh_face_counts(mesh_entry: GPUChunkMeshEntry) -> array<u32, 6> {
     return array<u32, 6>(px_count, mx_count, py_count, my_count, pz_count, mz_count);
 }
 
-fn mesh_face_counts_to_offsets(counts: array<u32, 6>) -> array<u32, 6> {
-    let px_offset = 0u;
-    let mx_offset = counts[0];
+fn mesh_face_offsets_from(offset: u32, counts: array<u32, 6>) -> array<u32, 6> {
+    let px_offset = offset;
+    let mx_offset = px_offset + counts[0];
     let py_offset = mx_offset + counts[1];
     let my_offset = py_offset + counts[2];
     let pz_offset = my_offset + counts[3];
