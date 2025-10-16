@@ -3,10 +3,52 @@ use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
 use voxer_macros::ShaderType;
 
+type ShaderAtomic<T> = T;
+
 #[repr(C)]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPU4Bytes {
     pub data: u32,
+}
+
+#[repr(C)]
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUPackedIndirectArgsAtomic {
+    draw: ShaderAtomic<u32>,
+    _padding: u32,
+    _padding1: u32,
+    _padding2: u32,
+    dispatch: GPUDispatchIndirectArgsAtomic,
+}
+
+impl GPUPackedIndirectArgsAtomic {
+    pub fn new(draw: u32, dispatch: GPUDispatchIndirectArgsAtomic) -> Self {
+        Self {
+            draw,
+            _padding: 0,
+            _padding1: 0,
+            _padding2: 0,
+            dispatch,
+        }
+    }
+    
+    pub fn as_bytes(&self) -> &[u8] {
+        bytemuck::bytes_of(self)
+    }
+}
+
+#[repr(C)]
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUDispatchIndirectArgsAtomic {
+    x: ShaderAtomic<u32>,
+    y: ShaderAtomic<u32>,
+    z: ShaderAtomic<u32>,
+}
+
+impl GPUDispatchIndirectArgsAtomic {
+    pub fn new(x: u32, y: u32, z: u32) -> Self {
+        Self { x, y, z }
+    }
 }
 
 #[repr(C, align(16))]
@@ -26,7 +68,8 @@ pub struct GPUChunkMeshEntry {
     // x: 10b,
     // y: 10b,
     // z: 10b,
-    // free :2b,
+    // free :1b,
+    // meshing_flag: 1b,
     pub positive_face_count: u32,
     // x: 10b,
     // y: 10b,
@@ -36,7 +79,12 @@ pub struct GPUChunkMeshEntry {
 }
 
 impl GPUChunkMeshEntry {
-    pub fn new(index: u32, negative_face_count: u32, positive_face_count: u32, face_alloc: u32) -> Self {
+    pub fn new(
+        index: u32,
+        negative_face_count: u32,
+        positive_face_count: u32,
+        face_alloc: u32,
+    ) -> Self {
         Self {
             index,
             negative_face_count,

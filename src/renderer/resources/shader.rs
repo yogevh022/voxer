@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use wgpu::ShaderSource;
 use crate::app::app_renderer::UniformCameraView;
 use crate::compute::geo::Plane;
-use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry, GPUVoxelChunkHeader};
+use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry, GPUVoxelChunkHeader, GPUDispatchIndirectArgsAtomic, GPUPackedIndirectArgsAtomic};
 use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF};
 
 macro_rules! include_shaders {
@@ -94,10 +94,13 @@ fn globals() -> String {
     )
 }
 
+pub const MAX_WORKGROUP_DIM_2D: u32 = 16;
+pub const MAX_WORKGROUP_DIM_1D: u32 = MAX_WORKGROUP_DIM_2D * MAX_WORKGROUP_DIM_2D;
+
 fn cfg_constants() -> String {
     include_shader_consts!(
-        CFG_MAX_WORKGROUP_DIM_2D: u32 = 16;
-        CFG_MAX_WORKGROUP_DIM_1D: u32 = 16 * 16;
+        CFG_MAX_WORKGROUP_DIM_2D: u32 = MAX_WORKGROUP_DIM_2D;
+        CFG_MAX_WORKGROUP_DIM_1D: u32 = MAX_WORKGROUP_DIM_1D;
         CFG_VAO_FACTOR: f32 = 0.35;
     )
 }
@@ -112,6 +115,8 @@ fn meta_types() -> String {
     include_shader_types!(
         UniformCameraView,
         GPUDrawIndirectArgs,
+        GPUDispatchIndirectArgsAtomic,
+        GPUPackedIndirectArgsAtomic,
     )
 }
 

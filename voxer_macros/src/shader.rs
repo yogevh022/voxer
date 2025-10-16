@@ -1,4 +1,4 @@
-use syn::{Data, Fields, TypeArray, TypePath};
+use syn::{Data, Fields, GenericArgument, PathArguments, PathSegment, TypeArray, TypePath};
 
 macro_rules! push_strs {
     ( $result:ident, $( $x:expr ),* $(,)? ) => (
@@ -26,18 +26,41 @@ impl StructField {
 
 fn rust_to_wgsl_path(type_path: &TypePath) -> String {
     let name_seg = type_path.path.segments.last().unwrap();
-    match name_seg.ident.to_string().as_str() {
-        "u32" => "u32".into(),
-        "i32" => "i32".into(),
-        "f32" => "f32".into(),
-        "bool" => "bool".into(),
-        "Vec3" | "Vec3A" => "vec3<f32>".into(),
-        "IVec3" | "IVec3A" => "vec3<i32>".into(),
-        "Vec4" => "vec4<f32>".into(),
-        "IVec4" => "vec4<i32>".into(),
-        "Mat4" => "mat4x4<f32>".into(),
-        other => other.into(),
+
+    fn handle_generic(name_seg: &PathSegment) -> String {
+        match &name_seg.arguments {
+            PathArguments::AngleBracketed(angle_args) => {
+                let GenericArgument::Type(ty) = angle_args.args.first().unwrap() else {
+                    panic!("Generic<T> must receive angle bracketed type arg.");
+                };
+                rust_to_wgsl_type(ty)
+            }
+            _ => panic!("Generic<T> must receive angle bracketed type arg."),
+        }
     }
+
+    fn type_str_convert(name_seg: &PathSegment) -> String {
+        match name_seg.ident.to_string().as_str() {
+            "u32" => "u32".into(),
+            "i32" => "i32".into(),
+            "f32" => "f32".into(),
+            "bool" => "bool".into(),
+            "Vec3" | "Vec3A" => "vec3<f32>".into(),
+            "IVec3" | "IVec3A" => "vec3<i32>".into(),
+            "Vec4" => "vec4<f32>".into(),
+            "IVec4" => "vec4<i32>".into(),
+            "Mat4" => "mat4x4<f32>".into(),
+            "ShaderAtomic" => {
+                let inner_type = handle_generic(name_seg);
+                let mut atomic_str = String::from("atomic<");
+                atomic_str.push_str(&inner_type);
+                atomic_str.push('>');
+                atomic_str
+            },
+            other => other.into(),
+        }
+    }
+    type_str_convert(name_seg)
 }
 
 fn rust_to_wgsl_array(array: &TypeArray) -> String {

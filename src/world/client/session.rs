@@ -92,14 +92,14 @@ impl<'window> ClientWorldSession<'window> {
             .map(|p| self.chunks.get(&p).unwrap().clone())
             .collect::<Vec<_>>();
 
-        self.renderer.chunk_manager.update_chunk_writes(&new_chunks);
+        self.renderer.chunk_manager.prepare_gpu_chunk_writes(&new_chunks);
 
         self.chunk_request_batch.clear();
         self.chunk_request_throttler.set_now(Instant::now());
 
         self.renderer
             .chunk_manager
-            .update_view_chunks(&self.view_frustum, |ch_pos| {
+            .prepare_visible_chunks(&self.view_frustum, |ch_pos| {
                 if player_ch_position.distance_squared(ch_pos) > self.render_max_sq {
                     return;
                 }

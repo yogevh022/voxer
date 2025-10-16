@@ -13,6 +13,7 @@ use std::sync::Arc;
 use voxer_macros::ShaderType;
 use wgpu::{BindGroup, BufferUsages, CommandEncoder, ComputePass, RenderPipeline};
 use winit::window::Window;
+use crate::renderer::resources::shader::{MAX_WORKGROUP_DIM_1D, MAX_WORKGROUP_DIM_2D};
 
 #[repr(C, align(16))]
 #[derive(ShaderType, Copy, Clone, Debug, Pod, Zeroable)]
@@ -57,12 +58,15 @@ impl AppRenderer<'_> {
             BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         );
 
-        // fixme move to a config
+        // fixme move to a config and fix arbitrary numbers
         let near_chunks = ((36.0 * 36.0 * 36.0) / 1.8) as usize;
         let cm_config = ChunkManagerConfig {
             max_chunks: near_chunks,
-            max_write_count: 1 << 14,
+            max_write_count: 1 << 14, // arbitrary
             max_face_count: (near_chunks as f32 * 0.4f32) as usize * 4096, // rough temp fov + face estimate
+            max_workgroup_size_1d: MAX_WORKGROUP_DIM_1D,
+            max_workgroup_size_2d: MAX_WORKGROUP_DIM_2D,
+            max_indirect_count: 1 << 16, // arbitrary
         };
         let chunk_manager = ChunkManager::new(&renderer, &view_projection_buffer, cm_config);
 

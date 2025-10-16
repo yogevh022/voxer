@@ -9,8 +9,8 @@ use std::array;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct VoxelChunkMeshMeta {
-    pub positive_face_count: U16Vec3,
-    pub negative_face_count: U16Vec3,
+    pub positive_faces: U16Vec3,
+    pub negative_faces: U16Vec3,
 }
 
 pub fn face_count(blocks: &ChunkBlocks, adj_blocks: &ChunkAdjBlocks) -> VoxelChunkMeshMeta {
@@ -46,32 +46,32 @@ fn face_count_from_packed(
         prep_adj_z(packed_adj_blocks[Y_OFFSET + i], xa, zb);
 
         let x_face_counts = bi_direction_face_counts(xa, xb);
-        mesh_meta.negative_face_count.x += x_face_counts.0 as u16;
-        mesh_meta.positive_face_count.x += x_face_counts.1 as u16;
+        mesh_meta.negative_faces.x += x_face_counts.0 as u16;
+        mesh_meta.positive_faces.x += x_face_counts.1 as u16;
 
         let y_face_counts = bi_direction_face_counts(ya, yb);
-        mesh_meta.negative_face_count.y += y_face_counts.0 as u16;
-        mesh_meta.positive_face_count.y += y_face_counts.1 as u16;
+        mesh_meta.negative_faces.y += y_face_counts.0 as u16;
+        mesh_meta.positive_faces.y += y_face_counts.1 as u16;
 
         let z_face_counts = bi_direction_face_counts(xa, zb);
-        mesh_meta.negative_face_count.z += z_face_counts.0 as u16;
-        mesh_meta.positive_face_count.z += z_face_counts.1 as u16;
+        mesh_meta.negative_faces.z += z_face_counts.0 as u16;
+        mesh_meta.positive_faces.z += z_face_counts.1 as u16;
     }
     prep_adj_y(&packed_blocks, packed_adj_blocks[LAST_Y], ya, yb, LAST_X);
     prep_adj_z(packed_adj_blocks[LAST_Z], xb, zb);
     let adj_x = into_array_slice(&packed_adj_blocks[0..CHUNK_DIM]);
 
     let x_face_counts = bi_direction_face_counts(xb, adj_x);
-    mesh_meta.negative_face_count.x += x_face_counts.0 as u16;
-    mesh_meta.positive_face_count.x += x_face_counts.1 as u16;
+    mesh_meta.negative_faces.x += x_face_counts.0 as u16;
+    mesh_meta.positive_faces.x += x_face_counts.1 as u16;
 
     let y_face_counts = bi_direction_face_counts(ya, yb);
-    mesh_meta.negative_face_count.y += y_face_counts.0 as u16;
-    mesh_meta.positive_face_count.y += y_face_counts.1 as u16;
+    mesh_meta.negative_faces.y += y_face_counts.0 as u16;
+    mesh_meta.positive_faces.y += y_face_counts.1 as u16;
 
     let z_face_counts = bi_direction_face_counts(xb, zb);
-    mesh_meta.negative_face_count.z += z_face_counts.0 as u16;
-    mesh_meta.positive_face_count.z += z_face_counts.1 as u16;
+    mesh_meta.negative_faces.z += z_face_counts.0 as u16;
+    mesh_meta.positive_faces.z += z_face_counts.1 as u16;
 
     mesh_meta
 }

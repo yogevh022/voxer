@@ -22,7 +22,7 @@ fn mesh_chunks_entry(
 ) {
     if (lid.x + lid.y == 0u) {
         let mesh_entry = mesh_queue_buffer[wid.x];
-        let face_counts = unpack_mesh_face_counts(mesh_entry);
+        let face_counts = unpack_mesh_entry_face_counts(mesh_entry);
         let face_offsets = mesh_face_offsets_from(mesh_entry.face_alloc, face_counts);
         atomicStore(&wg_face_buffer_write_offsets[0], face_offsets[0]);
         atomicStore(&wg_face_buffer_write_offsets[1], face_offsets[1]);
