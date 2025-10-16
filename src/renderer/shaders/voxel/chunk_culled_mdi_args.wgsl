@@ -48,19 +48,17 @@ fn write_culled_mdi(
     let within_render_distance = distance_within_threshold(chunk_world_position, camera_position, render_distance_voxels_f32);
     let within_view_frustum = frustum_check_chunk(chunk_world_position, chunk_world_position + f32(CHUNK_DIM));
 
-    if exists && within_render_distance && within_view_frustum {
-        for (var fid = 0u; fid < 6u; fid++) {
-            if (fids_facing_camera[fid] && face_counts[fid] > 0u) {
-                let draw_args = GPUDrawIndirectArgs(
-                    face_counts[fid] * 6u,      // vertex_count
-                    1u,                         // instance_count
-                    0u,                         // first_vertex
-                    face_offsets[fid] * 6u,     // first_instance
-                );
-                let arg_idx = atomicAdd(&wg_indirect_draw_args_count, 1);
-                wg_indirect_draw_args[arg_idx] = draw_args;
-            }
-        }
+    let write_arg_mask = u32(exists && within_render_distance && within_view_frustum);
+    for (var fid = 0u; fid < 6u; fid++) {
+        let write_face_mask = write_arg_mask * u32(fids_facing_camera[fid] && face_counts[fid] > 0u);
+        let draw_args = GPUDrawIndirectArgs(
+            face_counts[fid] * 6u,      // vertex_count
+            1u,                         // instance_count
+            0u,                         // first_vertex
+            face_offsets[fid] * 6u,     // first_instance
+        );
+        let arg_idx = atomicAdd(&wg_indirect_draw_args_count, write_face_mask);
+        wg_indirect_draw_args[write_face_mask * (arg_idx + VOID_OFFSET)] = draw_args;
     }
     workgroupBarrier();
 
@@ -68,7 +66,7 @@ fn write_culled_mdi(
         let arg_write_count = atomicLoad(&wg_indirect_draw_args_count);
         let arg_write_offset = atomicAdd(&indirect_count_buffer[0], arg_write_count);
         for (var i = 0u; i < arg_write_count; i++) {
-            indirect_buffer[arg_write_offset + i] = wg_indirect_draw_args[i];
+            indirect_buffer[arg_write_offset + i] = wg_indirect_draw_args[VOID_OFFSET + i];
         }
     }
 }
@@ -85,7 +83,6 @@ fn chunk_fids_facing_camera(camera_position: vec3<f32>, chunk_position_f32: vec3
     return array<bool, 6>(draw_px, draw_mx, draw_py, draw_my, draw_pz, draw_mz);
 }
 
-// fixme move to modular place
 fn distance_within_threshold(a: vec3<f32>,b: vec3<f32>, threshold: f32) -> bool {
     let threshold_sq = threshold * threshold;
     let distance_sq = dot(a - b, a - b);
@@ -95,13 +92,11 @@ fn distance_within_threshold(a: vec3<f32>,b: vec3<f32>, threshold: f32) -> bool 
 fn frustum_check_chunk(chunk_world_min: vec3<f32>, chunk_world_max: vec3<f32>) -> bool {
     for (var i = 0; i < 6; i++) {
         let plane = camera_view.view_planes[i];
-
         let pv = vec3<f32>(
             select(chunk_world_min.x, chunk_world_max.x, plane.equation.x >= 0.0),
             select(chunk_world_min.y, chunk_world_max.y, plane.equation.y >= 0.0),
             select(chunk_world_min.z, chunk_world_max.z, plane.equation.z >= 0.0),
         );
-
         if (dot(plane.equation.xyz, pv) + plane.equation.w < 0.0) {
             return false;
         }

@@ -75,6 +75,7 @@ include_shaders!(
     F_BITWISE => "functions/bitwise.wgsl",
     F_THREAD_MAPPING => "functions/thread_mapping.wgsl",
     F_UNPACK_GPU_CHUNK_MESH_ENTRY => "functions/unpack_GPUChunkMeshEntry.wgsl",
+    F_UNPACK_GPU_VOXEL_FACE_DATA => "functions/unpack_GPUVoxelFaceData.wgsl",
 );
 
 // voxel
@@ -141,6 +142,7 @@ pub fn render_wgsl() -> String {
         VERTEX_SHADER_ENTRY,
         FRAGMENT_SHADER_ENTRY,
         F_BITWISE,
+        F_UNPACK_GPU_VOXEL_FACE_DATA,
     )
 }
 
