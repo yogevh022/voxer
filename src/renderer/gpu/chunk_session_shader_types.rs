@@ -7,12 +7,6 @@ type ShaderAtomic<T> = T;
 
 #[repr(C)]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
-pub struct GPU4Bytes {
-    pub data: u32,
-}
-
-#[repr(C)]
-#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUPackedIndirectArgsAtomic {
     draw: ShaderAtomic<u32>,
     _padding: u32,

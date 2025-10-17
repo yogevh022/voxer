@@ -69,7 +69,7 @@ impl<'window> ClientWorldSession<'window> {
             .drain(remaining_positions.saturating_sub(CHUNKS_PER_PASS)..)
         {
             if camera_ch_position.distance_squared(position) > self.render_max_sq {
-                self.renderer.chunk_manager.drop_chunk(&position);
+                self.renderer.chunk_session.drop_chunk(&position);
                 self.chunks.remove(&position);
             }
         }
@@ -79,20 +79,20 @@ impl<'window> ClientWorldSession<'window> {
         let player_ch_position = world_to_chunk_pos(self.player.location.position);
         self.lazy_chunk_gc(player_ch_position);
 
-        let max_write = self.renderer.chunk_manager.config.max_write_count;
+        let max_write = self.renderer.chunk_session.config.max_write_count;
         let mesh_positions = self.prepare_meshing_positions(max_write);
         let mesh_chunks_refs = mesh_positions
             .into_iter()
             .map(|p| self.chunks.get(&p).unwrap());
 
         self.renderer
-            .chunk_manager
+            .chunk_session
             .prepare_chunk_writes(mesh_chunks_refs);
 
         self.chunk_request_batch.clear();
         self.chunk_request_throttler.set_now(Instant::now());
         self.renderer
-            .chunk_manager
+            .chunk_session
             .prepare_chunk_visibility(&self.view_frustum, |ch_pos| {
                 if player_ch_position.distance_squared(ch_pos) > self.render_max_sq {
                     return;
@@ -110,10 +110,10 @@ impl<'window> ClientWorldSession<'window> {
             timestamp_writes: None,
         });
         self.renderer
-            .chunk_manager
+            .chunk_session
             .compute_chunk_writes(&self.renderer.renderer, &mut compute_pass);
         self.renderer
-            .chunk_manager
+            .chunk_session
             .compute_chunk_visibility_and_meshing(&self.renderer.renderer, &mut compute_pass);
     }
 

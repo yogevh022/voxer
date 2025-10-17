@@ -1,7 +1,8 @@
 use crate::compute::geo::{Frustum, Plane};
 use crate::renderer::Renderer;
-use crate::renderer::gpu::chunk_manager::{ChunkManager, ChunkManagerConfig};
+use crate::renderer::gpu::chunk_session::{GpuChunkSession, GpuChunkSessionConfig};
 use crate::renderer::resources;
+use crate::renderer::resources::shader::{MAX_WORKGROUP_DIM_1D, MAX_WORKGROUP_DIM_2D};
 use crate::renderer::resources::texture::get_atlas_image;
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::vtypes::Camera;
@@ -13,7 +14,6 @@ use std::sync::Arc;
 use voxer_macros::ShaderType;
 use wgpu::{BindGroup, BufferUsages, CommandEncoder, RenderPipeline};
 use winit::window::Window;
-use crate::renderer::resources::shader::{MAX_WORKGROUP_DIM_1D, MAX_WORKGROUP_DIM_2D};
 
 #[repr(C, align(16))]
 #[derive(ShaderType, Copy, Clone, Debug, Pod, Zeroable)]
@@ -42,7 +42,7 @@ impl UniformCameraView {
 
 pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
-    pub chunk_manager: ChunkManager, // fixme temp
+    pub chunk_session: GpuChunkSession, // fixme temp
     render_pipeline: RenderPipeline,
     atlas_bind_group: BindGroup,
     view_projection_buffer: VxBuffer,
@@ -60,7 +60,7 @@ impl AppRenderer<'_> {
 
         // fixme move to a config and fix arbitrary numbers
         let near_chunks = ((36.0 * 36.0 * 36.0) / 1.8) as usize;
-        let cm_config = ChunkManagerConfig {
+        let cm_config = GpuChunkSessionConfig {
             max_chunks: near_chunks,
             max_write_count: 1 << 14, // arbitrary
             max_face_count: (near_chunks as f32 * 0.4f32) as usize * 4096, // rough temp fov + face estimate
@@ -68,7 +68,7 @@ impl AppRenderer<'_> {
             max_workgroup_size_2d: MAX_WORKGROUP_DIM_2D,
             max_indirect_count: 1 << 16, // arbitrary
         };
-        let chunk_manager = ChunkManager::new(&renderer, &view_projection_buffer, cm_config);
+        let chunk_session = GpuChunkSession::new(&renderer, &view_projection_buffer, cm_config);
 
         let (atlas_layout, atlas_bind_group) =
             renderer.texture_sampler("Texture Sampler Atlas", get_atlas_image());
@@ -77,14 +77,14 @@ impl AppRenderer<'_> {
             &renderer,
             resources::shader::render_wgsl().into(),
             &[
-                &atlas_layout,                           // 0
-                &chunk_manager.render_bind_group_layout, // 1
+                &atlas_layout,               // 0
+                &chunk_session.render_bgl(), // 1
             ],
         );
 
         Self {
             renderer,
-            chunk_manager,
+            chunk_session,
             render_pipeline,
             atlas_bind_group,
             view_projection_buffer,
@@ -95,7 +95,8 @@ impl AppRenderer<'_> {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.atlas_bind_group, &[]);
 
-        self.chunk_manager.render_chunks(&self.renderer, render_pass);
+        self.chunk_session
+            .render_chunks(&self.renderer, render_pass);
     }
 
     pub fn submit_render_pass(

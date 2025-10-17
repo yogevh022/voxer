@@ -63,7 +63,7 @@ impl ChunkMeshState {
         }
     }
 
-    pub fn entry_flagged_to_mesh(&self) -> GPUChunkMeshEntry {
+    pub fn entry_with_meshing_flag(&self) -> GPUChunkMeshEntry {
         let mut entry = match self {
             Self::Meshed(entry) => entry.clone(),
             _ => unreachable!(),
