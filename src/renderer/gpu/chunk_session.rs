@@ -1,8 +1,9 @@
 use crate::compute::geo::{Frustum, Plane};
-use crate::renderer::gpu::chunk_entry::{
+use crate::renderer::gpu::chunk_session_shader_types::{
     GPUChunkMeshEntry, GPUPackedIndirectArgsAtomic, GPUVoxelChunkHeader,
 };
-use crate::renderer::gpu::gpu_state_types::{ChunkMeshState, MeshStateError};
+use crate::renderer::gpu::chunk_session_resources::GpuChunkSessionResources;
+use crate::renderer::gpu::chunk_session_types::{ChunkMeshState, MeshStateError};
 use crate::renderer::gpu::{GPUDispatchIndirectArgsAtomic, GPUVoxelChunk, GPUVoxelFaceData};
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::{Renderer, resources};
@@ -11,10 +12,8 @@ use glam::IVec3;
 use slabmap::SlabMap;
 use suballoc::SubAllocator;
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, BufferUsages, ComputePass,
-    ComputePipeline, ComputePipelineDescriptor, Device, PipelineLayoutDescriptor,
-    PushConstantRange, RenderPass, ShaderStages,
+    BindGroup, BindGroupDescriptor, BindGroupLayout, BufferUsages, ComputePass, ComputePipeline,
+    RenderPass,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -31,7 +30,6 @@ struct GpuState {
     mesh_allocator: SubAllocator,
     chunk_cache: SlabMap<IVec3, ChunkMeshState>,
 
-    // buffers
     chunk_buffer: VxBuffer,
     aabb_visible_buffer: VxBuffer,
     write_batch_buffer: VxBuffer,
@@ -96,7 +94,7 @@ impl GpuState {
                 BufferUsages::INDIRECT | BufferUsages::STORAGE | BufferUsages::COPY_DST,
             );
 
-        let mdi_args_bgl = mdi_args_bgl(
+        let mdi_args_bgl = GpuChunkSessionResources::mdi_args_bgl(
             &renderer.device,
             renderer.indirect_buffer.buffer_size,
             packed_indirect_buffer.buffer_size,
@@ -105,7 +103,8 @@ impl GpuState {
             aabb_visible_buffer.buffer_size,
             camera_buffer.buffer_size,
         );
-        let mdi_args_pipeline = mdi_args_pipeline(&renderer.device, &[&mdi_args_bgl]);
+        let mdi_args_pipeline =
+            GpuChunkSessionResources::mdi_args_pipeline(&renderer.device, &[&mdi_args_bgl]);
         let mdi_args_bind_group = renderer.device.create_bind_group(&BindGroupDescriptor {
             label: Some("Chunk MDI Args Bind Group"),
             layout: &mdi_args_bgl,
@@ -119,12 +118,13 @@ impl GpuState {
             ]),
         });
 
-        let write_bgl = chunk_write_bgl(
+        let write_bgl = GpuChunkSessionResources::chunk_write_bgl(
             &renderer.device,
             chunk_buffer.buffer_size,
             write_batch_buffer.buffer_size,
         );
-        let write_pipeline = chunk_write_pipeline(&renderer.device, &[&write_bgl]);
+        let write_pipeline =
+            GpuChunkSessionResources::chunk_write_pipeline(&renderer.device, &[&write_bgl]);
         let write_bind_group = renderer.device.create_bind_group(&BindGroupDescriptor {
             label: Some("Chunk Write Bind Group"),
             layout: &write_bgl,
@@ -134,13 +134,14 @@ impl GpuState {
             ]),
         });
 
-        let meshing_bgl = chunk_meshing_bgl(
+        let meshing_bgl = GpuChunkSessionResources::chunk_meshing_bgl(
             &renderer.device,
             chunk_buffer.buffer_size,
             voxel_face_buffer.buffer_size,
             meshing_batch_buffer.buffer_size,
         );
-        let meshing_pipeline = chunk_meshing_pipeline(&renderer.device, &[&meshing_bgl]);
+        let meshing_pipeline =
+            GpuChunkSessionResources::chunk_meshing_pipeline(&renderer.device, &[&meshing_bgl]);
         let meshing_bind_group = renderer.device.create_bind_group(&BindGroupDescriptor {
             label: Some("Chunk Meshing Bind Group"),
             layout: &meshing_bgl,
@@ -152,7 +153,11 @@ impl GpuState {
         });
 
         let (render_bind_group_layout, render_bind_group) =
-            chunk_render_bind_group(&renderer.device, camera_buffer, &voxel_face_buffer);
+            GpuChunkSessionResources::chunk_render_bind_group(
+                &renderer.device,
+                camera_buffer,
+                &voxel_face_buffer,
+            );
 
         let mesh_allocator = SubAllocator::new(config.max_face_count as u32);
         let chunk_cache = SlabMap::with_capacity(config.max_chunks);
@@ -371,253 +376,4 @@ impl GpuChunkSession {
 
 fn dispatch_count_1d(tasks: u32, workgroup_size: u32) -> u32 {
     (tasks as f32 / workgroup_size as f32).ceil() as u32
-}
-
-fn chunk_render_bind_group(
-    device: &Device,
-    camera_buffer: &VxBuffer,
-    face_data_buffer: &VxBuffer,
-) -> (BindGroupLayout, BindGroup) {
-    let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        label: Some("Chunk Render Bind Group Layout"),
-        entries: &[
-            camera_buffer.bind_layout_entry(0, false, ShaderStages::VERTEX),
-            face_data_buffer.bind_layout_entry(1, true, ShaderStages::VERTEX),
-        ],
-    });
-
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("Chunk Render Bind Group"),
-        layout: &layout,
-        entries: &resources::utils::bind_entries([
-            camera_buffer.as_entire_binding(),
-            face_data_buffer.as_entire_binding(),
-        ]),
-    });
-    (layout, bind_group)
-}
-
-fn chunk_meshing_bgl(
-    device: &Device,
-    chunk_buffer_size: BufferSize,
-    face_data_buffer_size: BufferSize,
-    mesh_queue_buffer_size: BufferSize,
-) -> BindGroupLayout {
-    device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        label: Some("Chunk Compute Bind Group Layout"),
-        entries: &[
-            BindGroupLayoutEntry {
-                binding: 0, // chunk data
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(chunk_buffer_size),
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 1, // face data
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(face_data_buffer_size),
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 2, // mesh queue
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(mesh_queue_buffer_size),
-                },
-                count: None,
-            },
-        ],
-    })
-}
-
-fn chunk_write_bgl(device: &Device, dst_size: BufferSize, src_size: BufferSize) -> BindGroupLayout {
-    device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        label: Some("Chunk Write Bind Group Layout"),
-        entries: &[
-            BindGroupLayoutEntry {
-                binding: 0, // write dst
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(dst_size),
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 1, // write src
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(src_size),
-                },
-                count: None,
-            },
-        ],
-    })
-}
-
-fn mdi_args_bgl(
-    device: &Device,
-    indirect_size: BufferSize,
-    packed_indirect_size: BufferSize,
-    meshing_batch_size: BufferSize,
-    chunks_size: BufferSize,
-    chunks_in_view_size: BufferSize,
-    camera_size: BufferSize,
-) -> BindGroupLayout {
-    device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        label: Some("Chunk Draw Args Bind Group Layout"),
-        entries: &[
-            BindGroupLayoutEntry {
-                binding: 0, // indirect
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(indirect_size),
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 1, // meshing indirect
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(packed_indirect_size),
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 2, // meshing batch
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(meshing_batch_size),
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 3, // chunks
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(chunks_size),
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 4, // chunks in view
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(chunks_in_view_size),
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 5, // camera
-                visibility: ShaderStages::COMPUTE,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(camera_size),
-                },
-                count: None,
-            },
-        ],
-    })
-}
-
-fn mdi_args_pipeline(device: &Device, bind_group_layouts: &[&BindGroupLayout]) -> ComputePipeline {
-    let shader = resources::shader::create_shader(
-        device,
-        resources::shader::chunk_culled_mdi_args_wgsl().into(),
-        "Chunk Culled MDI Args Pipeline Shader",
-    );
-    let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-        label: Some("Chunk Culled MDI Args Pipeline Layout"),
-        bind_group_layouts,
-        push_constant_ranges: &[PushConstantRange {
-            stages: ShaderStages::COMPUTE,
-            range: 0..4,
-        }],
-    });
-
-    device.create_compute_pipeline(&ComputePipelineDescriptor {
-        label: Some("Chunk Culled MDI Args Pipeline"),
-        layout: Some(&pipeline_layout),
-        module: &shader,
-        entry_point: Some("write_culled_mdi"),
-        compilation_options: Default::default(),
-        cache: None,
-    })
-}
-
-fn chunk_meshing_pipeline(
-    device: &Device,
-    bind_group_layouts: &[&BindGroupLayout],
-) -> ComputePipeline {
-    let shader = resources::shader::create_shader(
-        device,
-        resources::shader::chunk_meshing_wgsl().into(),
-        "Chunk Meshing Pipeline Shader",
-    );
-    let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-        label: Some("Chunk Meshing Pipeline Layout"),
-        bind_group_layouts,
-        push_constant_ranges: &[],
-    });
-
-    device.create_compute_pipeline(&ComputePipelineDescriptor {
-        label: Some("Chunk Meshing Pipeline"),
-        layout: Some(&pipeline_layout),
-        module: &shader,
-        entry_point: Some("mesh_chunks_entry"),
-        compilation_options: Default::default(),
-        cache: None,
-    })
-}
-
-fn chunk_write_pipeline(
-    device: &Device,
-    bind_group_layouts: &[&BindGroupLayout],
-) -> ComputePipeline {
-    let shader = resources::shader::create_shader(
-        device,
-        resources::shader::chunk_write_wgsl().into(),
-        "Chunk Write Pipeline Shader",
-    );
-    let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-        label: Some("Chunk Write Pipeline Layout"),
-        bind_group_layouts,
-        push_constant_ranges: &[PushConstantRange {
-            stages: ShaderStages::COMPUTE,
-            range: 0..4,
-        }],
-    });
-
-    device.create_compute_pipeline(&ComputePipelineDescriptor {
-        label: Some("Chunk Write Pipeline"),
-        layout: Some(&pipeline_layout),
-        module: &shader,
-        entry_point: Some("chunk_write_entry"),
-        compilation_options: Default::default(),
-        cache: None,
-    })
 }
