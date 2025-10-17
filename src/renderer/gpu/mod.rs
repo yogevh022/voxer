@@ -1,5 +1,5 @@
 mod chunk_entry;
-pub mod chunk_manager;
+pub mod chunk_session;
 mod gpu_state_types;
 
 pub use chunk_entry::{
