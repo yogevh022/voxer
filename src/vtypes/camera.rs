@@ -6,16 +6,11 @@ use glam::{Mat4, Quat};
 pub struct Camera {
     pub transform: Transform,
     pub frustum: ViewFrustum,
-    pub render_distance: u32,
 }
 
 impl Camera {
     pub fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
         self.frustum.aspect_ratio = aspect_ratio;
-    }
-    
-    pub fn set_render_distance(&mut self, render_distance: u32) {
-        self.render_distance = render_distance;
     }
 
     pub fn view_projection(&self) -> Mat4 {
@@ -31,12 +26,12 @@ impl Camera {
         )
     }
 
-    pub fn chunk_view_projection(&self, render_distance: f32) -> Mat4 {
+    pub fn view_projection_with_far(&self, far: f32) -> Mat4 {
         Mat4::perspective_rh(
             self.frustum.fov,
             self.frustum.aspect_ratio,
             self.frustum.near,
-            render_distance,
+            far,
         ) * Mat4::look_to_rh(
             self.transform.position,
             self.transform.forward(),

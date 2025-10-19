@@ -21,17 +21,17 @@ pub struct UniformCameraView {
     // todo move from here
     view_proj: Mat4,
     view_planes: [Plane; 6],
-    origin: Vec4, // w = render_distance
+    origin: Vec4, // w = voxel_render_distance
 }
 
 impl UniformCameraView {
-    pub fn new(camera: &Camera) -> Self {
+    pub fn new(camera: &Camera, voxel_render_distance: u32) -> Self {
         let view_proj = camera.view_projection();
         let view_planes = Frustum::planes(view_proj);
         let origin = camera
             .transform
             .position
-            .extend((camera.render_distance * CHUNK_DIM as u32) as f32);
+            .extend(voxel_render_distance as f32);
         Self {
             view_proj,
             view_planes,
@@ -103,11 +103,12 @@ impl AppRenderer<'_> {
         &mut self,
         mut encoder: CommandEncoder,
         camera: &Camera,
+        voxel_render_distance: u32,
     ) -> Result<(), wgpu::SurfaceError> {
         let frame = self.renderer.surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
 
-        let camera_view = UniformCameraView::new(camera);
+        let camera_view = UniformCameraView::new(camera, voxel_render_distance);
 
         self.renderer.write_buffer(
             &self.view_projection_buffer,

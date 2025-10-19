@@ -35,10 +35,6 @@ impl Timer {
     pub(crate) fn is_new_second(&self) -> bool {
         self.frames == 0
     }
-
-    pub fn temp_200th_frame(&self) -> bool {
-        self.frames % 200 == 0
-    }
 }
 
 impl Default for Timer {

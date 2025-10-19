@@ -1,20 +1,20 @@
 pub mod app_renderer;
 
+use crate::compute::geo::Frustum;
 use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::types::CHUNK_DIM;
 use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld};
 use crate::{call_every, compute, vtypes};
-use glam::IVec3;
 use std::sync::Arc;
+use winit::application::ApplicationHandler;
+use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
-use winit::window::Window;
+use winit::window::{CursorGrabMode, Window};
 
 #[derive(Default)]
-pub struct AppDebug {
-    pub last_chunk_pos: IVec3,
-}
+pub struct AppDebug {}
 
 pub struct App<'a> {
     pub window: Option<Arc<Window>>,
@@ -45,27 +45,55 @@ impl<'a> App<'a> {
     }
 }
 
-impl<'a> winit::application::ApplicationHandler for App<'a> {
+#[derive(Debug, Clone)]
+struct WindowDescriptor {
+    size: (u32, u32),
+    title: String,
+    cursor_grab: CursorGrabMode,
+    cursor_visible: bool,
+}
+
+fn initialize_window(
+    event_loop: &ActiveEventLoop,
+    descriptor: &WindowDescriptor,
+) -> Result<Arc<Window>, String> {
+    let physical_size = PhysicalSize::new(descriptor.size.0, descriptor.size.1);
+    let attributes = Window::default_attributes()
+        .with_title(descriptor.title.clone())
+        .with_inner_size(physical_size);
+    let window = match event_loop.create_window(attributes) {
+        Ok(window) => Arc::new(window),
+        Err(e) => return Err(e.to_string()),
+    };
+    window
+        .set_cursor_grab(descriptor.cursor_grab)
+        .map_err(|e| e.to_string())?;
+    window.set_cursor_visible(descriptor.cursor_visible);
+    Ok(window)
+}
+
+impl<'a> ApplicationHandler for App<'a> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_none() {
-            let attributes = Window::default_attributes()
-                .with_title("Tech")
-                .with_inner_size(winit::dpi::PhysicalSize::new(1280, 720));
-            let arc_window = Arc::new(event_loop.create_window(attributes).unwrap());
-            self.window = Some(arc_window.clone());
-
-            self.v
-                .camera
-                .set_render_distance(self.client_config.render_distance as u32);
-            self.v.camera.set_aspect_ratio(
-                arc_window.inner_size().width as f32 / arc_window.inner_size().height as f32,
-            );
-            self.v.camera.transform.position = glam::vec3(0.0, 10.0, 0.0);
-            self.client = Some(ClientWorld::new(arc_window, self.client_config));
-            self.client.as_mut().unwrap().temp_send_req_conn();
-
-            self.debug.last_chunk_pos = IVec3::new(100, 100, 100);
+        if self.window.is_some() {
+            return;
         }
+        let window_desc = WindowDescriptor {
+            size: (1280, 720),
+            title: "Tech".to_string(),
+            cursor_grab: CursorGrabMode::Locked,
+            cursor_visible: false,
+        };
+        let window = initialize_window(event_loop, &window_desc).unwrap();
+        self.window = Some(window.clone());
+
+        let win_size = window.inner_size();
+        let aspect_ratio = win_size.width as f32 / win_size.height as f32;
+        self.v.camera.set_aspect_ratio(aspect_ratio);
+        self.v.camera.transform.position = glam::vec3(0.0, 10.0, 0.0);
+
+        let client = ClientWorld::new(window, self.client_config);
+        client.temp_send_req_conn();
+        self.client = Some(client);
     }
 
     fn window_event(
@@ -74,66 +102,62 @@ impl<'a> winit::application::ApplicationHandler for App<'a> {
         window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        let Some(window) = &self.window else {
-            return;
+        let window = match &self.window {
+            Some(window) if window.id() == window_id => window,
+            _ => return,
         };
-        if window.id() == window_id {
-            match event {
-                WindowEvent::CloseRequested => event_loop.exit(),
-                WindowEvent::RedrawRequested => {
-                    if let Some(client) = &mut self.client {
-                        self.v.time.tick();
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::RedrawRequested => {
+                let client = self.client.as_mut().unwrap();
+                self.v.time.tick();
 
-                        if self.v.time.temp_200th_frame() {
-                            window.set_title(&format!(
-                                "FPS: {:.2} POS: x: {:.2}, y: {:.2}, z: {:.2}",
-                                self.v.time.fps(),
-                                self.v.camera.transform.position.x,
-                                self.v.camera.transform.position.y,
-                                self.v.camera.transform.position.z,
-                            ));
-                        }
+                call_every!(WINDOW_TITLE_UPDATE, 200, || {
+                    let p = self.v.camera.transform.position;
+                    let fps = self.v.time.fps().floor() as u32;
+                    let title =
+                        format!("FPS: {:>4} ({:>8.1},{:>8.1},{:>8.1})", fps, p.x, p.y, p.z,);
+                    window.set_title(&title);
+                });
 
-                        // fixme naming here (renderer.renderer)
-                        let mut encoder = client
-                            .session
-                            .renderer
-                            .renderer
-                            .create_encoder("Main Encoder");
-                        client.tick(&mut encoder);
-                        if let Err(e) = client
-                            .session
-                            .renderer
-                            .submit_render_pass(encoder, &self.v.camera)
-                        {
-                            println!("{:?}", e);
-                        }
-                    }
-                }
-                WindowEvent::Resized(new_size) => {
-                    self.v
-                        .camera
-                        .set_aspect_ratio(new_size.width as f32 / new_size.height as f32);
-                }
-                WindowEvent::KeyboardInput { event, .. } => {
-                    let key_code =
-                        vtypes::input::get_keycode(event.physical_key).expect("unknown key");
-                    match event.state {
-                        ElementState::Pressed => self.v.input.write().keyboard.press(key_code),
-                        ElementState::Released => self.v.input.write().keyboard.release(key_code),
-                    }
-                }
-                _ => {}
+                // fixme naming here (renderer.renderer)
+                let mut encoder = client
+                    .session
+                    .renderer
+                    .renderer
+                    .create_encoder("Main Encoder");
+                client.tick(&mut encoder);
+                let voxel_render_distance = self.client_config.render_distance * CHUNK_DIM;
+                let render_result = client.session.renderer.submit_render_pass(
+                    encoder,
+                    &self.v.camera,
+                    voxel_render_distance as u32,
+                );
+                render_result.unwrap_or_else(|e| println!("{:?}", e));
             }
+            WindowEvent::Resized(new_size) => {
+                self.v
+                    .camera
+                    .set_aspect_ratio(new_size.width as f32 / new_size.height as f32);
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                let key_code = vtypes::input::get_keycode(event.physical_key).expect("unknown key");
+                match event.state {
+                    ElementState::Pressed => self.v.input.write().keyboard.press(key_code),
+                    ElementState::Released => self.v.input.write().keyboard.release(key_code),
+                }
+            }
+            _ => {}
         }
     }
 
     fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
-        let Some(window) = &self.window else {
+        if self.window.is_none() {
             return;
-        };
+        }
         match event {
             DeviceEvent::MouseMotion { delta } => {
+                // dbg!(delta);
                 self.v.input.write().mouse.add_delta(delta);
             }
             _ => {}
@@ -162,31 +186,26 @@ impl<'a> App<'a> {
         {
             let input = self.v.input.read();
             const MOVE_SPEED: f32 = 10.0;
-            let fast_mul: f32 = if input.keyboard.key_down(KeyCode::ShiftLeft) {
-                6.0
-            } else {
-                1.0
-            };
+            let sprint_mul = (1 + input.keyboard.key_down(KeyCode::ShiftLeft) as u32 * 6) as f32;
 
-            let forward_input = input.keyboard.key_down(KeyCode::KeyW) as i8
-                - input.keyboard.key_down(KeyCode::KeyS) as i8;
-            let right_input = input.keyboard.key_down(KeyCode::KeyD) as i8
-                - input.keyboard.key_down(KeyCode::KeyA) as i8;
+            let forward_input = input.keyboard.key_down(KeyCode::KeyW) as i32
+                - input.keyboard.key_down(KeyCode::KeyS) as i32;
+            let right_input = input.keyboard.key_down(KeyCode::KeyD) as i32
+                - input.keyboard.key_down(KeyCode::KeyA) as i32;
             let move_vec = forward_input as f32 * self.v.camera.transform.forward()
                 + right_input as f32 * self.v.camera.transform.right();
             self.v.camera.transform.position +=
-                move_vec * MOVE_SPEED * fast_mul * self.v.time.delta();
+                move_vec * MOVE_SPEED * sprint_mul * self.v.time.delta();
         }
 
-        let m_client = self.client.as_mut().unwrap();
+        let safe_voxel_rdist = ((self.client_config.render_distance - 1) * CHUNK_DIM) as f32;
+        let safe_vp = self.v.camera.view_projection_with_far(safe_voxel_rdist);
+        let safe_frustum_planes = Frustum::planes(safe_vp);
         let player_position = self.v.camera.transform.position;
-        let chunk_frustum_planes = compute::geo::Frustum::planes(
-            self.v
-                .camera
-                .chunk_view_projection(((m_client.config.render_distance - 1) * CHUNK_DIM) as f32),
-        );
+
+        let m_client = self.client.as_mut().unwrap();
         m_client.temp_set_player_position(player_position);
-        m_client.temp_set_view_frustum(chunk_frustum_planes);
+        m_client.temp_set_view_frustum(safe_frustum_planes);
 
         call_every!(CLIENT_POS_SEND, 20, || {
             m_client.temp_send_player_position()
