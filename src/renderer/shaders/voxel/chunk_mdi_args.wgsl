@@ -10,6 +10,8 @@ var<storage, read> chunks_buffer: array<GPUVoxelChunk>;
 @group(0) @binding(4)
 var<storage, read> chunks_in_view_buffer: array<GPUChunkMeshEntry>;
 @group(0) @binding(5)
+var depth_texture_array: texture_storage_2d_array<r32float, read>;
+@group(0) @binding(6)
 var<uniform> camera_view: UniformCameraView;
 
 const MAX_WORKGROUP_DRAW_ARGS: u32 = CFG_MAX_WORKGROUP_DIM_1D * 6u;
@@ -41,6 +43,21 @@ fn write_culled_mdi(
         f32(chunk_header.chunk_z),
     );
     let chunk_world_position = chunk_position_f32 * f32(CHUNK_DIM);
+    let chunk_world_position_center = chunk_world_position + f32(CHUNK_DIM_HALF);
+
+    let chunk_bounding_sphere_r = f32(CHUNK_DIM_HALF) * 1.9;
+    let chunk_clip_position = camera_view.view_proj * vec4<f32>(chunk_world_position_center, 1.0);
+    let chunk_ndc = chunk_clip_position.xyz / chunk_clip_position.w;
+    let chunk_screen_position = (chunk_ndc.xy * 0.5 + 0.5);
+    let chunk_screen_coords = vec2<i32>(chunk_screen_position * vec2<f32>(camera_view.view_dim_px));
+    let chunk_depth = (chunk_ndc.z * 0.5 + 0.5);
+    let distance_to_chunk_center = distance(camera_position, chunk_world_position_center);
+    let px_per_world_unit = (1 / tan(camera_view.fov_y / 2.0)) * (f32(camera_view.view_dim_px.y) / 2.0);
+    let pr = (chunk_bounding_sphere_r / chunk_clip_position.z) * px_per_world_unit;
+    let depth_mip_level = i32(max(1.0, log2(max(f32(camera_view.view_dim_px.x), f32(camera_view.view_dim_px.y)) / (2 * pr))));
+
+    let mip_depth = textureLoad(depth_texture_array, chunk_screen_coords, depth_mip_level).r;
+    let not_occluded = chunk_depth <= mip_depth;
 
     let fids_facing_camera = chunk_fids_facing_camera(camera_position, chunk_position_f32);
     let face_counts = unpack_mesh_entry_face_counts(mesh_entry);
@@ -49,7 +66,7 @@ fn write_culled_mdi(
     let exists = draw_arg_index < input_length;
     let within_render_distance = distance_within_threshold(chunk_world_position, camera_position, render_distance_voxels_f32);
     let within_view_frustum = frustum_check_chunk(chunk_world_position, chunk_world_position + f32(CHUNK_DIM));
-    let relevant_mask = u32(exists && within_render_distance && within_view_frustum);
+    let relevant_mask = u32(exists && within_render_distance && within_view_frustum && not_occluded);
     let requires_meshing_mask = u32(exists) * unpack_mesh_entry_meshing_flag(mesh_entry);
 
     let mesh_args_idx = atomicAdd(&wg_indirect_meshing_count, requires_meshing_mask);

@@ -1,8 +1,9 @@
 use crate::compute::geo::{Frustum, Plane};
+use crate::compute::num::ceil_div;
+use crate::renderer::gpu::chunk_session_resources::GpuChunkSessionResources;
 use crate::renderer::gpu::chunk_session_shader_types::{
     GPUChunkMeshEntry, GPUPackedIndirectArgsAtomic, GPUVoxelChunkHeader,
 };
-use crate::renderer::gpu::chunk_session_resources::GpuChunkSessionResources;
 use crate::renderer::gpu::chunk_session_types::{ChunkMeshState, MeshStateError};
 use crate::renderer::gpu::{GPUDispatchIndirectArgsAtomic, GPUVoxelChunk, GPUVoxelFaceData};
 use crate::renderer::resources::vx_buffer::VxBuffer;
@@ -12,10 +13,9 @@ use glam::IVec3;
 use slabmap::SlabMap;
 use suballoc::SubAllocator;
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupLayout, BufferUsages, ComputePass, ComputePipeline,
-    RenderPass,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, BufferUsages,
+    ComputePass, ComputePipeline, RenderPass,
 };
-use crate::compute::num::ceil_div;
 
 #[derive(Debug, Clone, Copy)]
 pub struct GpuChunkSessionConfig {
@@ -115,6 +115,7 @@ impl GpuState {
                 meshing_batch_buffer.as_entire_binding(),
                 chunk_buffer.as_entire_binding(),
                 aabb_visible_buffer.as_entire_binding(),
+                BindingResource::TextureView(&renderer.depth.mip_texture_array_view),
                 camera_buffer.as_entire_binding(),
             ]),
         });

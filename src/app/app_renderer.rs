@@ -8,11 +8,12 @@ use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::vtypes::Camera;
 use crate::world::types::CHUNK_DIM;
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec4};
+use glam::{Mat4, UVec2, Vec4};
 use std::borrow::Cow;
 use std::sync::Arc;
 use voxer_macros::ShaderType;
 use wgpu::{BindGroup, BufferUsages, CommandEncoder, RenderPipeline};
+use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
 #[repr(C, align(16))]
@@ -22,20 +23,27 @@ pub struct UniformCameraView {
     view_proj: Mat4,
     view_planes: [Plane; 6],
     origin: Vec4, // w = voxel_render_distance
+    view_dim_px: UVec2,
+    fov_y: f32,
+    _padding: u32,
 }
 
 impl UniformCameraView {
-    pub fn new(camera: &Camera, voxel_render_distance: u32) -> Self {
+    pub fn new(camera: &Camera, voxel_render_distance: u32, window_size: PhysicalSize<u32>) -> Self {
         let view_proj = camera.view_projection();
         let view_planes = Frustum::planes(view_proj);
         let origin = camera
             .transform
             .position
             .extend(voxel_render_distance as f32);
+        let view_dim_px = UVec2::new(window_size.width, window_size.height);
         Self {
             view_proj,
             view_planes,
             origin,
+            view_dim_px,
+            fov_y: camera.frustum.fov,
+            _padding: 0,
         }
     }
 }
@@ -73,7 +81,7 @@ impl AppRenderer<'_> {
         };
         let chunk_session = GpuChunkSession::new(&renderer, &view_projection_buffer, cm_config);
 
-        let v = &renderer.depth.mip_views[6];
+        let v = &renderer.depth.mip_views[1];
 
         let (dbg_bgl, dbg_bg) = renderer.dbg_sampler(v);
         let dbg_pipeline = debug_make_render_pipeline(
@@ -120,11 +128,12 @@ impl AppRenderer<'_> {
         mut encoder: CommandEncoder,
         camera: &Camera,
         voxel_render_distance: u32,
+        window_size: PhysicalSize<u32>,
     ) -> Result<(), wgpu::SurfaceError> {
         let frame = self.renderer.surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
 
-        let camera_view = UniformCameraView::new(camera, voxel_render_distance);
+        let camera_view = UniformCameraView::new(camera, voxel_render_distance, window_size);
 
         self.renderer.write_buffer(
             &self.view_projection_buffer,

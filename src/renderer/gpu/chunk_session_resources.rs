@@ -1,4 +1,4 @@
-use wgpu::{BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, ComputePipeline, ComputePipelineDescriptor, Device, PipelineLayoutDescriptor, PushConstantRange, ShaderStages};
+use wgpu::{BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, ComputePipeline, ComputePipelineDescriptor, Device, PipelineLayoutDescriptor, PushConstantRange, ShaderStages, StorageTextureAccess, TextureFormat, TextureViewDimension};
 use crate::renderer::gpu::chunk_session::GpuChunkSession;
 use crate::renderer::resources;
 use crate::renderer::resources::vx_buffer::VxBuffer;
@@ -164,7 +164,17 @@ impl GpuChunkSessionResources {
                     count: None,
                 },
                 BindGroupLayoutEntry {
-                    binding: 5, // camera
+                    binding: 5, // depth texture array
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::StorageTexture {
+                        access: StorageTextureAccess::ReadOnly,
+                        format: TextureFormat::R32Float,
+                        view_dimension: TextureViewDimension::D2Array,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 6, // camera
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,

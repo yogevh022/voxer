@@ -2,7 +2,7 @@
 @group(0) @binding(0)
 var src_depth_texture: texture_depth_2d;
 @group(0) @binding(1)
-var dst_texture: texture_storage_2d<r32float, write>;
+var dst_texture: texture_storage_2d_array<r32float, write>;
 
 var<push_constant> mip_size: vec2<u32>;
 
@@ -25,5 +25,5 @@ fn depth_mip1_entry(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let new_depth = max(max(tl_texel, tr_texel), max(bl_texel, br_texel));
 
-    textureStore(dst_texture, base_idx, vec4<f32>(new_depth, 0.0, 0.0, 0.0));
+    textureStore(dst_texture, base_idx, 0, vec4<f32>(new_depth, 0.0, 0.0, 0.0));
 }

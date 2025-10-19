@@ -15,7 +15,8 @@ pub struct VxDepth {
     surface_extent: Extent3d,
     pub texture: Texture,
     pub view: TextureView,
-    pub mip_texture: Texture,
+    pub mip_texture_array: Texture,
+    pub mip_texture_array_view: TextureView,
     pub mip_views: Box<[TextureView]>,
     mip1_compute_bgl: BindGroupLayout,
     mip1_compute_pipeline: ComputePipeline,
@@ -25,8 +26,8 @@ pub struct VxDepth {
 
 impl VxDepth {
     pub fn new(device: &Device, size: PhysicalSize<u32>) -> Self {
-        let depth_mip_count = (size.width.max(size.height) as f32).log2().floor() as u32 + 1;
-        let surface_extent = Extent3d {
+        let mip_count = (size.width.max(size.height) as f32).log2().floor() as u32 + 1;
+        let mut surface_extent = Extent3d {
             width: size.width,
             height: size.height,
             depth_or_array_layers: 1,
@@ -35,8 +36,10 @@ impl VxDepth {
         let texture = create_depth_texture(device, surface_extent);
         let view = texture.create_view(&Default::default());
 
-        let mip_texture = create_depth_mip_texture(device, surface_extent, depth_mip_count);
-        let mip_views = mip_views(&mip_texture, depth_mip_count);
+        surface_extent.depth_or_array_layers = mip_count;
+        let mip_texture_array = create_depth_mip_texture_array(device, surface_extent);
+        let mip_texture_array_view = Self::mip_array_view(&mip_texture_array, mip_count);
+        let mip_views = Self::mip_views(&mip_texture_array, mip_count);
 
         let mip1_compute_bgl = depth_mip1_bgl(device);
         let mip1_compute_pipeline = depth_mip1_pipeline(device, &[&mip1_compute_bgl]);
@@ -47,13 +50,39 @@ impl VxDepth {
             surface_extent,
             texture,
             view,
-            mip_texture,
+            mip_texture_array,
+            mip_texture_array_view,
             mip_views,
             mip1_compute_bgl,
             mip1_compute_pipeline,
             mipx_compute_bgl,
             mipx_compute_pipeline,
         }
+    }
+
+    fn mip_array_view(mip_texture_array: &Texture, mip_count: u32) -> TextureView {
+        mip_texture_array.create_view(&TextureViewDescriptor {
+            label: Some("Depth Mip Array View"),
+            base_array_layer: 0,
+            array_layer_count: Some(mip_count),
+            dimension: Some(TextureViewDimension::D2Array),
+            ..Default::default()
+        })
+    }
+
+    fn mip_views(texture: &Texture, mip_count: u32) -> Box<[TextureView]> {
+        let mut mip_views = Vec::with_capacity(mip_count as usize);
+        for mip in 0..mip_count {
+            let view = texture.create_view(&TextureViewDescriptor {
+                label: Some(&format!("Depth Mip View [{}]", mip)),
+                base_array_layer: mip,
+                array_layer_count: Some(1),
+                dimension: Some(TextureViewDimension::D2Array),
+                ..Default::default()
+            });
+            mip_views.push(view);
+        }
+        mip_views.into_boxed_slice()
     }
 
     fn mip1_bind_group(&self, device: &Device) -> BindGroup {
@@ -92,7 +121,7 @@ impl VxDepth {
         })
     }
 
-    pub fn generate_initial_mip(&self, device: &Device, compute_pass: &mut ComputePass) {
+    fn generate_depth_mip1(&self, device: &Device, compute_pass: &mut ComputePass) {
         compute_pass.set_pipeline(&self.mip1_compute_pipeline);
         compute_pass.set_bind_group(0, &self.mip1_bind_group(device), &[]);
         let mip_width = self.surface_extent.width >> 1;
@@ -104,6 +133,7 @@ impl VxDepth {
     }
 
     pub fn generate_depth_mips(&self, device: &Device, compute_pass: &mut ComputePass) {
+        self.generate_depth_mip1(device, compute_pass);
         compute_pass.set_pipeline(&self.mipx_compute_pipeline);
         for mip in 2..self.mip_views.len() {
             let mip_bg = self.mipx_bind_group(device, mip - 1, mip);
@@ -116,20 +146,6 @@ impl VxDepth {
             compute_pass.dispatch_workgroups(groups_x, groups_y, 1);
         }
     }
-}
-
-fn mip_views(mip_texture: &Texture, mip_count: u32) -> Box<[TextureView]> {
-    let mut mip_views = Vec::with_capacity(mip_count as usize);
-    for mip in 0..mip_count {
-        let view = mip_texture.create_view(&TextureViewDescriptor {
-            label: Some(&format!("Depth Mip View [{}]", mip)),
-            base_mip_level: mip,
-            mip_level_count: Some(1),
-            ..Default::default()
-        });
-        mip_views.push(view);
-    }
-    mip_views.into_boxed_slice()
 }
 
 fn create_depth_texture(device: &Device, surface_extent: Extent3d) -> Texture {
@@ -145,15 +161,11 @@ fn create_depth_texture(device: &Device, surface_extent: Extent3d) -> Texture {
     })
 }
 
-fn create_depth_mip_texture(
-    device: &Device,
-    surface_extent: Extent3d,
-    depth_mip_count: u32,
-) -> Texture {
+fn create_depth_mip_texture_array(device: &Device, surface_extent: Extent3d) -> Texture {
     device.create_texture(&TextureDescriptor {
-        label: Some("Depth Mip Texture"),
+        label: Some("Depth Mip Texture Array"),
         size: surface_extent,
-        mip_level_count: depth_mip_count,
+        mip_level_count: 1,
         sample_count: 1,
         dimension: TextureDimension::D2,
         format: TextureFormat::R32Float,
@@ -185,7 +197,7 @@ fn depth_mip1_bgl(device: &Device) -> BindGroupLayout {
                 ty: BindingType::StorageTexture {
                     access: StorageTextureAccess::WriteOnly,
                     format: TextureFormat::R32Float,
-                    view_dimension: TextureViewDimension::D2,
+                    view_dimension: TextureViewDimension::D2Array,
                 },
                 count: None,
             },
@@ -203,7 +215,7 @@ fn depth_mipx_bgl(device: &Device) -> BindGroupLayout {
                 ty: BindingType::StorageTexture {
                     access: StorageTextureAccess::ReadOnly,
                     format: TextureFormat::R32Float,
-                    view_dimension: TextureViewDimension::D2,
+                    view_dimension: TextureViewDimension::D2Array,
                 },
                 count: None,
             },
@@ -213,7 +225,7 @@ fn depth_mipx_bgl(device: &Device) -> BindGroupLayout {
                 ty: BindingType::StorageTexture {
                     access: StorageTextureAccess::WriteOnly,
                     format: TextureFormat::R32Float,
-                    view_dimension: TextureViewDimension::D2,
+                    view_dimension: TextureViewDimension::D2Array,
                 },
                 count: None,
             },

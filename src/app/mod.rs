@@ -133,15 +133,6 @@ impl<'a> ApplicationHandler for App<'a> {
                         .app_renderer
                         .renderer
                         .depth
-                        .generate_initial_mip(
-                            &client.session.app_renderer.renderer.device,
-                            &mut compute_pass,
-                        );
-                    client
-                        .session
-                        .app_renderer
-                        .renderer
-                        .depth
                         .generate_depth_mips(
                             &client.session.app_renderer.renderer.device,
                             &mut compute_pass,
@@ -149,10 +140,12 @@ impl<'a> ApplicationHandler for App<'a> {
                     client.tick(&mut compute_pass);
                 }
                 let voxel_render_distance = self.client_config.render_distance * CHUNK_DIM;
+                let window_size = window.inner_size();
                 let render_result = client.session.app_renderer.submit_render_pass(
                     encoder,
                     &self.v.camera,
                     voxel_render_distance as u32,
+                    window_size,
                 );
                 render_result.unwrap_or_else(|e| println!("{:?}", e));
             }
