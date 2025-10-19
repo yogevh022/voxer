@@ -12,7 +12,7 @@ use glam::Vec3;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use voxer_network::NetworkDeserializable;
-use wgpu::CommandEncoder;
+use wgpu::{CommandEncoder, ComputePass};
 use winit::window::Window;
 
 #[derive(Clone, Copy)]
@@ -71,11 +71,11 @@ impl ClientWorld<'_> {
         self.session.view_frustum = frustum;
     }
 
-    pub fn tick(&mut self, gpu_encoder: &mut CommandEncoder) {
+    pub fn tick(&mut self, compute_pass: &mut ComputePass) {
         for message in self.network.take_messages(64) {
             self.handle_network_message(message);
         }
-        self.session.tick(gpu_encoder);
+        self.session.tick(compute_pass);
         self.request_chunk_batch();
     }
 

@@ -1,8 +1,8 @@
 
 @group(0) @binding(0)
-var<storage, read_write> chunks_buffer_dst: array<GPUVoxelChunk>;
-@group(0) @binding(1)
 var<storage, read> chunks_buffer_src: array<GPUVoxelChunk>;
+@group(0) @binding(1)
+var<storage, read_write> chunks_buffer_dst: array<GPUVoxelChunk>;
 
 var<push_constant>  input_length: u32;
 

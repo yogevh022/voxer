@@ -63,6 +63,11 @@ macro_rules! include_shader_consts {
     };
 }
 
+include_shaders!(
+    VX_WRITE_DEPTH_MIPX_ENTRY => "vx/vx_write_depth_mipx_entry.wgsl",
+    VX_WRITE_DEPTH_MIP1_ENTRY => "vx/vx_write_depth_mip1_entry.wgsl",
+);
+
 // general
 include_shaders!(
     VERTEX_SHADER_ENTRY => "vert.wgsl",
@@ -165,7 +170,7 @@ pub fn chunk_meshing_wgsl() -> String {
     )
 }
 
-pub fn chunk_culled_mdi_args_wgsl() -> String {
+pub fn chunk_mdi_args_wgsl() -> String {
     concat_shaders!(
         &cfg_constants(),
         &meta_types(),
@@ -185,6 +190,35 @@ pub fn chunk_write_wgsl() -> String {
         &voxel_common(),
         F_THREAD_MAPPING,
         VOXEL_CHUNK_WRITE_ENTRY,
+    )
+}
+
+pub fn write_depth_mip1_wgsl() -> String {
+    concat_shaders!(
+        &cfg_constants(),
+        VX_WRITE_DEPTH_MIP1_ENTRY,
+    )
+}
+
+pub fn write_depth_mipx_wgsl() -> String {
+    concat_shaders!(
+        &cfg_constants(),
+        VX_WRITE_DEPTH_MIPX_ENTRY,
+    )
+}
+
+include_shaders!(
+    DBG_VERT => "vx/dbg_vert.wgsl",
+    DBG_FRAG => "vx/dbg_frag.wgsl",
+);
+
+pub fn dbg_render_wgsl() -> String {
+    concat_shaders!(
+        &cfg_constants(),
+        &meta_types(),
+        &geo_types(),
+        DBG_VERT,
+        DBG_FRAG,
     )
 }
 

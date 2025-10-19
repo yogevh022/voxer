@@ -36,7 +36,6 @@ fn run_app() {
 
     server.start_session();
     let mut app = app::App::new(voxer_engine, server, scene, client_config);
-
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
     event_loop.run_app(&mut app).unwrap();
@@ -44,19 +43,19 @@ fn run_app() {
 
 fn main() {
     run_app();
-    // debug();
 }
 
 fn debug() {
-    use crate::compute::geo::IVec3Iter;
     use crate::compute;
-    use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelFaceData, GPUVoxelChunkContent};
+    use crate::compute::geo::IVec3Iter;
+    use crate::renderer::gpu::{
+        GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData,
+    };
     use glam::IVec3;
     use rustc_hash::{FxHashMap, FxHashSet};
-    use smallhash;
     use slabmap;
+    use smallhash;
     use std::hint::black_box;
     use std::time::Duration;
     use std::time::Instant;
-
 }

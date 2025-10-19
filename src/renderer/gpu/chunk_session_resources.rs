@@ -78,22 +78,22 @@ impl GpuChunkSessionResources {
             label: Some("Chunk Write Bind Group Layout"),
             entries: &[
                 BindGroupLayoutEntry {
-                    binding: 0, // write dst
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: Some(dst_size),
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 1, // write src
+                    binding: 0, // write src
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
                         min_binding_size: Some(src_size),
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1, // write dst
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(dst_size),
                     },
                     count: None,
                 },
@@ -180,7 +180,7 @@ impl GpuChunkSessionResources {
     pub (crate) fn mdi_args_pipeline(device: &Device, bind_group_layouts: &[&BindGroupLayout]) -> ComputePipeline {
         let shader = resources::shader::create_shader(
             device,
-            resources::shader::chunk_culled_mdi_args_wgsl().into(),
+            resources::shader::chunk_mdi_args_wgsl().into(),
             "Chunk Culled MDI Args Pipeline Shader",
         );
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {

@@ -4,3 +4,4 @@ pub mod utils;
 pub mod vx_buffer;
 pub mod vx_queue;
 pub mod vx_device;
+pub mod vx_depth;

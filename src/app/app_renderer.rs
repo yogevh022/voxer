@@ -46,6 +46,9 @@ pub struct AppRenderer<'window> {
     render_pipeline: RenderPipeline,
     atlas_bind_group: BindGroup,
     view_projection_buffer: VxBuffer,
+
+    dbg_pipeline: RenderPipeline,
+    dbg_bg: BindGroup,
 }
 
 impl AppRenderer<'_> {
@@ -70,6 +73,17 @@ impl AppRenderer<'_> {
         };
         let chunk_session = GpuChunkSession::new(&renderer, &view_projection_buffer, cm_config);
 
+        let v = &renderer.depth.mip_views[6];
+
+        let (dbg_bgl, dbg_bg) = renderer.dbg_sampler(v);
+        let dbg_pipeline = debug_make_render_pipeline(
+            &renderer,
+            resources::shader::dbg_render_wgsl().into(),
+            &[
+                &dbg_bgl,
+            ],
+        );
+
         let (atlas_layout, atlas_bind_group) =
             renderer.texture_sampler("Texture Sampler Atlas", get_atlas_image());
 
@@ -88,13 +102,15 @@ impl AppRenderer<'_> {
             render_pipeline,
             atlas_bind_group,
             view_projection_buffer,
+
+            dbg_pipeline,
+            dbg_bg,
         }
     }
 
     fn render_chunks(&mut self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.atlas_bind_group, &[]);
-
         self.chunk_session
             .render_chunks(&self.renderer, render_pass);
     }
@@ -121,6 +137,10 @@ impl AppRenderer<'_> {
                 self.renderer
                     .begin_render_pass(&mut encoder, "Main Render Pass", &view);
             self.render_chunks(&mut render_pass);
+
+            render_pass.set_pipeline(&self.dbg_pipeline);
+            render_pass.set_bind_group(0, &self.dbg_bg, &[]);
+            render_pass.draw(0..6, 0..1);
         }
 
         self.renderer.queue.submit(Some(encoder.finish()));
@@ -149,7 +169,7 @@ pub fn make_render_pipeline(
     renderer
         .device
         .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("render_pipeline"),
+            label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -160,6 +180,65 @@ pub fn make_render_pipeline(
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: renderer.surface_format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        })
+}
+
+pub fn debug_make_render_pipeline(
+    renderer: &Renderer<'_>,
+    shader_source: Cow<str>,
+    bind_group_layouts: &[&wgpu::BindGroupLayout],
+) -> RenderPipeline {
+    let shader = resources::shader::create_shader(
+        &renderer.device,
+        shader_source,
+        "dbg render pipeline shader",
+    );
+    let dbg_render_pipeline_layout =
+        &renderer
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("dbg_render_pipeline_layout"),
+                bind_group_layouts,
+                push_constant_ranges: &[],
+            });
+
+    renderer
+        .device
+        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("dbg_render_pipeline"),
+            layout: Some(&dbg_render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("dbg_vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("dbg_fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: renderer.surface_format,

@@ -15,6 +15,7 @@ use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupLayout, BufferUsages, ComputePass, ComputePipeline,
     RenderPass,
 };
+use crate::compute::num::ceil_div;
 
 #[derive(Debug, Clone, Copy)]
 pub struct GpuChunkSessionConfig {
@@ -129,8 +130,8 @@ impl GpuState {
             label: Some("Chunk Write Bind Group"),
             layout: &write_bgl,
             entries: &resources::utils::bind_entries([
-                chunk_buffer.as_entire_binding(),
                 write_batch_buffer.as_entire_binding(),
+                chunk_buffer.as_entire_binding(),
             ]),
         });
 
@@ -316,7 +317,7 @@ impl GpuChunkSession {
         compute_pass.set_bind_group(0, &self.gpu_state.write_bind_group, &[]);
         let batch_size = self.cpu_state.write_batch.len() as u32;
         compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
-        let wg_count = dispatch_count_1d(batch_size, self.config.max_workgroup_size_1d);
+        let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_2d);
         compute_pass.dispatch_workgroups(wg_count, 1, 1);
     }
 
@@ -346,7 +347,7 @@ impl GpuChunkSession {
         compute_pass.set_bind_group(0, &self.gpu_state.mdi_args_bind_group, &[]);
         let batch_size = self.cpu_state.aabb_visible_batch.len() as u32;
         compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
-        let wg_count = dispatch_count_1d(batch_size, self.config.max_workgroup_size_1d);
+        let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_2d);
         compute_pass.dispatch_workgroups(wg_count, 1, 1);
 
         // handle meshing queue
@@ -372,8 +373,4 @@ impl GpuChunkSession {
     pub fn render_bgl(&self) -> &BindGroupLayout {
         &self.gpu_state.render_bind_group_layout
     }
-}
-
-fn dispatch_count_1d(tasks: u32, workgroup_size: u32) -> u32 {
-    (tasks as f32 / workgroup_size as f32).ceil() as u32
 }
