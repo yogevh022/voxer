@@ -18,10 +18,10 @@ pub struct VxDepth {
     pub mip_texture_array: Texture,
     pub mip_texture_array_view: TextureView,
     pub mip_views: Box<[TextureView]>,
-    mip1_compute_bgl: BindGroupLayout,
-    mip1_compute_pipeline: ComputePipeline,
-    mipx_compute_bgl: BindGroupLayout,
-    mipx_compute_pipeline: ComputePipeline,
+    mip_one_compute_bgl: BindGroupLayout,
+    mip_one_compute_pipeline: ComputePipeline,
+    mip_x_compute_bgl: BindGroupLayout,
+    mip_x_compute_pipeline: ComputePipeline,
 }
 
 impl VxDepth {
@@ -41,10 +41,10 @@ impl VxDepth {
         let mip_texture_array_view = Self::mip_array_view(&mip_texture_array, mip_count);
         let mip_views = Self::mip_views(&mip_texture_array, mip_count);
 
-        let mip1_compute_bgl = depth_mip1_bgl(device);
-        let mip1_compute_pipeline = depth_mip1_pipeline(device, &[&mip1_compute_bgl]);
-        let mipx_compute_bgl = depth_mipx_bgl(device);
-        let mipx_compute_pipeline = depth_mipx_pipeline(device, &[&mipx_compute_bgl]);
+        let mip_one_compute_bgl = depth_mip_one_bgl(device);
+        let mip_one_compute_pipeline = depth_mip_one_pipeline(device, &[&mip_one_compute_bgl]);
+        let mip_x_compute_bgl = depth_mip_x_bgl(device);
+        let mip_x_compute_pipeline = depth_mip_x_pipeline(device, &[&mip_x_compute_bgl]);
 
         Self {
             surface_extent,
@@ -53,10 +53,10 @@ impl VxDepth {
             mip_texture_array,
             mip_texture_array_view,
             mip_views,
-            mip1_compute_bgl,
-            mip1_compute_pipeline,
-            mipx_compute_bgl,
-            mipx_compute_pipeline,
+            mip_one_compute_bgl,
+            mip_one_compute_pipeline,
+            mip_x_compute_bgl,
+            mip_x_compute_pipeline,
         }
     }
 
@@ -85,7 +85,7 @@ impl VxDepth {
         mip_views.into_boxed_slice()
     }
 
-    fn mip1_bind_group(&self, device: &Device) -> BindGroup {
+    fn mip_one_bind_group(&self, device: &Device) -> BindGroup {
         let entries = [
             BindGroupEntry {
                 binding: 0,
@@ -98,12 +98,12 @@ impl VxDepth {
         ];
         device.create_bind_group(&BindGroupDescriptor {
             label: None,
-            layout: &self.mip1_compute_bgl,
+            layout: &self.mip_one_compute_bgl,
             entries: &entries,
         })
     }
 
-    fn mipx_bind_group(&self, device: &Device, src_mip: usize, dst_mip: usize) -> BindGroup {
+    fn mip_x_bind_group(&self, device: &Device, src_mip: usize, dst_mip: usize) -> BindGroup {
         let entries = [
             BindGroupEntry {
                 binding: 0,
@@ -116,14 +116,14 @@ impl VxDepth {
         ];
         device.create_bind_group(&BindGroupDescriptor {
             label: None,
-            layout: &self.mipx_compute_bgl,
+            layout: &self.mip_x_compute_bgl,
             entries: &entries,
         })
     }
 
-    fn generate_depth_mip1(&self, device: &Device, compute_pass: &mut ComputePass) {
-        compute_pass.set_pipeline(&self.mip1_compute_pipeline);
-        compute_pass.set_bind_group(0, &self.mip1_bind_group(device), &[]);
+    fn generate_depth_mip_one(&self, device: &Device, compute_pass: &mut ComputePass) {
+        compute_pass.set_pipeline(&self.mip_one_compute_pipeline);
+        compute_pass.set_bind_group(0, &self.mip_one_bind_group(device), &[]);
         let mip_width = self.surface_extent.width >> 1;
         let mip_height = self.surface_extent.height >> 1;
         let groups_x = ceil_div(mip_width, MAX_WORKGROUP_DIM_2D);
@@ -133,10 +133,10 @@ impl VxDepth {
     }
 
     pub fn generate_depth_mips(&self, device: &Device, compute_pass: &mut ComputePass) {
-        self.generate_depth_mip1(device, compute_pass);
-        compute_pass.set_pipeline(&self.mipx_compute_pipeline);
+        self.generate_depth_mip_one(device, compute_pass);
+        compute_pass.set_pipeline(&self.mip_x_compute_pipeline);
         for mip in 2..self.mip_views.len() {
-            let mip_bg = self.mipx_bind_group(device, mip - 1, mip);
+            let mip_bg = self.mip_x_bind_group(device, mip - 1, mip);
             compute_pass.set_bind_group(0, &mip_bg, &[]);
             let mip_width = (self.surface_extent.width >> mip).max(1);
             let mip_height = (self.surface_extent.height >> mip).max(1);
@@ -177,7 +177,7 @@ fn create_depth_mip_texture_array(device: &Device, surface_extent: Extent3d) -> 
     })
 }
 
-fn depth_mip1_bgl(device: &Device) -> BindGroupLayout {
+fn depth_mip_one_bgl(device: &Device) -> BindGroupLayout {
     device.create_bind_group_layout(&BindGroupLayoutDescriptor {
         label: Some("Depth Mip 1 Bind Group Layout"),
         entries: &[
@@ -205,7 +205,7 @@ fn depth_mip1_bgl(device: &Device) -> BindGroupLayout {
     })
 }
 
-fn depth_mipx_bgl(device: &Device) -> BindGroupLayout {
+fn depth_mip_x_bgl(device: &Device) -> BindGroupLayout {
     device.create_bind_group_layout(&BindGroupLayoutDescriptor {
         label: Some("Depth Mip X Bind Group Layout"),
         entries: &[
@@ -233,13 +233,13 @@ fn depth_mipx_bgl(device: &Device) -> BindGroupLayout {
     })
 }
 
-fn depth_mip1_pipeline(
+fn depth_mip_one_pipeline(
     device: &Device,
     bind_group_layouts: &[&BindGroupLayout],
 ) -> ComputePipeline {
     let shader = resources::shader::create_shader(
         device,
-        resources::shader::write_depth_mip1_wgsl().into(),
+        resources::shader::depth_mip_one_wgsl().into(),
         "Depth Mip 1 Pipeline Shader",
     );
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
@@ -255,19 +255,19 @@ fn depth_mip1_pipeline(
         label: Some("Depth Mip 1 Pipeline"),
         layout: Some(&pipeline_layout),
         module: &shader,
-        entry_point: Some("depth_mip1_entry"),
+        entry_point: Some("depth_mip_one_entry"),
         compilation_options: Default::default(),
         cache: None,
     })
 }
 
-fn depth_mipx_pipeline(
+fn depth_mip_x_pipeline(
     device: &Device,
     bind_group_layouts: &[&BindGroupLayout],
 ) -> ComputePipeline {
     let shader = resources::shader::create_shader(
         device,
-        resources::shader::write_depth_mipx_wgsl().into(),
+        resources::shader::depth_mip_x_wgsl().into(),
         "Depth Mip X Pipeline Shader",
     );
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
@@ -283,7 +283,7 @@ fn depth_mipx_pipeline(
         label: Some("Depth Mip X Pipeline"),
         layout: Some(&pipeline_layout),
         module: &shader,
-        entry_point: Some("depth_mipx_entry"),
+        entry_point: Some("depth_mip_x_entry"),
         compilation_options: Default::default(),
         cache: None,
     })

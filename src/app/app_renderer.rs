@@ -6,7 +6,6 @@ use crate::renderer::resources::shader::{MAX_WORKGROUP_DIM_1D, MAX_WORKGROUP_DIM
 use crate::renderer::resources::texture::get_atlas_image;
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::vtypes::Camera;
-use crate::world::types::CHUNK_DIM;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, UVec2, Vec4};
 use std::borrow::Cow;

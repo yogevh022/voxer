@@ -64,8 +64,9 @@ macro_rules! include_shader_consts {
 }
 
 include_shaders!(
-    VX_WRITE_DEPTH_MIPX_ENTRY => "vx/vx_write_depth_mipx_entry.wgsl",
-    VX_WRITE_DEPTH_MIP1_ENTRY => "vx/vx_write_depth_mip1_entry.wgsl",
+    VX_DEPTH_MIP_COMMON => "vx/vx_depth_mip_common.wgsl",
+    VX_DEPTH_MIP_ONE_ENTRY => "vx/vx_depth_mip_one_entry.wgsl",
+    VX_DEPTH_MIP_X_ENTRY => "vx/vx_depth_mip_x_entry.wgsl",
 );
 
 // general
@@ -193,17 +194,19 @@ pub fn chunk_write_wgsl() -> String {
     )
 }
 
-pub fn write_depth_mip1_wgsl() -> String {
+pub fn depth_mip_one_wgsl() -> String {
     concat_shaders!(
         &cfg_constants(),
-        VX_WRITE_DEPTH_MIP1_ENTRY,
+        VX_DEPTH_MIP_COMMON,
+        VX_DEPTH_MIP_ONE_ENTRY,
     )
 }
 
-pub fn write_depth_mipx_wgsl() -> String {
+pub fn depth_mip_x_wgsl() -> String {
     concat_shaders!(
         &cfg_constants(),
-        VX_WRITE_DEPTH_MIPX_ENTRY,
+        VX_DEPTH_MIP_COMMON,
+        VX_DEPTH_MIP_X_ENTRY,
     )
 }
 
