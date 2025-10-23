@@ -15,33 +15,44 @@ use wgpu::{BindGroup, BufferUsages, CommandEncoder, RenderPipeline};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
+// todo move from here
 #[repr(C, align(16))]
 #[derive(ShaderType, Copy, Clone, Debug, Pod, Zeroable)]
-pub struct UniformCameraView {
-    // todo move from here
-    view_proj: Mat4,
-    view_planes: [Plane; 6],
-    origin: Vec4, // w = voxel_render_distance
-    view_dim_px: UVec2,
-    fov_y: f32,
+pub struct VxCamera {
+    main_origin: Vec4,
+    main_vp: Mat4,
+    culling_origin: Vec4, // fixme w = voxel_render_distance
+    culling_view: Mat4,
+    culling_proj: Mat4,
+    culling_vp: Mat4,
+    culling_vf: [Plane; 6],
+    window_size: UVec2,
+    culling_dist: u32,
     _padding: u32,
 }
 
-impl UniformCameraView {
-    pub fn new(camera: &Camera, voxel_render_distance: u32, window_size: PhysicalSize<u32>) -> Self {
-        let view_proj = camera.view_projection();
-        let view_planes = Frustum::planes(view_proj);
-        let origin = camera
-            .transform
-            .position
-            .extend(voxel_render_distance as f32);
-        let view_dim_px = UVec2::new(window_size.width, window_size.height);
+impl VxCamera {
+    pub fn new(main_camera: &Camera, culling_camera: &Camera, culling_dist: u32, window_size: PhysicalSize<u32>) -> Self {
+        let window_size = UVec2::new(window_size.width, window_size.height);
+
+        let main_origin = main_camera.transform.position.extend(1.0); // unneeded
+        let main_vp = main_camera.view_projection_matrix();
+
+        let culling_origin = culling_camera.transform.position.extend(1.0); // unneeded
+        let culling_view = culling_camera.view_matrix();
+        let culling_proj = culling_camera.projection_matrix();
+        let culling_vp = culling_proj * culling_view;
+        let culling_vf = Frustum::planes(culling_vp);
         Self {
-            view_proj,
-            view_planes,
-            origin,
-            view_dim_px,
-            fov_y: camera.frustum.fov,
+            main_origin,
+            main_vp,
+            culling_origin,
+            culling_dist,
+            culling_view,
+            culling_proj,
+            culling_vp,
+            culling_vf,
+            window_size,
             _padding: 0,
         }
     }
@@ -62,7 +73,7 @@ impl AppRenderer<'_> {
     pub fn new(window: Arc<Window>) -> Self {
         let renderer = Renderer::new(window);
 
-        let view_projection_buffer = renderer.device.create_vx_buffer::<UniformCameraView>(
+        let view_projection_buffer = renderer.device.create_vx_buffer::<VxCamera>(
             "View Projection Buffer",
             1,
             BufferUsages::UNIFORM | BufferUsages::COPY_DST,
@@ -86,9 +97,7 @@ impl AppRenderer<'_> {
         let dbg_pipeline = debug_make_render_pipeline(
             &renderer,
             resources::shader::dbg_render_wgsl().into(),
-            &[
-                &dbg_bgl,
-            ],
+            &[&dbg_bgl],
         );
 
         let (atlas_layout, atlas_bind_group) =
@@ -125,14 +134,15 @@ impl AppRenderer<'_> {
     pub fn submit_render_pass(
         &mut self,
         mut encoder: CommandEncoder,
-        camera: &Camera,
+        main_camera: &Camera,
+        culling_camera: &Camera,
         voxel_render_distance: u32,
         window_size: PhysicalSize<u32>,
     ) -> Result<(), wgpu::SurfaceError> {
         let frame = self.renderer.surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
 
-        let camera_view = UniformCameraView::new(camera, voxel_render_distance, window_size);
+        let camera_view = VxCamera::new(main_camera, culling_camera, voxel_render_distance, window_size);
 
         self.renderer.write_buffer(
             &self.view_projection_buffer,

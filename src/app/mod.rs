@@ -1,10 +1,11 @@
 pub mod app_renderer;
 
 use crate::compute::geo::Frustum;
-use crate::vtypes::{Scene, Voxer, VoxerObject};
+use crate::vtypes::{Camera, Scene, Voxer, VoxerObject};
 use crate::world::types::CHUNK_DIM;
 use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld};
 use crate::{call_every, compute, vtypes};
+use glam::{Quat, Vec3};
 use std::sync::Arc;
 use wgpu::ComputePassDescriptor;
 use winit::application::ApplicationHandler;
@@ -15,7 +16,9 @@ use winit::keyboard::KeyCode;
 use winit::window::{CursorGrabMode, Window};
 
 #[derive(Default)]
-pub struct AppDebug {}
+pub struct AppDebug {
+    pub culling_camera: Camera,
+}
 
 pub struct App<'a> {
     pub window: Option<Arc<Window>>,
@@ -90,7 +93,8 @@ impl<'a> ApplicationHandler for App<'a> {
         let win_size = window.inner_size();
         let aspect_ratio = win_size.width as f32 / win_size.height as f32;
         self.v.camera.set_aspect_ratio(aspect_ratio);
-        self.v.camera.transform.position = glam::vec3(0.0, 10.0, 0.0);
+        self.v.camera.transform.position = glam::vec3(0.0, 0.0, 0.0);
+        self.debug.culling_camera = self.v.camera.clone();
 
         let client = ClientWorld::new(window, self.client_config);
         client.temp_send_req_conn();
@@ -144,6 +148,7 @@ impl<'a> ApplicationHandler for App<'a> {
                 let render_result = client.session.app_renderer.submit_render_pass(
                     encoder,
                     &self.v.camera,
+                    &self.debug.culling_camera,
                     voxel_render_distance as u32,
                     window_size,
                 );
@@ -210,16 +215,25 @@ impl<'a> App<'a> {
                 + right_input as f32 * self.v.camera.transform.right();
             self.v.camera.transform.position +=
                 move_vec * MOVE_SPEED * sprint_mul * self.v.time.delta();
+
+            if input.keyboard.key_pressed(KeyCode::KeyC) {
+                self.debug.culling_camera.transform.position = self.v.camera.transform.position;
+                self.debug.culling_camera.transform.rotation = self.v.camera.transform.rotation;
+            }
         }
 
+        self.debug.culling_camera = self.v.camera.clone();
+        let culling_camera = &self.debug.culling_camera;
+
         let safe_voxel_rdist = ((self.client_config.render_distance - 1) * CHUNK_DIM) as f32;
-        let safe_vp = self.v.camera.view_projection_with_far(safe_voxel_rdist);
-        let safe_frustum_planes = Frustum::planes(safe_vp);
-        let player_position = self.v.camera.transform.position;
+        let safe_culling_vp =
+            culling_camera.projection_with_far(safe_voxel_rdist) * culling_camera.view_matrix();
+        let safe_culling_vf = Frustum::planes(safe_culling_vp);
+        let camera_position = self.v.camera.transform.position;
 
         let m_client = self.client.as_mut().unwrap();
-        m_client.temp_set_player_position(player_position);
-        m_client.temp_set_view_frustum(safe_frustum_planes);
+        m_client.temp_set_player_position(camera_position);
+        m_client.temp_set_view_frustum(safe_culling_vf);
 
         call_every!(CLIENT_POS_SEND, 20, || {
             m_client.temp_send_player_position()

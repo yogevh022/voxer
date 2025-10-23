@@ -135,7 +135,7 @@ impl VxDepth {
     pub fn generate_depth_mips(&self, device: &Device, compute_pass: &mut ComputePass) {
         self.generate_depth_mip_one(device, compute_pass);
         compute_pass.set_pipeline(&self.mip_x_compute_pipeline);
-        for mip in 2..self.mip_views.len() {
+        for mip in 2..self.mip_views.len() - 1 { // last mip unused
             let mip_bg = self.mip_x_bind_group(device, mip - 1, mip);
             compute_pass.set_bind_group(0, &mip_bg, &[]);
             let mip_width = (self.surface_extent.width >> mip).max(1);

@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 use wgpu::ShaderSource;
-use crate::app::app_renderer::UniformCameraView;
+use crate::app::app_renderer::VxCamera;
 use crate::compute::geo::Plane;
 use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry, GPUVoxelChunkHeader, GPUDispatchIndirectArgsAtomic, GPUPackedIndirectArgsAtomic};
-use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF};
+use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, INV_CHUNK_DIM, INV_CHUNK_DIM_HALF};
 
 macro_rules! include_shaders {
     ($($name:ident => $file:literal), * $(,)?) => (
@@ -80,8 +80,11 @@ include_shaders!(
     F_WORLD => "functions/world.wgsl",
     F_BITWISE => "functions/bitwise.wgsl",
     F_THREAD_MAPPING => "functions/thread_mapping.wgsl",
+    F_MATH => "functions/math.wgsl",
+    F_GEO => "functions/geo.wgsl",
     F_UNPACK_GPU_CHUNK_MESH_ENTRY => "functions/unpack_GPUChunkMeshEntry.wgsl",
     F_UNPACK_GPU_VOXEL_FACE_DATA => "functions/unpack_GPUVoxelFaceData.wgsl",
+    F_MASK_INDEX => "functions/mask_index.wgsl",
 );
 
 // voxel
@@ -95,8 +98,12 @@ include_shaders!(
 );
 
 fn globals() -> String {
-    include_shader_consts!(
+    let consts = include_shader_consts!(
         VOID_OFFSET: u32 = 1;
+    );
+    concat_shaders!(
+        &consts,
+        F_MASK_INDEX,
     )
 }
 
@@ -119,7 +126,7 @@ fn geo_types() -> String {
 
 fn meta_types() -> String {
     include_shader_types!(
-        UniformCameraView,
+        VxCamera,
         GPUDrawIndirectArgs,
         GPUDispatchIndirectArgsAtomic,
         GPUPackedIndirectArgsAtomic,
@@ -130,6 +137,8 @@ fn voxel_common() -> String {
     let consts = include_shader_consts!(
         CHUNK_DIM: u32 = CHUNK_DIM;
         CHUNK_DIM_HALF: u32 = CHUNK_DIM_HALF;
+        INV_CHUNK_DIM: f32 = INV_CHUNK_DIM;
+        INV_CHUNK_DIM_HALF: f32 = INV_CHUNK_DIM_HALF;
     );
     let types = include_shader_types!(
         GPUVoxelChunkContent,
@@ -179,6 +188,8 @@ pub fn chunk_mdi_args_wgsl() -> String {
         &voxel_common(),
         &globals(),
         VOXEL_CHUNK_CULL_ENTRY,
+        F_MATH,
+        F_GEO,
         F_BITWISE,
         F_THREAD_MAPPING,
         F_UNPACK_GPU_CHUNK_MESH_ENTRY,

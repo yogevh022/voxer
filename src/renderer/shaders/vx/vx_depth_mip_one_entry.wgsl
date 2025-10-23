@@ -7,6 +7,10 @@ fn depth_mip_one_entry(@builtin(global_invocation_id) gid: vec3<u32>) {
         return;
     }
     let base_idx = vec2<i32>(gid.xy);
+//    let inv_idx = vec2<i32>(
+//        bitcast<i32>(gid.x),
+//        bitcast<i32>(depth_tex_data.mip_h - 1u - gid.y),
+//    );
     let mip_indices = src_indices(base_idx);
     let mip_depth = load_depth_texture_2x2_mip(mip_indices);
     textureStore(dst_texture, base_idx, 0, vec4<f32>(mip_depth, 0.0, 0.0, 0.0));

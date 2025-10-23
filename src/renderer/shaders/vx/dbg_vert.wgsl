@@ -16,9 +16,9 @@ fn dbg_vs_main(@builtin(vertex_index) i: u32) -> VertexOutput {
 
     var uv = array<vec2<f32>, 4>(
       vec2<f32>(0.0, 0.0),
-      vec2<f32>(1.0, 0.0),
-      vec2<f32>(1.0, 1.0),
-      vec2<f32>(0.0, 1.0),
+      vec2<f32>(0.5, 0.0),
+      vec2<f32>(0.5, 0.5),
+      vec2<f32>(0.0, 0.5),
     );
 
     let vi = via[i];
