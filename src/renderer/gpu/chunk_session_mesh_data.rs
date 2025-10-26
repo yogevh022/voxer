@@ -1,11 +1,13 @@
 use crate::compute::array::{Array3D, array_and, array_not, array_pop_count_u16, array_xor};
 use crate::compute::bytes::bit_at;
 use crate::world::types::{
-    BlockBytewise, CHUNK_DIM, CHUNK_SLICE, Chunk, ChunkAdjBlocks, ChunkBlocks, VoxelBlock,
+    BlockBytewise, CHUNK_DIM, CHUNK_SLICE, ChunkAdjBlocks, ChunkBlocks, VoxelBlock,
 };
-use glam::{IVec3, U16Vec3};
-use rustc_hash::FxHashMap;
+use glam::U16Vec3;
 use std::array;
+
+pub const TRANSPARENT_LAYER_BLOCKS: [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] =
+    [[VoxelBlock { value: 0 }; CHUNK_DIM]; CHUNK_DIM];
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct VoxelChunkMeshMeta {
@@ -13,7 +15,7 @@ pub struct VoxelChunkMeshMeta {
     pub negative_faces: U16Vec3,
 }
 
-pub fn face_count(blocks: &ChunkBlocks, adj_blocks: &ChunkAdjBlocks) -> VoxelChunkMeshMeta {
+pub(crate) fn chunk_mesh_data(blocks: &ChunkBlocks, adj_blocks: &ChunkAdjBlocks) -> VoxelChunkMeshMeta {
     type ChunkPositiveAdjBlocks = Array3D<VoxelBlock, 3, CHUNK_DIM, CHUNK_DIM>;
     let positive_adj_blocks = unsafe { *adj_blocks.as_ptr().cast::<ChunkPositiveAdjBlocks>() };
     let packed_blocks = pack_solid_blocks(blocks);
@@ -143,67 +145,4 @@ fn pack_solid_blocks<const X: usize, const Y: usize, const Z: usize, const XY: u
     }
 
     bytes
-}
-
-pub const TRANSPARENT_LAYER_BITS: [u16; CHUNK_DIM] = [0u16; CHUNK_DIM];
-pub const TRANSPARENT_LAYER_BLOCKS: [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] =
-    [[VoxelBlock { value: 0 }; CHUNK_DIM]; CHUNK_DIM];
-
-fn get_mx_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
-    blocks[0]
-}
-
-fn get_my_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
-    array::from_fn(|i| blocks[i][0])
-}
-
-fn get_mz_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
-    array::from_fn(|x| array::from_fn(|y| blocks[x][y][0]))
-}
-
-fn get_px_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
-    blocks[CHUNK_DIM - 1]
-}
-
-fn get_py_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
-    array::from_fn(|i| blocks[i][CHUNK_DIM - 1])
-}
-
-fn get_pz_layer(blocks: &ChunkBlocks) -> [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] {
-    array::from_fn(|x| array::from_fn(|y| blocks[x][y][CHUNK_DIM - 1]))
-}
-
-pub fn get_adj_blocks(
-    position: IVec3,
-    chunks_map: &FxHashMap<IVec3, Chunk>,
-) -> [[[VoxelBlock; CHUNK_DIM]; CHUNK_DIM]; 6] {
-    let px = IVec3::new(position.x + 1, position.y, position.z);
-    let py = IVec3::new(position.x, position.y + 1, position.z);
-    let pz = IVec3::new(position.x, position.y, position.z + 1);
-
-    let mx = IVec3::new(position.x - 1, position.y, position.z);
-    let my = IVec3::new(position.x, position.y - 1, position.z);
-    let mz = IVec3::new(position.x, position.y, position.z - 1);
-
-    // fixme just pass none?
-    [
-        chunks_map
-            .get(&px)
-            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_mx_layer(&c.blocks)),
-        chunks_map
-            .get(&py)
-            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_my_layer(&c.blocks)),
-        chunks_map
-            .get(&pz)
-            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_mz_layer(&c.blocks)),
-        chunks_map
-            .get(&mx)
-            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_px_layer(&c.blocks)),
-        chunks_map
-            .get(&my)
-            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_py_layer(&c.blocks)),
-        chunks_map
-            .get(&mz)
-            .map_or(TRANSPARENT_LAYER_BLOCKS, |c| get_pz_layer(&c.blocks)),
-    ]
 }

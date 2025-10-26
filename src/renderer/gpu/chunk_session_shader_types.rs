@@ -119,6 +119,10 @@ impl GPUVoxelChunkHeader {
             chunk_z: chunk_position.z,
         }
     }
+    
+    pub(crate) fn position(&self) -> IVec3 {
+        IVec3::new(self.chunk_x, self.chunk_y, self.chunk_z)
+    }
 }
 
 #[repr(C, align(4))]
@@ -131,9 +135,9 @@ pub struct GPUVoxelChunk {
 }
 
 impl GPUVoxelChunk {
-    pub fn new(header: GPUVoxelChunkHeader, adj: ChunkAdjBlocks, blocks: ChunkBlocks) -> Self {
+    pub fn new_uninit(header: GPUVoxelChunkHeader, blocks: ChunkBlocks) -> Self {
         let gpu_content: GPUVoxelChunkContent = unsafe { std::mem::transmute(blocks) };
-        let gpu_adj_content: GPUVoxelChunkAdjContent = unsafe { std::mem::transmute(adj) };
+        let gpu_adj_content = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
         Self {
             header,
             adj_content: gpu_adj_content,

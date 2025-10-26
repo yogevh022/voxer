@@ -64,7 +64,6 @@ impl ServerWorld {
                 for chunk in chunks {
                     let msg = MsgChunkData {
                         position: chunk.position,
-                        solid_count: chunk.solid_count as u32,
                         blocks: chunk.blocks,
                     };
                     self.network

@@ -125,8 +125,8 @@ pub fn world_generation_task(
 }
 
 pub(crate) fn generate_chunk(gen_config: WorldConfig, chunk_position: IVec3) -> Chunk {
-    let (solid_count, blocks) = generate_chunk_blocks(gen_config, chunk_position);
-    Chunk::new(chunk_position, blocks, solid_count)
+    let blocks = generate_chunk_blocks(gen_config, chunk_position);
+    Chunk::new(chunk_position, blocks)
 }
 
 fn generate_chunk_noise(
@@ -160,18 +160,16 @@ fn generate_chunk_noise(
 fn generate_chunk_blocks(
     gen_config: WorldConfig,
     chunk_position: IVec3,
-) -> (usize, ChunkBlocks) {
+) -> ChunkBlocks {
     let noise = generate_chunk_noise(gen_config, chunk_position);
 
     let mut blocks: [[[MaybeUninit<VoxelBlock>; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] =
         unsafe { MaybeUninit::uninit().assume_init() };
     
-    let mut solid_count = 0;
     for z in 0..CHUNK_DIM {
         for y in 0..CHUNK_DIM {
             for x in 0..CHUNK_DIM {
                 if noise[z][y][x] > 0.1 {
-                    solid_count += 1;
                     blocks[x][y][z] = MaybeUninit::new(VoxelBlock { value: 1u16 << 15 });
                 } else {
                     blocks[x][y][z] = MaybeUninit::new(VoxelBlock { value: 0u16 });
@@ -182,5 +180,5 @@ fn generate_chunk_blocks(
     let blocks3d: [[[VoxelBlock; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM] =
         unsafe { *(blocks.as_mut_ptr() as *mut [[[VoxelBlock; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM]) };
 
-    (solid_count, Array3D(blocks3d))
+    Array3D(blocks3d)
 }

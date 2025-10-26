@@ -86,8 +86,7 @@ impl MsgChunkDataRequest {
 #[network_message(tag = ServerMessageTag::ChunkData.as_tag())]
 pub struct MsgChunkData {
     pub position: IVec3,     // 0..11
-    pub solid_count: u32,    // 12..15
-    pub blocks: ChunkBlocks, // 16..8208
+    pub blocks: ChunkBlocks, // 12..8204
 }
 
 #[repr(C)]
