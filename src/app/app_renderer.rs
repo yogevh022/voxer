@@ -1,4 +1,3 @@
-use crate::compute::geo::{Frustum, Plane};
 use crate::renderer::Renderer;
 use crate::renderer::gpu::chunk_session::{GpuChunkSession, GpuChunkSessionConfig};
 use crate::renderer::resources;
@@ -6,57 +5,12 @@ use crate::renderer::resources::shader::{MAX_WORKGROUP_DIM_1D, MAX_WORKGROUP_DIM
 use crate::renderer::resources::texture::get_atlas_image;
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::vtypes::Camera;
-use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, UVec2, Vec4};
 use std::borrow::Cow;
 use std::sync::Arc;
-use voxer_macros::ShaderType;
 use wgpu::{BindGroup, BufferUsages, CommandEncoder, RenderPipeline};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
-
-// todo move from here
-#[repr(C, align(16))]
-#[derive(ShaderType, Copy, Clone, Debug, Pod, Zeroable)]
-pub struct VxCamera {
-    main_origin: Vec4,
-    main_vp: Mat4,
-    culling_origin: Vec4, // fixme w = voxel_render_distance
-    culling_view: Mat4,
-    culling_proj: Mat4,
-    culling_vp: Mat4,
-    culling_vf: [Plane; 6],
-    window_size: UVec2,
-    culling_dist: u32,
-    _padding: u32,
-}
-
-impl VxCamera {
-    pub fn new(main_camera: &Camera, culling_camera: &Camera, culling_dist: u32, window_size: PhysicalSize<u32>) -> Self {
-        let window_size = UVec2::new(window_size.width, window_size.height);
-
-        let main_origin = main_camera.transform.position.extend(1.0); // unneeded
-        let main_vp = main_camera.view_projection_matrix();
-
-        let culling_origin = culling_camera.transform.position.extend(1.0); // unneeded
-        let culling_view = culling_camera.view_matrix();
-        let culling_proj = culling_camera.projection_matrix();
-        let culling_vp = culling_proj * culling_view;
-        let culling_vf = Frustum::planes(culling_vp);
-        Self {
-            main_origin,
-            main_vp,
-            culling_origin,
-            culling_dist,
-            culling_view,
-            culling_proj,
-            culling_vp,
-            culling_vf,
-            window_size,
-            _padding: 0,
-        }
-    }
-}
+use crate::renderer::gpu::vx_gpu_camera::VxGPUCamera;
 
 pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
@@ -64,16 +18,13 @@ pub struct AppRenderer<'window> {
     render_pipeline: RenderPipeline,
     atlas_bind_group: BindGroup,
     view_projection_buffer: VxBuffer,
-
-    dbg_pipeline: RenderPipeline,
-    dbg_bg: BindGroup,
 }
 
 impl AppRenderer<'_> {
     pub fn new(window: Arc<Window>) -> Self {
         let renderer = Renderer::new(window);
 
-        let view_projection_buffer = renderer.device.create_vx_buffer::<VxCamera>(
+        let view_projection_buffer = renderer.device.create_vx_buffer::<VxGPUCamera>(
             "View Projection Buffer",
             1,
             BufferUsages::UNIFORM | BufferUsages::COPY_DST,
@@ -90,15 +41,6 @@ impl AppRenderer<'_> {
             max_indirect_count: 1 << 16, // arbitrary
         };
         let chunk_session = GpuChunkSession::new(&renderer, &view_projection_buffer, cm_config);
-
-        let v = &renderer.depth.mip_views[8];
-
-        let (dbg_bgl, dbg_bg) = renderer.dbg_sampler(v);
-        let dbg_pipeline = debug_make_render_pipeline(
-            &renderer,
-            resources::shader::dbg_render_wgsl().into(),
-            &[&dbg_bgl],
-        );
 
         let (atlas_layout, atlas_bind_group) =
             renderer.texture_sampler("Texture Sampler Atlas", get_atlas_image());
@@ -118,9 +60,6 @@ impl AppRenderer<'_> {
             render_pipeline,
             atlas_bind_group,
             view_projection_buffer,
-
-            dbg_pipeline,
-            dbg_bg,
         }
     }
 
@@ -135,14 +74,13 @@ impl AppRenderer<'_> {
         &mut self,
         mut encoder: CommandEncoder,
         main_camera: &Camera,
-        culling_camera: &Camera,
-        voxel_render_distance: u32,
+        voxel_culling_distance: u32,
         window_size: PhysicalSize<u32>,
     ) -> Result<(), wgpu::SurfaceError> {
         let frame = self.renderer.surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
 
-        let camera_view = VxCamera::new(main_camera, culling_camera, voxel_render_distance, window_size);
+        let camera_view = VxGPUCamera::new(main_camera, voxel_culling_distance, window_size);
 
         self.renderer.write_buffer(
             &self.view_projection_buffer,
@@ -155,10 +93,6 @@ impl AppRenderer<'_> {
                 self.renderer
                     .begin_render_pass(&mut encoder, "Main Render Pass", &view);
             self.render_chunks(&mut render_pass);
-
-            // render_pass.set_pipeline(&self.dbg_pipeline);
-            // render_pass.set_bind_group(0, &self.dbg_bg, &[]);
-            // render_pass.draw(0..6, 0..1);
         }
 
         self.renderer.queue.submit(Some(encoder.finish()));
@@ -198,65 +132,6 @@ pub fn make_render_pipeline(
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: renderer.surface_format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: Default::default(),
-                bias: Default::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        })
-}
-
-pub fn debug_make_render_pipeline(
-    renderer: &Renderer<'_>,
-    shader_source: Cow<str>,
-    bind_group_layouts: &[&wgpu::BindGroupLayout],
-) -> RenderPipeline {
-    let shader = resources::shader::create_shader(
-        &renderer.device,
-        shader_source,
-        "dbg render pipeline shader",
-    );
-    let dbg_render_pipeline_layout =
-        &renderer
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("dbg_render_pipeline_layout"),
-                bind_group_layouts,
-                push_constant_ranges: &[],
-            });
-
-    renderer
-        .device
-        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("dbg_render_pipeline"),
-            layout: Some(&dbg_render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("dbg_vs_main"),
-                compilation_options: Default::default(),
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("dbg_fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: renderer.surface_format,

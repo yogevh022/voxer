@@ -71,11 +71,11 @@ impl ClientWorld<'_> {
         self.session.view_frustum = frustum;
     }
 
-    pub fn tick(&mut self, compute_pass: &mut ComputePass) {
+    pub fn tick(&mut self, encoder: &mut CommandEncoder) {
         for message in self.network.take_messages(64) {
             self.handle_network_message(message);
         }
-        self.session.tick(compute_pass);
+        self.session.tick(encoder);
         self.request_chunk_batch();
     }
 

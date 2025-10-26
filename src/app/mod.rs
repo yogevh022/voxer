@@ -1,11 +1,10 @@
 pub mod app_renderer;
 
-use crate::compute::geo::{chunk_to_world_pos, Frustum};
-use crate::vtypes::{Camera, Scene, Voxer, VoxerObject};
+use crate::compute::geo::Frustum;
+use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::types::CHUNK_DIM;
 use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld};
-use crate::{call_every, compute, vtypes};
-use glam::{IVec3, Quat, Vec3};
+use crate::{call_every, vtypes};
 use std::sync::Arc;
 use wgpu::ComputePassDescriptor;
 use winit::application::ApplicationHandler;
@@ -16,9 +15,7 @@ use winit::keyboard::KeyCode;
 use winit::window::{CursorGrabMode, Window};
 
 #[derive(Default)]
-pub struct AppDebug {
-    pub culling_camera: Camera,
-}
+pub struct AppDebug {}
 
 pub struct App<'a> {
     pub window: Option<Arc<Window>>,
@@ -94,7 +91,6 @@ impl<'a> ApplicationHandler for App<'a> {
         let aspect_ratio = win_size.width as f32 / win_size.height as f32;
         self.v.camera.set_aspect_ratio(aspect_ratio);
         self.v.camera.transform.position = glam::vec3(0.0, 0.0, 0.0);
-        self.debug.culling_camera = self.v.camera.clone();
 
         let client = ClientWorld::new(window, self.client_config);
         client.temp_send_req_conn();
@@ -125,31 +121,18 @@ impl<'a> ApplicationHandler for App<'a> {
                     window.set_title(&title);
                 });
 
-                let app_renderer = &mut client.session.app_renderer;
-                let mut encoder = app_renderer.renderer.create_encoder("Main Encoder");
-                {
-                    let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
-                        label: Some("Main Compute Pass"),
-                        timestamp_writes: None,
-                    });
-                    client
-                        .session
-                        .app_renderer
-                        .renderer
-                        .depth
-                        .generate_depth_mips(
-                            &client.session.app_renderer.renderer.device,
-                            &mut compute_pass,
-                        );
-                    client.tick(&mut compute_pass);
-                }
-                let voxel_render_distance = self.client_config.render_distance * CHUNK_DIM;
+                let mut encoder = client
+                    .session
+                    .app_renderer
+                    .renderer
+                    .create_encoder("Main Encoder");
+                client.tick(&mut encoder);
+                let voxel_culling_distance = self.client_config.render_distance * CHUNK_DIM;
                 let window_size = window.inner_size();
                 let render_result = client.session.app_renderer.submit_render_pass(
                     encoder,
                     &self.v.camera,
-                    &self.debug.culling_camera,
-                    voxel_render_distance as u32,
+                    voxel_culling_distance as u32,
                     window_size,
                 );
                 render_result.unwrap_or_else(|e| println!("{:?}", e));
@@ -215,25 +198,9 @@ impl<'a> App<'a> {
                 + right_input as f32 * self.v.camera.transform.right();
             self.v.camera.transform.position +=
                 move_vec * MOVE_SPEED * sprint_mul * self.v.time.delta();
-
-            if input.keyboard.key_pressed(KeyCode::KeyC) {
-                self.debug.culling_camera.transform.position = self.v.camera.transform.position;
-                self.debug.culling_camera.transform.rotation = self.v.camera.transform.rotation;
-            }
         }
 
-        self.debug.culling_camera = self.v.camera.clone();
-        let culling_camera = &self.debug.culling_camera;
-        // let test_cam = unsafe {
-        //     std::mem::transmute(culling_camera)
-        // };
-        // let c_pos = IVec3::new(-8, -1, -5);
-        // let cw_pos = chunk_to_world_pos(c_pos);
-        // let sc = testing::depth::depth_func(test_cam, cw_pos);
-        // call_every!(DBG_SC, 50, || {
-        //     dbg!(sc);
-        // });
-
+        let culling_camera = &self.v.camera;
         let safe_voxel_rdist = ((self.client_config.render_distance - 1) * CHUNK_DIM) as f32;
         let safe_culling_vp =
             culling_camera.projection_with_far(safe_voxel_rdist) * culling_camera.view_matrix();

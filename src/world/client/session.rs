@@ -75,7 +75,16 @@ impl<'window> ClientWorldSession<'window> {
         }
     }
 
-    pub fn tick(&mut self, compute_pass: &mut ComputePass) {
+    pub fn tick(&mut self, encoder: &mut CommandEncoder) {
+        let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+            label: Some("Client Compute Pass"),
+            timestamp_writes: None,
+        });
+        self.app_renderer.renderer.depth.generate_depth_mips(
+            &self.app_renderer.renderer.device,
+            &mut compute_pass
+        );
+
         let player_ch_position = world_to_chunk_pos(self.player.location.position);
         self.lazy_chunk_gc(player_ch_position);
 
@@ -107,10 +116,10 @@ impl<'window> ClientWorldSession<'window> {
 
         self.app_renderer
             .chunk_session
-            .compute_chunk_writes(&self.app_renderer.renderer, compute_pass);
+            .compute_chunk_writes(&self.app_renderer.renderer, &mut compute_pass);
         self.app_renderer
             .chunk_session
-            .compute_chunk_visibility_and_meshing(&self.app_renderer.renderer, compute_pass);
+            .compute_chunk_visibility_and_meshing(&self.app_renderer.renderer, &mut compute_pass);
     }
 
     fn prepare_meshing_positions(&mut self, count: usize) -> Vec<IVec3> {

@@ -1,10 +1,9 @@
 [package]
 name = "voxer"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
-testing = { path = "C:/Users/Yogev/RustroverProjects/testing" }
 voxer_macros = { path = "voxer_macros" }
 voxer_network = { git = "https://github.com/yogevh022/voxer_network" }
 suballoc = { git = "https://github.com/yogevh022/suballoc-rs" }

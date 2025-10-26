@@ -10,9 +10,9 @@ use crate::renderer::resources::vx_device::VxDevice;
 use crate::renderer::resources::vx_queue::VxQueue;
 use std::sync::Arc;
 use wgpu::{
-    Adapter, Backends, BufferAddress, BufferUsages, CommandEncoder, ComputePass,
-    Device, Extent3d, Features, Instance, Limits, Origin3d, Queue, Surface, SurfaceCapabilities,
-    SurfaceConfiguration, TexelCopyTextureInfo, TextureAspect,
+    Adapter, Backends, BufferAddress, BufferUsages, CommandEncoder,
+    Device, Features, Instance, Limits, Queue, Surface, SurfaceCapabilities,
+    SurfaceConfiguration,
     TextureFormat, TextureUsages, TextureView,
 };
 use winit::dpi::PhysicalSize;

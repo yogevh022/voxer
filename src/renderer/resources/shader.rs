@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 use wgpu::ShaderSource;
-use crate::app::app_renderer::VxCamera;
 use crate::compute::geo::Plane;
 use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry, GPUVoxelChunkHeader, GPUDispatchIndirectArgsAtomic, GPUPackedIndirectArgsAtomic};
+use crate::renderer::gpu::vx_gpu_camera::VxGPUCamera;
 use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, INV_CHUNK_DIM, INV_CHUNK_DIM_HALF};
 
 macro_rules! include_shaders {
@@ -127,7 +127,7 @@ fn geo_types() -> String {
 
 fn meta_types() -> String {
     include_shader_types!(
-        VxCamera,
+        VxGPUCamera,
         GPUDrawIndirectArgs,
         GPUDispatchIndirectArgsAtomic,
         GPUPackedIndirectArgsAtomic,
@@ -221,21 +221,6 @@ pub fn depth_mip_x_wgsl() -> String {
         &cfg_constants(),
         VX_DEPTH_MIP_COMMON,
         VX_DEPTH_MIP_X_ENTRY,
-    )
-}
-
-include_shaders!(
-    DBG_VERT => "vx/dbg_vert.wgsl",
-    DBG_FRAG => "vx/dbg_frag.wgsl",
-);
-
-pub fn dbg_render_wgsl() -> String {
-    concat_shaders!(
-        &cfg_constants(),
-        &meta_types(),
-        &geo_types(),
-        DBG_VERT,
-        DBG_FRAG,
     )
 }
 

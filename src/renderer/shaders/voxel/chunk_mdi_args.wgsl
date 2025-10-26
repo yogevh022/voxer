@@ -12,7 +12,7 @@ var<storage, read> chunks_in_view_buffer: array<GPUChunkMeshEntry>;
 @group(0) @binding(5)
 var vx_depth_mipmaps: texture_storage_2d_array<r32float, read>;
 @group(0) @binding(6)
-var<uniform> vx_camera: VxCamera;
+var<uniform> vx_camera: VxGPUCamera;
 
 const MAX_WORKGROUP_DRAW_ARGS: u32 = CFG_MAX_WORKGROUP_DIM_1D * 6u;
 const MAX_WORKGROUP_MESHING_ARGS: u32 = CFG_MAX_WORKGROUP_DIM_1D + VOID_OFFSET;

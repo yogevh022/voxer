@@ -23,49 +23,6 @@ impl Renderer<'_> {
         });
         (texture_sampler_layout, texture_sampler_bind_group)
     }
-
-    pub fn dbg_sampler(&self, tempv: &TextureView) -> (BindGroupLayout, BindGroup) {
-        let temps = self.device.create_sampler(&wgpu::SamplerDescriptor {
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
-
-        let debug_bgl = self.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("DEBUG Sampler Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2Array,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                    count: None,
-                },
-            ],
-        });
-
-        let bg_entries = resources::utils::bind_entries([
-            wgpu::BindingResource::TextureView(tempv),
-            wgpu::BindingResource::Sampler(&temps),
-        ]);
-
-        let debug_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &debug_bgl,
-            entries: &bg_entries,
-            label: Some("debug depth mip bind group"),
-        });
-        (debug_bgl, debug_bg)
-    }
 }
 
 

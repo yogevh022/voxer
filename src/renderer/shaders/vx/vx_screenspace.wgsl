@@ -1,7 +1,7 @@
 
 // MUST BE BOUND!
 // var vx_depth_mipmaps: texture_storage_2d_array<r32float, read>;
-// var<uniform> vx_camera: VxCamera;
+// var<uniform> vx_camera: VxGPUCamera;
 
 var<private> vx__pr_max_depth_mip: u32;
 var<private> vx__pr_max_screen_size: u32;
