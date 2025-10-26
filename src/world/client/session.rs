@@ -1,6 +1,4 @@
 use crate::app::app_renderer::AppRenderer;
-use crate::compute;
-use crate::compute::array::Array3D;
 use crate::compute::geo::{Plane, ivec3_with_adjacent_positions, world_to_chunk_pos};
 use crate::compute::throttler::Throttler;
 use crate::world::ClientWorldConfig;
@@ -11,7 +9,7 @@ use glam::IVec3;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use wgpu::{CommandEncoder, ComputePass, ComputePassDescriptor};
+use wgpu::{CommandEncoder, ComputePassDescriptor};
 use winit::window::Window;
 
 pub struct ClientWorldSession<'window> {
@@ -80,19 +78,20 @@ impl<'window> ClientWorldSession<'window> {
             label: Some("Client Compute Pass"),
             timestamp_writes: None,
         });
-        self.app_renderer.renderer.depth.generate_depth_mips(
-            &self.app_renderer.renderer.device,
-            &mut compute_pass
-        );
+        self.app_renderer
+            .renderer
+            .depth
+            .generate_depth_mips(&self.app_renderer.renderer.device, &mut compute_pass);
 
         let player_ch_position = world_to_chunk_pos(self.player.location.position);
         self.lazy_chunk_gc(player_ch_position);
 
         let max_write = self.app_renderer.chunk_session.config.max_write_count;
-        let mesh_positions = self.prepare_meshing_positions(max_write);
-        let mesh_chunks_refs = mesh_positions
-            .into_iter()
-            .map(|p| self.chunks.get(&p).unwrap());
+        let mesh_chunks_refs = self
+            .chunk_meshing_batch
+            .drain()
+            .filter_map(|p| self.chunks.get(&p))
+            .take(max_write);
 
         self.app_renderer
             .chunk_session
@@ -120,23 +119,5 @@ impl<'window> ClientWorldSession<'window> {
         self.app_renderer
             .chunk_session
             .compute_chunk_visibility_and_meshing(&self.app_renderer.renderer, &mut compute_pass);
-    }
-
-    fn prepare_meshing_positions(&mut self, count: usize) -> Vec<IVec3> {
-        let meshing_positions: Vec<IVec3> = self.chunk_meshing_batch.drain().take(count).collect();
-        meshing_positions
-            .into_iter()
-            .filter(|p| self.update_chunk_mesh_data(*p))
-            .collect()
-    }
-
-    fn update_chunk_mesh_data(&mut self, position: IVec3) -> bool {
-        let adj_blocks = Array3D(compute::chunk::get_adj_blocks(position, &self.chunks));
-        if let Some(chunk) = self.chunks.get_mut(&position) {
-            chunk.mesh_meta = Some(compute::chunk::face_count(&chunk.blocks, &adj_blocks));
-            chunk.adjacent_blocks = adj_blocks;
-            return true;
-        }
-        false
     }
 }

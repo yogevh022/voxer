@@ -96,7 +96,6 @@ impl ClientWorld<'_> {
                 let chunk = Chunk::new(
                     chunk_data_msg.position,
                     chunk_data_msg.blocks,
-                    chunk_data_msg.solid_count as usize,
                 );
                 self.session.add_new_chunk(chunk);
             }

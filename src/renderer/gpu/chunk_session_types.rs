@@ -1,4 +1,4 @@
-use crate::compute::chunk::VoxelChunkMeshMeta;
+use crate::renderer::gpu::chunk_session_mesh_data::VoxelChunkMeshMeta;
 use crate::renderer::gpu::GPUChunkMeshEntry;
 
 #[derive(Debug, Clone, Copy)]
@@ -12,6 +12,7 @@ pub enum MeshStateError {
 pub enum ChunkMeshState {
     Meshed(GPUChunkMeshEntry),
     Unmeshed(ChunkMeshUnmeshedEntry),
+    Uninitialized,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -59,7 +60,7 @@ impl ChunkMeshState {
                 );
                 *self = ChunkMeshState::Meshed(mesh_entry);
             }
-            ChunkMeshState::Meshed(_) => unreachable!(),
+            _ => unreachable!(),
         }
     }
 
