@@ -64,6 +64,7 @@ macro_rules! include_shader_consts {
 }
 
 include_shaders!(
+    VX_SCREENSPACE => "vx/vx_screenspace.wgsl",
     VX_DEPTH_MIP_COMMON => "vx/vx_depth_mip_common.wgsl",
     VX_DEPTH_MIP_ONE_ENTRY => "vx/vx_depth_mip_one_entry.wgsl",
     VX_DEPTH_MIP_X_ENTRY => "vx/vx_depth_mip_x_entry.wgsl",
@@ -137,6 +138,7 @@ fn voxel_common() -> String {
     let consts = include_shader_consts!(
         CHUNK_DIM: u32 = CHUNK_DIM;
         CHUNK_DIM_HALF: u32 = CHUNK_DIM_HALF;
+        CHUNK_BOUNDING_SPHERE_R: f32 = CHUNK_DIM_HALF as f32 * 1.75;
         INV_CHUNK_DIM: f32 = INV_CHUNK_DIM;
         INV_CHUNK_DIM_HALF: f32 = INV_CHUNK_DIM_HALF;
     );
@@ -187,6 +189,7 @@ pub fn chunk_mdi_args_wgsl() -> String {
         &geo_types(),
         &voxel_common(),
         &globals(),
+        VX_SCREENSPACE,
         VOXEL_CHUNK_CULL_ENTRY,
         F_MATH,
         F_GEO,

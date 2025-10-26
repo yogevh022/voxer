@@ -3,7 +3,9 @@ var src_texture: texture_storage_2d_array<r32float, read>;
 
 @compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_2D, CFG_MAX_WORKGROUP_DIM_2D)
 fn depth_mip_x_entry(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if (gid.x >= depth_tex_data.mip_w || gid.y >= depth_tex_data.mip_h) {
+    // bounds check overflows by 1 on purpose! (to handle edge texels)
+    // its okay because all mips > 0 may overflow by 1 and still be within texture bounds
+    if (gid.x > depth_tex_data.mip_w || gid.y > depth_tex_data.mip_h) {
         return;
     }
     let base_idx = vec2<i32>(gid.xy);

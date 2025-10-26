@@ -3,14 +3,12 @@ var src_depth_texture: texture_depth_2d;
 
 @compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_2D, CFG_MAX_WORKGROUP_DIM_2D)
 fn depth_mip_one_entry(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if (gid.x >= depth_tex_data.mip_w || gid.y >= depth_tex_data.mip_h) {
+    // bounds check overflows by 1 on purpose! (to handle edge texels)
+    // its okay because all mips > 0 may overflow by 1 and still be within texture bounds
+    if (gid.x > depth_tex_data.mip_w || gid.y > depth_tex_data.mip_h) {
         return;
     }
     let base_idx = vec2<i32>(gid.xy);
-//    let inv_idx = vec2<i32>(
-//        bitcast<i32>(gid.x),
-//        bitcast<i32>(depth_tex_data.mip_h - 1u - gid.y),
-//    );
     let mip_indices = src_indices(base_idx);
     let mip_depth = load_depth_texture_2x2_mip(mip_indices);
     textureStore(dst_texture, base_idx, 0, vec4<f32>(mip_depth, 0.0, 0.0, 0.0));

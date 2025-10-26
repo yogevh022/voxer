@@ -1,11 +1,11 @@
 pub mod app_renderer;
 
-use crate::compute::geo::Frustum;
+use crate::compute::geo::{chunk_to_world_pos, Frustum};
 use crate::vtypes::{Camera, Scene, Voxer, VoxerObject};
 use crate::world::types::CHUNK_DIM;
 use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld};
 use crate::{call_every, compute, vtypes};
-use glam::{Quat, Vec3};
+use glam::{IVec3, Quat, Vec3};
 use std::sync::Arc;
 use wgpu::ComputePassDescriptor;
 use winit::application::ApplicationHandler;
@@ -224,6 +224,15 @@ impl<'a> App<'a> {
 
         self.debug.culling_camera = self.v.camera.clone();
         let culling_camera = &self.debug.culling_camera;
+        // let test_cam = unsafe {
+        //     std::mem::transmute(culling_camera)
+        // };
+        // let c_pos = IVec3::new(-8, -1, -5);
+        // let cw_pos = chunk_to_world_pos(c_pos);
+        // let sc = testing::depth::depth_func(test_cam, cw_pos);
+        // call_every!(DBG_SC, 50, || {
+        //     dbg!(sc);
+        // });
 
         let safe_voxel_rdist = ((self.client_config.render_distance - 1) * CHUNK_DIM) as f32;
         let safe_culling_vp =

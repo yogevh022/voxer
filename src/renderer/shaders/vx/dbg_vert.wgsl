@@ -16,14 +16,15 @@ fn dbg_vs_main(@builtin(vertex_index) i: u32) -> VertexOutput {
 
     var uv = array<vec2<f32>, 4>(
       vec2<f32>(0.0, 0.0),
-      vec2<f32>(0.5, 0.0),
-      vec2<f32>(0.5, 0.5),
-      vec2<f32>(0.0, 0.5),
+      vec2<f32>(1.0, 0.0),
+      vec2<f32>(1.0, 1.0),
+      vec2<f32>(0.0, 1.0),
     );
 
+    const DISPLAY_MIP: f32 = 8.0;
     let vi = via[i];
     let out_pos = pos[vi];
-    let out_uv = uv[vi];
+    let out_uv = uv[vi] / pow(2.0, DISPLAY_MIP);
 
     var output: VertexOutput;
     output.pos = vec4<f32>(out_pos, 0.0, 1.0);

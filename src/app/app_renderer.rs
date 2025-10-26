@@ -91,7 +91,7 @@ impl AppRenderer<'_> {
         };
         let chunk_session = GpuChunkSession::new(&renderer, &view_projection_buffer, cm_config);
 
-        let v = &renderer.depth.mip_views[1];
+        let v = &renderer.depth.mip_views[8];
 
         let (dbg_bgl, dbg_bg) = renderer.dbg_sampler(v);
         let dbg_pipeline = debug_make_render_pipeline(
@@ -156,9 +156,9 @@ impl AppRenderer<'_> {
                     .begin_render_pass(&mut encoder, "Main Render Pass", &view);
             self.render_chunks(&mut render_pass);
 
-            render_pass.set_pipeline(&self.dbg_pipeline);
-            render_pass.set_bind_group(0, &self.dbg_bg, &[]);
-            render_pass.draw(0..6, 0..1);
+            // render_pass.set_pipeline(&self.dbg_pipeline);
+            // render_pass.set_bind_group(0, &self.dbg_bg, &[]);
+            // render_pass.draw(0..6, 0..1);
         }
 
         self.renderer.queue.submit(Some(encoder.finish()));
