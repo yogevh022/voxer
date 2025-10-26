@@ -10,7 +10,7 @@ var<storage, read> mesh_queue_buffer: array<GPUChunkMeshEntry>;
 var<workgroup> wg_face_buffer_write_offsets: array<atomic<u32>, 6>;
 var<workgroup> wg_chunk_content: GPUVoxelChunkContent;
 var<workgroup> wg_chunk_adj_content: GPUVoxelChunkAdjContent;
-var<workgroup> wg_chunk_world_position: vec3<i32>;
+var<workgroup> wg_chunk_position: vec3<i32>;
 
 var<private> pr_face_data: array<array<GPUVoxelFaceData, MAX_DIR_FACES_PER_THREAD>, 6>;
 var<private> pr_face_counts: array<u32, 6> = array<u32, 6>(0u, 0u, 0u, 0u, 0u, 0u);
@@ -39,7 +39,7 @@ fn mesh_chunks_entry(
             chunk_header.chunk_y,
             chunk_header.chunk_z,
         );
-        wg_chunk_world_position = chunk_position * i32(CHUNK_DIM);
+        wg_chunk_position = chunk_position;
     }
     workgroupBarrier();
 

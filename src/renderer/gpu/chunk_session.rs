@@ -18,6 +18,7 @@ use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupLayout, BindingResource, BufferUsages, ComputePass,
     ComputePipeline, RenderPass,
 };
+use crate::call_every;
 
 #[derive(Debug, Clone, Copy)]
 pub struct GpuChunkSessionConfig {
@@ -327,7 +328,7 @@ impl GpuChunkSession {
         write_batch.clear();
         for chunk in chunks.take(self.config.max_write_count) {
             if self.gpu_state.is_chunk_cached(&chunk.position) {
-                self.gpu_state.drop_chunk(&chunk.position);
+                self.drop_chunk(&chunk.position);
             }
             let gpu_chunk = self.cache_chunk(chunk);
             write_batch.push(gpu_chunk);

@@ -210,7 +210,7 @@ impl<'a> App<'a> {
         let m_client = self.client.as_mut().unwrap();
         m_client.temp_set_player_position(camera_position);
         m_client.temp_set_view_frustum(safe_culling_vf);
-
+        
         call_every!(CLIENT_POS_SEND, 20, || {
             m_client.temp_send_player_position()
         });

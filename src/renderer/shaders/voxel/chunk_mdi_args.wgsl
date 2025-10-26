@@ -74,13 +74,13 @@ fn push_to_draw_batch(mesh_entry: GPUChunkMeshEntry, camera_chunk_pos: vec3<i32>
     let fids_facing_camera = fids_facing_camera(camera_chunk_pos, chunk_pos);
     let face_counts = unpack_mesh_entry_face_counts(mesh_entry);
     let face_offsets = mesh_face_offsets_from(mesh_entry.face_alloc, face_counts);
-
+    let packed_xy: u32 = bitcast<u32>((chunk_pos.x & 0xFFFFF) | ((chunk_pos.z & 0xFFF) << 20));
     for (var fid = 0u; fid < 6u; fid++) {
         let draw_args = GPUDrawIndirectArgs(
             face_counts[fid] * 6u,      // vertex_count
             1u,                         // instance_count
-            0u,                         // first_vertex
-            face_offsets[fid] * 6u,     // first_instance
+            face_offsets[fid] * 6u,     // first_vertex
+            packed_xy,                  // first_instance
         );
         let has_faces: bool = face_counts[fid] > 0u;
         let facing_camera: bool = fids_facing_camera[fid];

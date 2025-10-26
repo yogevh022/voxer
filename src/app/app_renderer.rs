@@ -31,7 +31,7 @@ impl AppRenderer<'_> {
         );
 
         // fixme move to a config and fix arbitrary numbers
-        let near_chunks = ((36.0 * 36.0 * 36.0) / 1.8) as usize;
+        let near_chunks = ((48.0 * 48.0 * 48.0) * 0.55) as usize;
         let cm_config = GpuChunkSessionConfig {
             max_chunks: near_chunks,
             max_write_count: 1 << 14, // arbitrary
