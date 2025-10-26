@@ -4,8 +4,9 @@ use crate::compute::geo::Frustum;
 use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::types::CHUNK_DIM;
 use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld};
-use crate::{call_every, compute, vtypes};
+use crate::{call_every, vtypes};
 use std::sync::Arc;
+use wgpu::ComputePassDescriptor;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -89,7 +90,7 @@ impl<'a> ApplicationHandler for App<'a> {
         let win_size = window.inner_size();
         let aspect_ratio = win_size.width as f32 / win_size.height as f32;
         self.v.camera.set_aspect_ratio(aspect_ratio);
-        self.v.camera.transform.position = glam::vec3(0.0, 10.0, 0.0);
+        self.v.camera.transform.position = glam::vec3(0.0, 0.0, 0.0);
 
         let client = ClientWorld::new(window, self.client_config);
         client.temp_send_req_conn();
@@ -120,25 +121,25 @@ impl<'a> ApplicationHandler for App<'a> {
                     window.set_title(&title);
                 });
 
-                // fixme naming here (renderer.renderer)
                 let mut encoder = client
                     .session
-                    .renderer
+                    .app_renderer
                     .renderer
                     .create_encoder("Main Encoder");
                 client.tick(&mut encoder);
-                let voxel_render_distance = self.client_config.render_distance * CHUNK_DIM;
-                let render_result = client.session.renderer.submit_render_pass(
+                let voxel_culling_distance = self.client_config.render_distance * CHUNK_DIM;
+                let window_size = window.inner_size();
+                let render_result = client.session.app_renderer.submit_render_pass(
                     encoder,
                     &self.v.camera,
-                    voxel_render_distance as u32,
+                    voxel_culling_distance as u32,
+                    window_size,
                 );
                 render_result.unwrap_or_else(|e| println!("{:?}", e));
             }
             WindowEvent::Resized(new_size) => {
-                self.v
-                    .camera
-                    .set_aspect_ratio(new_size.width as f32 / new_size.height as f32);
+                let aspect_ratio = new_size.width as f32 / new_size.height as f32;
+                self.v.camera.set_aspect_ratio(aspect_ratio);
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 let key_code = vtypes::input::get_keycode(event.physical_key).expect("unknown key");
@@ -157,8 +158,7 @@ impl<'a> ApplicationHandler for App<'a> {
         }
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                // dbg!(delta);
-                self.v.input.write().mouse.add_delta(delta);
+                self.v.input.write().mouse.accumulate_delta(delta);
             }
             _ => {}
         }
@@ -188,24 +188,28 @@ impl<'a> App<'a> {
             const MOVE_SPEED: f32 = 10.0;
             let sprint_mul = (1 + input.keyboard.key_down(KeyCode::ShiftLeft) as u32 * 6) as f32;
 
-            let forward_input = input.keyboard.key_down(KeyCode::KeyW) as i32
-                - input.keyboard.key_down(KeyCode::KeyS) as i32;
-            let right_input = input.keyboard.key_down(KeyCode::KeyD) as i32
-                - input.keyboard.key_down(KeyCode::KeyA) as i32;
+            let w = input.keyboard.key_down(KeyCode::KeyW) as i32;
+            let a = input.keyboard.key_down(KeyCode::KeyA) as i32;
+            let s = input.keyboard.key_down(KeyCode::KeyS) as i32;
+            let d = input.keyboard.key_down(KeyCode::KeyD) as i32;
+            let forward_input = w - s;
+            let right_input = d - a;
             let move_vec = forward_input as f32 * self.v.camera.transform.forward()
                 + right_input as f32 * self.v.camera.transform.right();
             self.v.camera.transform.position +=
                 move_vec * MOVE_SPEED * sprint_mul * self.v.time.delta();
         }
 
+        let culling_camera = &self.v.camera;
         let safe_voxel_rdist = ((self.client_config.render_distance - 1) * CHUNK_DIM) as f32;
-        let safe_vp = self.v.camera.view_projection_with_far(safe_voxel_rdist);
-        let safe_frustum_planes = Frustum::planes(safe_vp);
-        let player_position = self.v.camera.transform.position;
+        let safe_culling_vp =
+            culling_camera.projection_with_far(safe_voxel_rdist) * culling_camera.view_matrix();
+        let safe_culling_vf = Frustum::planes(safe_culling_vp);
+        let camera_position = self.v.camera.transform.position;
 
         let m_client = self.client.as_mut().unwrap();
-        m_client.temp_set_player_position(player_position);
-        m_client.temp_set_view_frustum(safe_frustum_planes);
+        m_client.temp_set_player_position(camera_position);
+        m_client.temp_set_view_frustum(safe_culling_vf);
 
         call_every!(CLIENT_POS_SEND, 20, || {
             m_client.temp_send_player_position()

@@ -10,11 +10,14 @@ use crate::renderer::resources::vx_device::VxDevice;
 use crate::renderer::resources::vx_queue::VxQueue;
 use std::sync::Arc;
 use wgpu::{
-    Adapter, Backends, BufferAddress, BufferUsages, Device, Features, Instance, Limits, Queue,
-    Surface, SurfaceCapabilities, SurfaceConfiguration, TextureView,
+    Adapter, Backends, BufferAddress, BufferUsages, CommandEncoder,
+    Device, Features, Instance, Limits, Queue, Surface, SurfaceCapabilities,
+    SurfaceConfiguration,
+    TextureFormat, TextureUsages, TextureView,
 };
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
+use crate::renderer::resources::vx_depth::VxDepth;
 
 pub(crate) struct Renderer<'window> {
     pub(crate) surface: Surface<'window>,
@@ -22,8 +25,8 @@ pub(crate) struct Renderer<'window> {
     pub(crate) device: VxDevice,
     pub(crate) queue: VxQueue,
     pub(crate) indirect_buffer: VxBuffer,
-    pub(crate) surface_format: wgpu::TextureFormat,
-    depth_texture_view: TextureView,
+    pub(crate) surface_format: TextureFormat,
+    pub(crate) depth: VxDepth,
 }
 
 impl<'window> Renderer<'window> {
@@ -81,7 +84,7 @@ impl<'window> Renderer<'window> {
         size: PhysicalSize<u32>,
     ) -> SurfaceConfiguration {
         SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: TextureUsages::RENDER_ATTACHMENT,
             format: surface_capabilities.formats[0],
             width: size.width,
             height: size.height,
@@ -123,8 +126,7 @@ impl<'window> Renderer<'window> {
             BufferUsages::INDIRECT | BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
 
-        let depth_texture = resources::texture::create_depth(&vx_device, &surface_config);
-        let depth_texture_view = depth_texture.create_view(&Default::default());
+        let depth = VxDepth::new(&vx_device, size);
 
         Self {
             surface,
@@ -132,8 +134,8 @@ impl<'window> Renderer<'window> {
             device: vx_device,
             queue: vx_queue,
             indirect_buffer,
-            depth_texture_view,
             surface_format: surface_capabilities.formats[0],
+            depth,
         }
     }
 
@@ -141,7 +143,7 @@ impl<'window> Renderer<'window> {
         self.queue.write_buffer(buffer, offset, data)
     }
 
-    pub fn create_encoder(&self, label: &str) -> wgpu::CommandEncoder {
+    pub fn create_encoder(&self, label: &str) -> CommandEncoder {
         self.device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
     }
@@ -169,7 +171,7 @@ impl<'window> Renderer<'window> {
                 },
             })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.depth_texture_view,
+                view: &self.depth.view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
                     store: wgpu::StoreOp::Store,

@@ -49,6 +49,8 @@ fn rust_to_wgsl_path(type_path: &TypePath) -> String {
             "IVec3" | "IVec3A" => "vec3<i32>".into(),
             "Vec4" => "vec4<f32>".into(),
             "IVec4" => "vec4<i32>".into(),
+            "UVec2" => "vec2<u32>".into(),
+            "UVec3" => "vec3<u32>".into(),
             "Mat4" => "mat4x4<f32>".into(),
             "ShaderAtomic" => {
                 let inner_type = handle_generic(name_seg);

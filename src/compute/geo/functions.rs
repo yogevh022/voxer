@@ -4,7 +4,7 @@ use std::f32::consts::PI;
 use crate::compute::geo::Sphere;
 
 pub fn world_to_chunk_pos(vec: Vec3) -> IVec3 {
-    let chunk_pos_float = vec / CHUNK_DIM as f32;
+    let chunk_pos_float = (vec / CHUNK_DIM as f32).floor();
     IVec3::new(
         chunk_pos_float.x as i32,
         chunk_pos_float.y as i32,

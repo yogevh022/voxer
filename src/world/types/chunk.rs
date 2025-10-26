@@ -6,6 +6,8 @@ use crate::compute::chunk::VoxelChunkMeshMeta;
 
 pub const CHUNK_DIM: usize = 16;
 pub const CHUNK_DIM_HALF: usize = CHUNK_DIM / 2;
+pub const INV_CHUNK_DIM: f32 = 1.0 / CHUNK_DIM as f32;
+pub const INV_CHUNK_DIM_HALF: f32 = 1.0 / CHUNK_DIM_HALF as f32;
 pub const CHUNK_SLICE: usize = CHUNK_DIM * CHUNK_DIM;
 pub const CHUNK_VOLUME: usize = CHUNK_SLICE * CHUNK_DIM;
 pub type ChunkBlocks = Array3D<VoxelBlock, CHUNK_DIM, CHUNK_DIM, CHUNK_DIM>;

@@ -1,6 +1,6 @@
 
 @group(1) @binding(0)
-var<uniform> camera_view: UniformCameraView;
+var<uniform> vx_camera: VxGPUCamera;
 @group(1) @binding(1)
 var<storage, read> face_data_buffer: array<GPUVoxelFaceData>;
 
@@ -28,7 +28,7 @@ fn vs_main(
 
     let vertex_position = face_position + QUAD_VERTICES[face_voxel.face_id][vertex_index];
 
-    out.position = camera_view.view_proj * vec4<f32>(vertex_position, 1.0);
+    out.position = vx_camera.view_vp * vec4<f32>(vertex_position, 1.0);
     out.tex_coords = TEX_COORDS[vertex_index];
     out.ao = occlusion_count_to_ao(face_ao[vertex_index]);
 

@@ -1,4 +1,3 @@
-use crate::compute::geo::{Frustum, Plane};
 use crate::renderer::Renderer;
 use crate::renderer::gpu::chunk_session::{GpuChunkSession, GpuChunkSessionConfig};
 use crate::renderer::resources;
@@ -6,39 +5,12 @@ use crate::renderer::resources::shader::{MAX_WORKGROUP_DIM_1D, MAX_WORKGROUP_DIM
 use crate::renderer::resources::texture::get_atlas_image;
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::vtypes::Camera;
-use crate::world::types::CHUNK_DIM;
-use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec4};
 use std::borrow::Cow;
 use std::sync::Arc;
-use voxer_macros::ShaderType;
 use wgpu::{BindGroup, BufferUsages, CommandEncoder, RenderPipeline};
+use winit::dpi::PhysicalSize;
 use winit::window::Window;
-
-#[repr(C, align(16))]
-#[derive(ShaderType, Copy, Clone, Debug, Pod, Zeroable)]
-pub struct UniformCameraView {
-    // todo move from here
-    view_proj: Mat4,
-    view_planes: [Plane; 6],
-    origin: Vec4, // w = voxel_render_distance
-}
-
-impl UniformCameraView {
-    pub fn new(camera: &Camera, voxel_render_distance: u32) -> Self {
-        let view_proj = camera.view_projection();
-        let view_planes = Frustum::planes(view_proj);
-        let origin = camera
-            .transform
-            .position
-            .extend(voxel_render_distance as f32);
-        Self {
-            view_proj,
-            view_planes,
-            origin,
-        }
-    }
-}
+use crate::renderer::gpu::vx_gpu_camera::VxGPUCamera;
 
 pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
@@ -52,7 +24,7 @@ impl AppRenderer<'_> {
     pub fn new(window: Arc<Window>) -> Self {
         let renderer = Renderer::new(window);
 
-        let view_projection_buffer = renderer.device.create_vx_buffer::<UniformCameraView>(
+        let view_projection_buffer = renderer.device.create_vx_buffer::<VxGPUCamera>(
             "View Projection Buffer",
             1,
             BufferUsages::UNIFORM | BufferUsages::COPY_DST,
@@ -94,7 +66,6 @@ impl AppRenderer<'_> {
     fn render_chunks(&mut self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.atlas_bind_group, &[]);
-
         self.chunk_session
             .render_chunks(&self.renderer, render_pass);
     }
@@ -102,13 +73,14 @@ impl AppRenderer<'_> {
     pub fn submit_render_pass(
         &mut self,
         mut encoder: CommandEncoder,
-        camera: &Camera,
-        voxel_render_distance: u32,
+        main_camera: &Camera,
+        voxel_culling_distance: u32,
+        window_size: PhysicalSize<u32>,
     ) -> Result<(), wgpu::SurfaceError> {
         let frame = self.renderer.surface.get_current_texture()?;
         let view = frame.texture.create_view(&Default::default());
 
-        let camera_view = UniformCameraView::new(camera, voxel_render_distance);
+        let camera_view = VxGPUCamera::new(main_camera, voxel_culling_distance, window_size);
 
         self.renderer.write_buffer(
             &self.view_projection_buffer,
@@ -149,7 +121,7 @@ pub fn make_render_pipeline(
     renderer
         .device
         .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("render_pipeline"),
+            label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,

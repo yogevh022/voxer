@@ -1,5 +1,5 @@
 use image::RgbaImage;
-use wgpu::{BindGroup, BindGroupLayout};
+use wgpu::{BindGroup, BindGroupLayout, TextureView};
 use crate::renderer::{resources, Renderer};
 
 impl Renderer<'_> {
@@ -15,9 +15,7 @@ impl Renderer<'_> {
             wgpu::BindingResource::TextureView(&texture_view),
             wgpu::BindingResource::Sampler(&sampler),
         ]);
-
         let texture_sampler_layout = texture_sampler_bind_layout(&self.device);
-
         let texture_sampler_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(label),
             layout: &texture_sampler_layout,
@@ -62,26 +60,6 @@ pub fn create_diffuse(
         texture_size,
     );
     diffuse_texture
-}
-
-pub fn create_depth(
-    device: &wgpu::Device,
-    surface_config: &wgpu::SurfaceConfiguration,
-) -> wgpu::Texture {
-    device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("Depth Texture"),
-        size: wgpu::Extent3d {
-            width: surface_config.width,
-            height: surface_config.height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Depth32Float,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats: &[],
-    })
 }
 
 pub fn diffuse_sampler(device: &wgpu::Device) -> wgpu::Sampler {

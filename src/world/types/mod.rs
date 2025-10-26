@@ -1,5 +1,8 @@
 mod block;
 mod chunk;
 
-pub use block::{VoxelBlock, BlockBytewise};
-pub use chunk::{Chunk, ChunkAdjBlocks, ChunkBlocks, CHUNK_DIM, CHUNK_SLICE, CHUNK_DIM_HALF};
+pub use block::{BlockBytewise, VoxelBlock};
+pub use chunk::{
+    CHUNK_DIM, CHUNK_DIM_HALF, CHUNK_SLICE, Chunk, ChunkAdjBlocks, ChunkBlocks, INV_CHUNK_DIM,
+    INV_CHUNK_DIM_HALF,
+};

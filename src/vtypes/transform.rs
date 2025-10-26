@@ -1,6 +1,7 @@
 use glam;
 use std::default::Default;
 
+#[derive(Clone, Copy, Debug)]
 pub struct Transform {
     pub position: glam::Vec3,
     pub rotation: glam::Quat,

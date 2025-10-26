@@ -2,7 +2,7 @@ use crate::vtypes::scene_object::VoxerObject;
 use crate::vtypes::{Transform, Voxer};
 use glam::{Mat4, Quat};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Camera {
     pub transform: Transform,
     pub frustum: ViewFrustum,
@@ -13,33 +13,38 @@ impl Camera {
         self.frustum.aspect_ratio = aspect_ratio;
     }
 
-    pub fn view_projection(&self) -> Mat4 {
+    pub fn view_matrix(&self) -> Mat4 {
+        Mat4::look_to_rh(
+            self.transform.position,
+            self.transform.forward(),
+            self.transform.up(),
+        )
+    }
+
+    pub fn projection_matrix(&self) -> Mat4 {
         Mat4::perspective_rh(
             self.frustum.fov,
             self.frustum.aspect_ratio,
             self.frustum.near,
             self.frustum.far,
-        ) * Mat4::look_to_rh(
-            self.transform.position,
-            self.transform.forward(),
-            self.transform.up(),
         )
     }
 
-    pub fn view_projection_with_far(&self, far: f32) -> Mat4 {
+    pub fn view_projection_matrix(&self) -> Mat4 {
+        self.projection_matrix() * self.view_matrix()
+    }
+
+    pub fn projection_with_far(&self, far: f32) -> Mat4 {
         Mat4::perspective_rh(
             self.frustum.fov,
             self.frustum.aspect_ratio,
             self.frustum.near,
             far,
-        ) * Mat4::look_to_rh(
-            self.transform.position,
-            self.transform.forward(),
-            self.transform.up(),
         )
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ViewFrustum {
     pub fov: f32,
     pub near: f32,

@@ -11,12 +11,12 @@ use glam::IVec3;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use wgpu::{CommandEncoder, ComputePassDescriptor};
+use wgpu::{CommandEncoder, ComputePass, ComputePassDescriptor};
 use winit::window::Window;
 
 pub struct ClientWorldSession<'window> {
     pub player: PlayerSession,
-    pub renderer: AppRenderer<'window>,
+    pub app_renderer: AppRenderer<'window>,
     pub view_frustum: [Plane; 6],
     pub chunks: FxHashMap<IVec3, Chunk>,
 
@@ -36,7 +36,7 @@ impl<'window> ClientWorldSession<'window> {
         chunks.reserve((config.render_distance * 2).pow(3));
         Self {
             player,
-            renderer: AppRenderer::new(window),
+            app_renderer: AppRenderer::new(window),
             view_frustum: [Plane::default(); 6],
             chunks,
             render_max_sq: (config.render_distance as i32).pow(2),
@@ -69,29 +69,38 @@ impl<'window> ClientWorldSession<'window> {
             .drain(remaining_positions.saturating_sub(CHUNKS_PER_PASS)..)
         {
             if camera_ch_position.distance_squared(position) > self.render_max_sq {
-                self.renderer.chunk_session.drop_chunk(&position);
+                self.app_renderer.chunk_session.drop_chunk(&position);
                 self.chunks.remove(&position);
             }
         }
     }
 
     pub fn tick(&mut self, encoder: &mut CommandEncoder) {
+        let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+            label: Some("Client Compute Pass"),
+            timestamp_writes: None,
+        });
+        self.app_renderer.renderer.depth.generate_depth_mips(
+            &self.app_renderer.renderer.device,
+            &mut compute_pass
+        );
+
         let player_ch_position = world_to_chunk_pos(self.player.location.position);
         self.lazy_chunk_gc(player_ch_position);
 
-        let max_write = self.renderer.chunk_session.config.max_write_count;
+        let max_write = self.app_renderer.chunk_session.config.max_write_count;
         let mesh_positions = self.prepare_meshing_positions(max_write);
         let mesh_chunks_refs = mesh_positions
             .into_iter()
             .map(|p| self.chunks.get(&p).unwrap());
 
-        self.renderer
+        self.app_renderer
             .chunk_session
             .prepare_chunk_writes(mesh_chunks_refs);
 
         self.chunk_request_batch.clear();
         self.chunk_request_throttler.set_now(Instant::now());
-        self.renderer
+        self.app_renderer
             .chunk_session
             .prepare_chunk_visibility(&self.view_frustum, |ch_pos| {
                 if player_ch_position.distance_squared(ch_pos) > self.render_max_sq {
@@ -105,16 +114,12 @@ impl<'window> ClientWorldSession<'window> {
                 }
             });
 
-        let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("Chunk Compute Pass"),
-            timestamp_writes: None,
-        });
-        self.renderer
+        self.app_renderer
             .chunk_session
-            .compute_chunk_writes(&self.renderer.renderer, &mut compute_pass);
-        self.renderer
+            .compute_chunk_writes(&self.app_renderer.renderer, &mut compute_pass);
+        self.app_renderer
             .chunk_session
-            .compute_chunk_visibility_and_meshing(&self.renderer.renderer, &mut compute_pass);
+            .compute_chunk_visibility_and_meshing(&self.app_renderer.renderer, &mut compute_pass);
     }
 
     fn prepare_meshing_positions(&mut self, count: usize) -> Vec<IVec3> {

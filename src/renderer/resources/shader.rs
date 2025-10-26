@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 use wgpu::ShaderSource;
-use crate::app::app_renderer::UniformCameraView;
 use crate::compute::geo::Plane;
 use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry, GPUVoxelChunkHeader, GPUDispatchIndirectArgsAtomic, GPUPackedIndirectArgsAtomic};
-use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF};
+use crate::renderer::gpu::vx_gpu_camera::VxGPUCamera;
+use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, INV_CHUNK_DIM, INV_CHUNK_DIM_HALF};
 
 macro_rules! include_shaders {
     ($($name:ident => $file:literal), * $(,)?) => (
@@ -63,6 +63,13 @@ macro_rules! include_shader_consts {
     };
 }
 
+include_shaders!(
+    VX_SCREENSPACE => "vx/vx_screenspace.wgsl",
+    VX_DEPTH_MIP_COMMON => "vx/vx_depth_mip_common.wgsl",
+    VX_DEPTH_MIP_ONE_ENTRY => "vx/vx_depth_mip_one_entry.wgsl",
+    VX_DEPTH_MIP_X_ENTRY => "vx/vx_depth_mip_x_entry.wgsl",
+);
+
 // general
 include_shaders!(
     VERTEX_SHADER_ENTRY => "vert.wgsl",
@@ -74,8 +81,11 @@ include_shaders!(
     F_WORLD => "functions/world.wgsl",
     F_BITWISE => "functions/bitwise.wgsl",
     F_THREAD_MAPPING => "functions/thread_mapping.wgsl",
+    F_MATH => "functions/math.wgsl",
+    F_GEO => "functions/geo.wgsl",
     F_UNPACK_GPU_CHUNK_MESH_ENTRY => "functions/unpack_GPUChunkMeshEntry.wgsl",
     F_UNPACK_GPU_VOXEL_FACE_DATA => "functions/unpack_GPUVoxelFaceData.wgsl",
+    F_MASK_INDEX => "functions/mask_index.wgsl",
 );
 
 // voxel
@@ -85,12 +95,16 @@ include_shaders!(
     VOXEL_CHUNK_MESH_FACES => "voxel/chunk_mesh_faces.wgsl",
     VOXEL_CHUNK_MESH_VAO => "voxel/chunk_mesh_vao.wgsl",
     VOXEL_CHUNK_WRITE_ENTRY => "voxel/chunk_scattered_write.wgsl",
-    VOXEL_CHUNK_CULL_ENTRY => "voxel/chunk_culled_mdi_args.wgsl",
+    VOXEL_CHUNK_CULL_ENTRY => "voxel/chunk_mdi_args.wgsl",
 );
 
 fn globals() -> String {
-    include_shader_consts!(
+    let consts = include_shader_consts!(
         VOID_OFFSET: u32 = 1;
+    );
+    concat_shaders!(
+        &consts,
+        F_MASK_INDEX,
     )
 }
 
@@ -113,7 +127,7 @@ fn geo_types() -> String {
 
 fn meta_types() -> String {
     include_shader_types!(
-        UniformCameraView,
+        VxGPUCamera,
         GPUDrawIndirectArgs,
         GPUDispatchIndirectArgsAtomic,
         GPUPackedIndirectArgsAtomic,
@@ -124,6 +138,9 @@ fn voxel_common() -> String {
     let consts = include_shader_consts!(
         CHUNK_DIM: u32 = CHUNK_DIM;
         CHUNK_DIM_HALF: u32 = CHUNK_DIM_HALF;
+        CHUNK_BOUNDING_SPHERE_R: f32 = CHUNK_DIM_HALF as f32 * 1.75;
+        INV_CHUNK_DIM: f32 = INV_CHUNK_DIM;
+        INV_CHUNK_DIM_HALF: f32 = INV_CHUNK_DIM_HALF;
     );
     let types = include_shader_types!(
         GPUVoxelChunkContent,
@@ -165,14 +182,17 @@ pub fn chunk_meshing_wgsl() -> String {
     )
 }
 
-pub fn chunk_culled_mdi_args_wgsl() -> String {
+pub fn chunk_mdi_args_wgsl() -> String {
     concat_shaders!(
         &cfg_constants(),
         &meta_types(),
         &geo_types(),
         &voxel_common(),
         &globals(),
+        VX_SCREENSPACE,
         VOXEL_CHUNK_CULL_ENTRY,
+        F_MATH,
+        F_GEO,
         F_BITWISE,
         F_THREAD_MAPPING,
         F_UNPACK_GPU_CHUNK_MESH_ENTRY,
@@ -185,6 +205,22 @@ pub fn chunk_write_wgsl() -> String {
         &voxel_common(),
         F_THREAD_MAPPING,
         VOXEL_CHUNK_WRITE_ENTRY,
+    )
+}
+
+pub fn depth_mip_one_wgsl() -> String {
+    concat_shaders!(
+        &cfg_constants(),
+        VX_DEPTH_MIP_COMMON,
+        VX_DEPTH_MIP_ONE_ENTRY,
+    )
+}
+
+pub fn depth_mip_x_wgsl() -> String {
+    concat_shaders!(
+        &cfg_constants(),
+        VX_DEPTH_MIP_COMMON,
+        VX_DEPTH_MIP_X_ENTRY,
     )
 }
 
