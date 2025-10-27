@@ -1,7 +1,5 @@
-use crate::world::types::CHUNK_DIM;
 use glam::{IVec3, Vec3};
-use std::f32::consts::PI;
-use crate::compute::geo::Sphere;
+use crate::world::CHUNK_DIM;
 
 pub fn world_to_chunk_pos(vec: Vec3) -> IVec3 {
     let chunk_pos_float = (vec / CHUNK_DIM as f32).floor();

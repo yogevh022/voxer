@@ -3,7 +3,6 @@ mod world;
 
 use crate::compute::MIB;
 use crate::voxer_network;
-use crate::world::generation::WorldConfig;
 use crate::world::network::{
     MsgChunkData, MsgChunkDataRequest, MsgSetPositionRequest, NetworkHandle, ServerMessage,
     ServerMessageTag,
@@ -14,6 +13,7 @@ use crate::world::session::{PlayerLocation, PlayerSession};
 use glam::Vec3;
 use std::net::SocketAddr;
 use voxer_network::NetworkDeserializable;
+pub use crate::world::server::world::*;
 
 #[derive(Debug)]
 pub struct ServerWorldConfig {

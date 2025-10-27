@@ -4,19 +4,19 @@ use crate::compute::throttler::Throttler;
 use crate::world::ClientWorldConfig;
 use crate::world::network::MAX_CHUNKS_PER_BATCH;
 use crate::world::session::PlayerSession;
-use crate::world::types::Chunk;
 use glam::IVec3;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use wgpu::{CommandEncoder, ComputePassDescriptor};
 use winit::window::Window;
+use crate::world::server::chunk::VoxelChunk;
 
 pub struct ClientWorldSession<'window> {
     pub player: PlayerSession,
     pub app_renderer: AppRenderer<'window>,
     pub view_frustum: [Plane; 6],
-    pub chunks: FxHashMap<IVec3, Chunk>,
+    pub chunks: FxHashMap<IVec3, VoxelChunk>,
 
     render_max_sq: i32,
 
@@ -45,7 +45,7 @@ impl<'window> ClientWorldSession<'window> {
         }
     }
 
-    pub fn add_new_chunk(&mut self, chunk: Chunk) {
+    pub fn add_new_chunk(&mut self, chunk: VoxelChunk) {
         self.chunk_meshing_batch
             .extend(ivec3_with_adjacent_positions(chunk.position));
         self.chunks.insert(chunk.position, chunk);

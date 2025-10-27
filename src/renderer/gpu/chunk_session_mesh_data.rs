@@ -1,10 +1,9 @@
 use crate::compute::array::{Array3D, array_and, array_not, array_pop_count_u16, array_xor};
 use crate::compute::bytes::bit_at;
-use crate::world::types::{
-    BlockBytewise, CHUNK_DIM, CHUNK_SLICE, ChunkAdjBlocks, ChunkBlocks, VoxelBlock,
-};
 use glam::U16Vec3;
 use std::array;
+use crate::world::{VoxelChunkAdjBlocks, VoxelChunkBlocks, CHUNK_DIM};
+use crate::world::block::VoxelBlock;
 
 pub const TRANSPARENT_LAYER_BLOCKS: [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] =
     [[VoxelBlock { value: 0 }; CHUNK_DIM]; CHUNK_DIM];
@@ -15,8 +14,11 @@ pub struct VoxelChunkMeshMeta {
     pub negative_faces: U16Vec3,
 }
 
-pub(crate) fn chunk_mesh_data(blocks: &ChunkBlocks, adj_blocks: &ChunkAdjBlocks) -> VoxelChunkMeshMeta {
-    type ChunkPositiveAdjBlocks = Array3D<VoxelBlock, 3, CHUNK_DIM, CHUNK_DIM>;
+pub(crate) fn chunk_mesh_data(
+    blocks: &VoxelChunkBlocks,
+    adj_blocks: &VoxelChunkAdjBlocks,
+) -> VoxelChunkMeshMeta {
+    type ChunkPositiveAdjBlocks = [[[VoxelBlock; CHUNK_DIM]; CHUNK_DIM]; 3];
     let positive_adj_blocks = unsafe { *adj_blocks.as_ptr().cast::<ChunkPositiveAdjBlocks>() };
     let packed_blocks = pack_solid_blocks(blocks);
     let packed_adj_blocks = pack_solid_blocks(&positive_adj_blocks);
@@ -25,7 +27,7 @@ pub(crate) fn chunk_mesh_data(blocks: &ChunkBlocks, adj_blocks: &ChunkAdjBlocks)
 }
 
 fn face_count_from_packed(
-    packed_blocks: [u16; CHUNK_SLICE],
+    packed_blocks: [u16; CHUNK_DIM * CHUNK_DIM],
     packed_adj_blocks: [u16; CHUNK_DIM * 3],
 ) -> VoxelChunkMeshMeta {
     let xa = &mut [0u16; CHUNK_DIM];
@@ -98,7 +100,7 @@ fn into_array_slice<T, const N: usize>(slice: &[T]) -> &[T; N] {
 
 #[inline(always)]
 fn prep_adj_x(
-    packed_blocks: &[u16; CHUNK_SLICE],
+    packed_blocks: &[u16; CHUNK_DIM * CHUNK_DIM],
     xa: &mut [u16; CHUNK_DIM],
     xb: &mut [u16; CHUNK_DIM],
     x: usize,
@@ -109,7 +111,7 @@ fn prep_adj_x(
 
 #[inline(always)]
 fn prep_adj_y(
-    packed_blocks: &[u16; CHUNK_SLICE],
+    packed_blocks: &[u16; CHUNK_DIM * CHUNK_DIM],
     packed_adjacent_blocks: u16,
     ya: &mut [u16; CHUNK_DIM],
     yb: &mut [u16; CHUNK_DIM],
@@ -129,7 +131,7 @@ fn prep_adj_z(packed_adjacent_blocks: u16, xa: &[u16; CHUNK_DIM], zb: &mut [u16;
 }
 
 fn pack_solid_blocks<const X: usize, const Y: usize, const Z: usize, const XY: usize>(
-    blocks: &Array3D<VoxelBlock, X, Y, Z>,
+    blocks: &[[[VoxelBlock; Z]; Y]; X],
 ) -> [u16; XY] {
     // packs chunk blocks into a bit (u16) array, 1 for solid 0 for transparent
     // Array3D<Block, X, Y, Z> -> Array1D<u16, XY>

@@ -9,7 +9,6 @@ use crate::renderer::gpu::chunk_session_types::{ChunkMeshState, MeshStateError};
 use crate::renderer::gpu::{GPUDispatchIndirectArgsAtomic, GPUVoxelChunk, GPUVoxelFaceData};
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::{Renderer, resources};
-use crate::world::types::{CHUNK_DIM, Chunk, ChunkAdjBlocks};
 use glam::IVec3;
 use rustc_hash::FxHashMap;
 use slabmap::SlabMap;
@@ -19,6 +18,8 @@ use wgpu::{
     ComputePipeline, RenderPass,
 };
 use crate::call_every;
+use crate::world::chunk::VoxelChunk;
+use crate::world::{VoxelChunkAdjBlocks, CHUNK_DIM};
 
 #[derive(Debug, Clone, Copy)]
 pub struct GpuChunkSessionConfig {
@@ -189,7 +190,7 @@ impl GpuState {
         }
     }
 
-    fn cache_chunk(&mut self, chunk: &Chunk) -> GPUVoxelChunk {
+    fn cache_chunk(&mut self, chunk: &VoxelChunk) -> GPUVoxelChunk {
         let mesh_state = ChunkMeshState::Uninitialized;
         let chunk_index = self.chunk_cache.insert(chunk.position, mesh_state);
         let header = GPUVoxelChunkHeader::new(chunk_index as u32, chunk.position);
@@ -232,7 +233,7 @@ impl GpuState {
 }
 
 struct CpuState {
-    chunk_adj_cache: FxHashMap<IVec3, ChunkAdjBlocks>,
+    chunk_adj_cache: FxHashMap<IVec3, VoxelChunkAdjBlocks>,
     write_batch: Vec<GPUVoxelChunk>,
     aabb_visible_batch: Vec<GPUChunkMeshEntry>,
 }
@@ -248,7 +249,7 @@ impl CpuState {
         }
     }
 
-    fn cache_adj_blocks(&mut self, chunk: &Chunk) {
+    fn cache_adj_blocks(&mut self, chunk: &VoxelChunk) {
         let as_adj = chunk.blocks_as_adj();
         self.chunk_adj_cache.insert(chunk.position, as_adj);
     }
@@ -257,7 +258,7 @@ impl CpuState {
         self.chunk_adj_cache.remove(position);
     }
 
-    fn adj_blocks_of(&self, position: &IVec3) -> ChunkAdjBlocks {
+    fn adj_blocks_of(&self, position: &IVec3) -> VoxelChunkAdjBlocks {
         let px = IVec3::new(position.x + 1, position.y, position.z);
         let py = IVec3::new(position.x, position.y + 1, position.z);
         let pz = IVec3::new(position.x, position.y, position.z + 1);
@@ -287,7 +288,7 @@ impl CpuState {
                 .map_or(TRANSPARENT_LAYER_BLOCKS, |adj| adj[5]),
         ];
 
-        unsafe { std::mem::transmute(adj) }
+        adj
     }
 }
 
@@ -312,7 +313,7 @@ impl GpuChunkSession {
         }
     }
 
-    fn cache_chunk(&mut self, chunk: &Chunk) -> GPUVoxelChunk {
+    fn cache_chunk(&mut self, chunk: &VoxelChunk) -> GPUVoxelChunk {
         self.cpu_state.cache_adj_blocks(chunk);
         self.gpu_state.cache_chunk(chunk)
     }
@@ -322,7 +323,7 @@ impl GpuChunkSession {
         self.gpu_state.drop_chunk(position);
     }
 
-    pub fn prepare_chunk_writes<'a>(&mut self, chunks: impl Iterator<Item = &'a Chunk>) {
+    pub fn prepare_chunk_writes<'a>(&mut self, chunks: impl Iterator<Item = &'a VoxelChunk>) {
         let write_batch: &mut Vec<GPUVoxelChunk> =
             unsafe { &mut *((&mut self.cpu_state.write_batch) as *mut _) };
         write_batch.clear();

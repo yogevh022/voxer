@@ -1,10 +1,10 @@
 use crate::compute;
 use crate::world::server::world::World;
 use crate::world::session::PlayerSession;
-use crate::world::types::Chunk;
 use glam::IVec3;
 use rustc_hash::FxHashMap;
 use std::net::SocketAddr;
+use crate::world::server::world::chunk::VoxelChunk;
 
 pub(crate) struct ServerPlayerSession {
     pub player: PlayerSession,
@@ -53,7 +53,7 @@ impl ServerWorldSession {
         &mut self,
         world_index: usize,
         chunk_positions: &[IVec3],
-    ) -> Vec<&Chunk> {
+    ) -> Vec<&VoxelChunk> {
         self.worlds[world_index].request_chunks(chunk_positions)
     }
 

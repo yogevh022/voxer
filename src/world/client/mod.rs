@@ -7,13 +7,13 @@ use crate::world::network::{
     ServerMessage, ServerMessageTag,
 };
 use crate::world::session::{PlayerLocation, PlayerSession};
-use crate::world::types::Chunk;
 use glam::Vec3;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use voxer_network::NetworkDeserializable;
 use wgpu::{CommandEncoder, ComputePass};
 use winit::window::Window;
+use crate::world::server::chunk::VoxelChunk;
 
 #[derive(Clone, Copy)]
 pub struct ClientWorldConfig {
@@ -93,7 +93,7 @@ impl ClientWorld<'_> {
         match message.tag {
             ServerMessageTag::ChunkData => {
                 let chunk_data_msg = MsgChunkData::deserialize(message.message.data);
-                let chunk = Chunk::new(
+                let chunk = VoxelChunk::new(
                     chunk_data_msg.position,
                     chunk_data_msg.blocks,
                 );

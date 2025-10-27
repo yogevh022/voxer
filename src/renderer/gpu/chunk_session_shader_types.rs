@@ -1,7 +1,7 @@
-use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, ChunkBlocks};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
 use voxer_macros::ShaderType;
+use crate::world::{VoxelChunkBlocks, CHUNK_DIM, CHUNK_DIM_HALF};
 
 type ShaderAtomic<T> = T;
 
@@ -135,7 +135,7 @@ pub struct GPUVoxelChunk {
 }
 
 impl GPUVoxelChunk {
-    pub fn new_uninit(header: GPUVoxelChunkHeader, blocks: ChunkBlocks) -> Self {
+    pub fn new_uninit(header: GPUVoxelChunkHeader, blocks: VoxelChunkBlocks) -> Self {
         let gpu_content: GPUVoxelChunkContent = unsafe { std::mem::transmute(blocks) };
         let gpu_adj_content = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
         Self {

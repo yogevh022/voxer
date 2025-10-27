@@ -3,7 +3,7 @@ use wgpu::ShaderSource;
 use crate::compute::geo::Plane;
 use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry, GPUVoxelChunkHeader, GPUDispatchIndirectArgsAtomic, GPUPackedIndirectArgsAtomic};
 use crate::renderer::gpu::vx_gpu_camera::VxGPUCamera;
-use crate::world::types::{CHUNK_DIM, CHUNK_DIM_HALF, INV_CHUNK_DIM, INV_CHUNK_DIM_HALF};
+use crate::world::{CHUNK_DIM, CHUNK_DIM_HALF};
 
 macro_rules! include_shaders {
     ($($name:ident => $file:literal), * $(,)?) => (
@@ -139,8 +139,8 @@ fn voxel_common() -> String {
         CHUNK_DIM: u32 = CHUNK_DIM;
         CHUNK_DIM_HALF: u32 = CHUNK_DIM_HALF;
         CHUNK_BOUNDING_SPHERE_R: f32 = CHUNK_DIM_HALF as f32 * 1.75;
-        INV_CHUNK_DIM: f32 = INV_CHUNK_DIM;
-        INV_CHUNK_DIM_HALF: f32 = INV_CHUNK_DIM_HALF;
+        INV_CHUNK_DIM: f32 = 1.0 / CHUNK_DIM as f32;
+        INV_CHUNK_DIM_HALF: f32 = 1.0 / CHUNK_DIM_HALF as f32;
     );
     let types = include_shader_types!(
         GPUVoxelChunkContent,

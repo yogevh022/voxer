@@ -2,8 +2,7 @@ pub mod app_renderer;
 
 use crate::compute::geo::Frustum;
 use crate::vtypes::{Scene, Voxer, VoxerObject};
-use crate::world::types::CHUNK_DIM;
-use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld};
+use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld, CHUNK_DIM};
 use crate::{call_every, vtypes};
 use std::sync::Arc;
 use wgpu::ComputePassDescriptor;

@@ -7,8 +7,7 @@ mod renderer;
 mod vtypes;
 mod world;
 
-use crate::world::generation::WorldConfig;
-use crate::world::{ClientWorldConfig, ServerWorld, ServerWorldConfig};
+use crate::world::{ClientWorldConfig, ServerWorld, ServerWorldConfig, WorldConfig};
 use voxer_network;
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
