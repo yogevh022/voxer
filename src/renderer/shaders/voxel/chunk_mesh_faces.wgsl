@@ -9,15 +9,19 @@ fn face_data(
     ocl_count: vec4<u32>,
     draw_mask: FaceDrawMask,
 ) -> GPUVoxelFaceData {
-    let global_position = wg_chunk_world_position + vec3<i32>(face_position);
+    let chunk_y_pos: u32 = bitcast<u32>(wg_chunk_position.y & 0xFF);
+    let chunk_z_pos_upper_8bits: u32 = bitcast<u32>(wg_chunk_position.z & 0xFF000);
+    
+    let word_a = voxel | (fid << 28);
+    let word_b = face_position.y | (ocl_count.x << 10) | (ocl_count.y << 30);
+    let word_c = face_position.x
+        | (face_position.z << 4)
+        | (chunk_y_pos << 8)
+        | (chunk_z_pos_upper_8bits << 4)
+        | (ocl_count.z << 30);
+    let word_d = (ocl_count.w << 30);
 
-    let word_a = cast_i24_to_u32(global_position.x) | (ocl_count.x << 30);
-    let word_b = cast_i24_to_u32(global_position.z) | (ocl_count.y << 30);
-    let word_c = cast_i12_to_u32(global_position.y) | (ocl_count.w << 30);
-    let word_d = (ocl_count.z << 30);
-    let word_e = voxel | (fid << 28);
-
-    return GPUVoxelFaceData(word_a, word_b, word_c, word_d, word_e);
+    return GPUVoxelFaceData(word_a, word_b, word_c, word_d);
 }
 
 struct FaceDrawMask {
