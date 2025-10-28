@@ -2,11 +2,11 @@ mod handle;
 
 use crate::impl_try_from_uint;
 use crate::voxer_network::{NetworkMessageTag, ReceivedMessage};
-use voxer_macros::network_message;
+use crate::world::server::VoxelChunkBlocks;
 use bytemuck::{Pod, Zeroable};
 use glam::{IVec3, Vec3};
 pub use handle::NetworkHandle;
-use crate::world::server::VoxelChunkBlocks;
+use voxer_macros::network_message;
 
 #[derive(Debug)]
 pub struct ServerMessage {
@@ -26,6 +26,7 @@ pub enum ServerMessageTag {
     ChunkDataRequest,
     ChunkDataDeny,
     ChunkData,
+    ChunkDataEmpty,
     UpdateChunksRequest,
     UpdateChunksDeny,
     UpdateChunks,
@@ -85,8 +86,16 @@ impl MsgChunkDataRequest {
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 #[network_message(tag = ServerMessageTag::ChunkData.as_tag())]
 pub struct MsgChunkData {
-    pub position: IVec3,     // 0..11
-    pub blocks: VoxelChunkBlocks, // 12..8204
+    pub position: IVec3,          // 0..11
+    pub voxel_count: u32,         // 12..15
+    pub blocks: VoxelChunkBlocks, // 15..8208
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[network_message(tag = ServerMessageTag::ChunkDataEmpty.as_tag())]
+pub struct MsgChunkDataEmpty {
+    pub position: IVec3,          // 0..11
 }
 
 #[repr(C)]

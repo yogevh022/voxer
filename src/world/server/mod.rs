@@ -4,16 +4,16 @@ mod world;
 use crate::compute::MIB;
 use crate::voxer_network;
 use crate::world::network::{
-    MsgChunkData, MsgChunkDataRequest, MsgSetPositionRequest, NetworkHandle, ServerMessage,
-    ServerMessageTag,
+    MsgChunkData, MsgChunkDataEmpty, MsgChunkDataRequest, MsgSetPositionRequest, NetworkHandle,
+    ServerMessage, ServerMessageTag,
 };
 use crate::world::server::session::{ServerPlayerSession, ServerWorldSession};
+pub use crate::world::server::world::*;
 use crate::world::server::world::{Earth, World};
 use crate::world::session::{PlayerLocation, PlayerSession};
 use glam::Vec3;
 use std::net::SocketAddr;
 use voxer_network::NetworkDeserializable;
-pub use crate::world::server::world::*;
 
 #[derive(Debug)]
 pub struct ServerWorldConfig {
@@ -62,13 +62,24 @@ impl ServerWorld {
                 let positions = &chunk_req_msg.positions[0..chunk_req_msg.count as usize];
                 let chunks = self.session.request_chunks_from_world(0, positions);
                 for chunk in chunks {
-                    let msg = MsgChunkData {
-                        position: chunk.position,
-                        blocks: chunk.blocks,
-                    };
-                    self.network
-                        .send_to(Box::new(msg), &message.message.src)
-                        .unwrap();
+                    match chunk.is_empty() {
+                        true => {
+                            let msg_data = MsgChunkDataEmpty {
+                                position: chunk.position,
+                            };
+                            let msg = Box::new(msg_data);
+                            self.network.send_to(msg, &message.message.src).unwrap();
+                        }
+                        false => {
+                            let msg_data = MsgChunkData {
+                                position: chunk.position,
+                                voxel_count: chunk.voxel_count,
+                                blocks: chunk.blocks,
+                            };
+                            let msg = Box::new(msg_data);
+                            self.network.send_to(msg, &message.message.src).unwrap();
+                        }
+                    }
                 }
             }
             ServerMessageTag::SetPositionRequest => {

@@ -5,7 +5,7 @@ pub mod chunk;
 pub mod block;
 
 use fastnoise2::generator::GeneratorWrapper;
-use fastnoise2::SafeNode;
+use fastnoise2::{Node, SafeNode};
 use glam::{IVec3, USizeVec3};
 pub use earth::Earth;
 use crate::world::server::world::block::VoxelBlock;

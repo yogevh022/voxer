@@ -1,12 +1,13 @@
-use fastnoise2::generator::{Generator, GeneratorWrapper};
-use glam::IVec3;
-use std::mem::MaybeUninit;
-use fastnoise2::SafeNode;
+use crate::world::WorldConfig;
+use crate::world::server::world::block::VoxelBlock;
 use crate::world::server::world::chunk::VoxelChunk;
 use crate::world::server::world::generation::VoxelChunkNoise;
-use crate::world::server::world::{VoxelChunkBlocks, WorldGenerator, CHUNK_DIM, CHUNK_VOLUME};
-use crate::world::server::world::block::VoxelBlock;
-use crate::world::WorldConfig;
+use crate::world::server::world::{CHUNK_DIM, CHUNK_VOLUME, VoxelChunkBlocks, WorldGenerator};
+use fastnoise2::SafeNode;
+use fastnoise2::generator::{Generator, GeneratorWrapper, prelude};
+use glam::IVec3;
+use std::mem::MaybeUninit;
+use std::ops::Add;
 
 #[derive(Clone)]
 pub struct EarthGen {
@@ -15,12 +16,23 @@ pub struct EarthGen {
 
 impl WorldGenerator for EarthGen {
     fn noise(&self) -> GeneratorWrapper<SafeNode> {
-        fastnoise2::generator::prelude::opensimplex2().build()
+        let ground_level = prelude::perlin()
+            .domain_scale(0.02)
+            .remap(-1.0, 1.0, -3.0, 3.0)
+            .add(prelude::position_output([0.0, 1.0, 0.0, 0.0], [0.0; 4]).build());
+        let ridges = prelude::perlin()
+            .domain_scale(0.1)
+            .ridged(2.0, 3.0, 3, 2.5)
+            .remap(-1.0, 1.0, 1.0, 0.0)
+            .powi(2)
+            .remap(0.0, 1.0, -1.0, 2.0);
+
+        ground_level.add(ridges.build()).build()
     }
     fn chunk(&self, position: IVec3) -> VoxelChunk {
         let noise = self.chunk_noise(position);
-        let voxels = self.chunk_voxels(noise, position);
-        VoxelChunk::new(position, voxels)
+        let (voxel_count, voxels) = self.chunk_voxels(noise);
+        VoxelChunk::new(position, voxels, voxel_count)
     }
 }
 
@@ -44,27 +56,28 @@ impl EarthGen {
         unsafe { std::mem::transmute(noise_out) }
     }
 
-    fn chunk_voxels(&self, voxel_chunk_noise: VoxelChunkNoise, position: IVec3) -> VoxelChunkBlocks {
-        let mut blocks: [MaybeUninit<VoxelBlock>; CHUNK_VOLUME] = [MaybeUninit::uninit(); CHUNK_VOLUME];
+    fn chunk_voxels(&self, voxel_chunk_noise: VoxelChunkNoise) -> (u32, VoxelChunkBlocks) {
+        let mut blocks: [MaybeUninit<VoxelBlock>; CHUNK_VOLUME] =
+            [MaybeUninit::uninit(); CHUNK_VOLUME];
         let out = unsafe { &mut *(blocks.as_mut_ptr() as *mut VoxelChunkBlocks) };
 
-        let ground_level = 0.0;
-        let amplitude = 10.0;
-
-        let chunk_world_y = position.y as f32 * CHUNK_DIM as f32;
+        let mut voxel_count = 0u32;
         for z in 0..CHUNK_DIM {
             for y in 0..CHUNK_DIM {
-                let world_y = chunk_world_y + y as f32;
                 for x in 0..CHUNK_DIM {
-                    let noise_value = voxel_chunk_noise[z][y][x];
-                    let density = (world_y - ground_level) + (noise_value * amplitude);
-                    out[z][y][x] = Self::voxel_from_noise(density);
+                    let density = voxel_chunk_noise[z][y][x];
+                    let voxel = Self::voxel_from_noise(density);
+                    if !voxel.is_transparent() {
+                        voxel_count += 1;
+                    }
+                    out[z][y][x] = voxel;
                 }
             }
         }
 
         // SAFETY: all blocks are initialized above
-        unsafe { std::mem::transmute(blocks) }
+        let voxel_chunk_blocks = unsafe { std::mem::transmute(blocks) };
+        (voxel_count, voxel_chunk_blocks)
     }
 
     fn voxel_from_noise(density: f32) -> VoxelBlock {

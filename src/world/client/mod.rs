@@ -2,10 +2,7 @@ mod session;
 use crate::compute::MIB;
 use crate::compute::geo::Plane;
 use crate::world::client::session::ClientWorldSession;
-use crate::world::network::{
-    MsgChunkData, MsgChunkDataRequest, MsgConnectRequest, MsgSetPositionRequest, NetworkHandle,
-    ServerMessage, ServerMessageTag,
-};
+use crate::world::network::{MsgChunkData, MsgChunkDataEmpty, MsgChunkDataRequest, MsgConnectRequest, MsgSetPositionRequest, NetworkHandle, ServerMessage, ServerMessageTag};
 use crate::world::session::{PlayerLocation, PlayerSession};
 use glam::Vec3;
 use std::net::SocketAddr;
@@ -93,10 +90,12 @@ impl ClientWorld<'_> {
         match message.tag {
             ServerMessageTag::ChunkData => {
                 let chunk_data_msg = MsgChunkData::deserialize(message.message.data);
-                let chunk = VoxelChunk::new(
-                    chunk_data_msg.position,
-                    chunk_data_msg.blocks,
-                );
+                let chunk = VoxelChunk::from(chunk_data_msg);
+                self.session.add_new_chunk(chunk);
+            }
+            ServerMessageTag::ChunkDataEmpty => {
+                let chunk_data_msg = MsgChunkDataEmpty::deserialize(message.message.data);
+                let chunk = VoxelChunk::from(chunk_data_msg);
                 self.session.add_new_chunk(chunk);
             }
             ServerMessageTag::SetPosition => {
