@@ -24,6 +24,9 @@ var<workgroup> wg_indirect_meshing_count: atomic<u32>;
 
 var<push_constant> input_length: u32;
 
+const SUPER_NEAR: u32 = 2u;
+const SUPER_NEAR_SQ: u32 = SUPER_NEAR * SUPER_NEAR;
+
 @compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_1D)
 fn write_culled_mdi(
     @builtin(workgroup_id) wid: vec3<u32>,
@@ -42,7 +45,7 @@ fn write_culled_mdi(
     let chunk_center_world_pos: vec3<f32> = chunk_world_pos + f32(CHUNK_DIM_HALF);
 
     let chunk_distance = isquare_distance(camera_chunk_pos, chunk_pos);
-    let super_nearby: bool = chunk_distance < 2;
+    let super_nearby: bool = chunk_distance < bitcast<i32>(SUPER_NEAR_SQ);
     let within_culling_dist: bool = chunk_distance < bitcast<i32>(culling_distance * culling_distance);
     let within_view: bool = vx_screenspace_sphere_visible(chunk_center_world_pos, CHUNK_BOUNDING_SPHERE_R);
     let exists_mask: u32 = u32(mdi_arg_index < input_length);
