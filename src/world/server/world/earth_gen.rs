@@ -19,7 +19,7 @@ impl WorldGenerator for EarthGen {
     }
     fn chunk(&self, position: IVec3) -> VoxelChunk {
         let noise = self.chunk_noise(position);
-        let voxels = self.chunk_voxels(noise);
+        let voxels = self.chunk_voxels(noise, position);
         VoxelChunk::new(position, voxels)
     }
 }
@@ -44,14 +44,21 @@ impl EarthGen {
         unsafe { std::mem::transmute(noise_out) }
     }
 
-    fn chunk_voxels(&self, voxel_chunk_noise: VoxelChunkNoise) -> VoxelChunkBlocks {
+    fn chunk_voxels(&self, voxel_chunk_noise: VoxelChunkNoise, position: IVec3) -> VoxelChunkBlocks {
         let mut blocks: [MaybeUninit<VoxelBlock>; CHUNK_VOLUME] = [MaybeUninit::uninit(); CHUNK_VOLUME];
         let out = unsafe { &mut *(blocks.as_mut_ptr() as *mut VoxelChunkBlocks) };
 
+        let ground_level = 0.0;
+        let amplitude = 10.0;
+
+        let chunk_world_y = position.y as f32 * CHUNK_DIM as f32;
         for z in 0..CHUNK_DIM {
             for y in 0..CHUNK_DIM {
+                let world_y = chunk_world_y + y as f32;
                 for x in 0..CHUNK_DIM {
-                    out[z][y][x] = Self::voxel_from_noise(voxel_chunk_noise[z][y][x]);
+                    let noise_value = voxel_chunk_noise[z][y][x];
+                    let density = (world_y - ground_level) + (noise_value * amplitude);
+                    out[z][y][x] = Self::voxel_from_noise(density);
                 }
             }
         }
@@ -60,9 +67,9 @@ impl EarthGen {
         unsafe { std::mem::transmute(blocks) }
     }
 
-    fn voxel_from_noise(noise: f32) -> VoxelBlock {
-        match noise {
-            n if n > 0.1 => VoxelBlock { value: 1u16 << 15 },
+    fn voxel_from_noise(density: f32) -> VoxelBlock {
+        match density {
+            n if n < 0.0 => VoxelBlock { value: 1u16 << 15 },
             _ => VoxelBlock::EMPTY,
         }
     }

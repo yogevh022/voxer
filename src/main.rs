@@ -7,6 +7,7 @@ mod renderer;
 mod vtypes;
 mod world;
 
+use glam::USizeVec3;
 use crate::world::{ClientWorldConfig, ServerWorld, ServerWorldConfig, WorldConfig};
 use voxer_network;
 use vtypes::{CameraController, VObject};
@@ -19,6 +20,7 @@ fn run_app() {
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
         world_config: WorldConfig {
             seed: 0,
+            max_world_size: USizeVec3::new(1024, 1024, 1024),
             noise_scale: 0.03,
         },
     };

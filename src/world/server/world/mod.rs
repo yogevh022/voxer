@@ -6,7 +6,7 @@ pub mod block;
 
 use fastnoise2::generator::GeneratorWrapper;
 use fastnoise2::SafeNode;
-use glam::IVec3;
+use glam::{IVec3, USizeVec3};
 pub use earth::Earth;
 use crate::world::server::world::block::VoxelBlock;
 use crate::world::server::world::chunk::VoxelChunk;
@@ -23,6 +23,7 @@ pub type VoxelChunkAdjBlocks = [[[VoxelBlock; CHUNK_DIM]; CHUNK_DIM]; 6]; // px 
 pub struct WorldConfig {
     pub seed: i32,
     pub noise_scale: f64,
+    pub max_world_size: USizeVec3,
 }
 
 pub trait World {

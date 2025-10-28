@@ -89,7 +89,7 @@ impl<'a> ApplicationHandler for App<'a> {
         let win_size = window.inner_size();
         let aspect_ratio = win_size.width as f32 / win_size.height as f32;
         self.v.camera.set_aspect_ratio(aspect_ratio);
-        self.v.camera.transform.position = glam::vec3(0.0, 0.0, 0.0);
+        self.v.camera.transform.position = glam::vec3(0.0, 20.0, 0.0);
 
         let client = ClientWorld::new(window, self.client_config);
         client.temp_send_req_conn();
