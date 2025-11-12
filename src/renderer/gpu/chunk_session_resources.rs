@@ -1,12 +1,17 @@
-use wgpu::{BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, ComputePipeline, ComputePipelineDescriptor, Device, PipelineLayoutDescriptor, PushConstantRange, ShaderStages, StorageTextureAccess, TextureFormat, TextureViewDimension};
 use crate::renderer::gpu::chunk_session::GpuChunkSession;
 use crate::renderer::resources;
 use crate::renderer::resources::vx_buffer::VxBuffer;
+use wgpu::{
+    BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
+    BufferBindingType, BufferSize, ComputePipeline, ComputePipelineDescriptor, Device,
+    PipelineLayoutDescriptor, PushConstantRange, ShaderStages, StorageTextureAccess, TextureFormat,
+    TextureViewDimension,
+};
 
-pub (crate) struct GpuChunkSessionResources;
+pub(crate) struct GpuChunkSessionResources;
 
 impl GpuChunkSessionResources {
-    pub (crate) fn chunk_render_bind_group(
+    pub(crate) fn chunk_render_bind_group(
         device: &Device,
         camera_buffer: &VxBuffer,
         face_data_buffer: &VxBuffer,
@@ -30,7 +35,7 @@ impl GpuChunkSessionResources {
         (layout, bind_group)
     }
 
-    pub (crate) fn chunk_meshing_bgl(
+    pub(crate) fn chunk_meshing_bgl(
         device: &Device,
         chunk_buffer_size: BufferSize,
         face_data_buffer_size: BufferSize,
@@ -73,7 +78,11 @@ impl GpuChunkSessionResources {
         })
     }
 
-    pub (crate) fn chunk_write_bgl(device: &Device, dst_size: BufferSize, src_size: BufferSize) -> BindGroupLayout {
+    pub(crate) fn write_bgl(
+        device: &Device,
+        src_size: BufferSize,
+        dst_size: BufferSize,
+    ) -> BindGroupLayout {
         device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some("Chunk Write Bind Group Layout"),
             entries: &[
@@ -101,7 +110,7 @@ impl GpuChunkSessionResources {
         })
     }
 
-    pub (crate) fn mdi_args_bgl(
+    pub(crate) fn mdi_args_bgl(
         device: &Device,
         indirect_size: BufferSize,
         packed_indirect_size: BufferSize,
@@ -187,7 +196,10 @@ impl GpuChunkSessionResources {
         })
     }
 
-    pub (crate) fn mdi_args_pipeline(device: &Device, bind_group_layouts: &[&BindGroupLayout]) -> ComputePipeline {
+    pub(crate) fn mdi_args_pipeline(
+        device: &Device,
+        bind_group_layouts: &[&BindGroupLayout],
+    ) -> ComputePipeline {
         let shader = resources::shader::create_shader(
             device,
             resources::shader::chunk_mdi_args_wgsl().into(),
@@ -212,7 +224,7 @@ impl GpuChunkSessionResources {
         })
     }
 
-    pub (crate) fn chunk_meshing_pipeline(
+    pub(crate) fn chunk_meshing_pipeline(
         device: &Device,
         bind_group_layouts: &[&BindGroupLayout],
     ) -> ComputePipeline {
@@ -237,7 +249,7 @@ impl GpuChunkSessionResources {
         })
     }
 
-    pub (crate) fn chunk_write_pipeline(
+    pub(crate) fn chunk_write_pipeline(
         device: &Device,
         bind_group_layouts: &[&BindGroupLayout],
     ) -> ComputePipeline {
@@ -260,6 +272,34 @@ impl GpuChunkSessionResources {
             layout: Some(&pipeline_layout),
             module: &shader,
             entry_point: Some("chunk_write_entry"),
+            compilation_options: Default::default(),
+            cache: None,
+        })
+    }
+
+    pub(crate) fn view_candidate_write_pipeline(
+        device: &Device,
+        bind_group_layouts: &[&BindGroupLayout],
+    ) -> ComputePipeline {
+        let shader = resources::shader::create_shader(
+            device,
+            resources::shader::chunk_view_candidates_write_wgsl().into(),
+            "Chunk View Candidate Write Pipeline Shader",
+        );
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("Chunk View Candidate Write Pipeline Layout"),
+            bind_group_layouts,
+            push_constant_ranges: &[PushConstantRange {
+                stages: ShaderStages::COMPUTE,
+                range: 0..4,
+            }],
+        });
+
+        device.create_compute_pipeline(&ComputePipelineDescriptor {
+            label: Some("Chunk View Candidate Write Pipeline"),
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("view_candidate_write_entry"),
             compilation_options: Default::default(),
             cache: None,
         })

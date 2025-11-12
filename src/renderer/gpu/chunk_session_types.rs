@@ -1,5 +1,6 @@
-use crate::renderer::gpu::chunk_session_mesh_data::VoxelChunkMeshMeta;
 use crate::renderer::gpu::GPUChunkMeshEntry;
+use crate::renderer::gpu::chunk_session_mesh_data::VoxelChunkMeshMeta;
+use glam::UVec3;
 
 #[derive(Debug, Clone, Copy)]
 pub enum MeshStateError {
@@ -29,17 +30,25 @@ impl ChunkMeshUnmeshedEntry {
 }
 
 impl ChunkMeshState {
+    fn pack_face_count(face_count: UVec3) -> u32 {
+        face_count.x | face_count.y << 10 | face_count.z << 20
+    }
+
+    fn unpack_face_count(face_count: u32) -> UVec3 {
+        let x = face_count & 0x3FF;
+        let y = (face_count >> 10) & 0x3FF;
+        let z = face_count >> 20;
+        UVec3::new(x, y, z)
+    }
+
     pub fn new_unmeshed(mesh_meta: VoxelChunkMeshMeta) -> Self {
         let negative_uvec3 = mesh_meta.negative_faces.as_uvec3();
         let positive_uvec3 = mesh_meta.positive_faces.as_uvec3();
 
         let total_faces = negative_uvec3.element_sum() + positive_uvec3.element_sum();
 
-        let negative_faces: u32 =
-            negative_uvec3.x | negative_uvec3.y << 10 | negative_uvec3.z << 20;
-
-        let positive_faces: u32 =
-            positive_uvec3.x | positive_uvec3.y << 10 | positive_uvec3.z << 20;
+        let negative_faces: u32 = Self::pack_face_count(negative_uvec3);
+        let positive_faces: u32 = Self::pack_face_count(positive_uvec3);
 
         let unmeshed_entry = ChunkMeshUnmeshedEntry {
             negative_faces,
@@ -62,6 +71,20 @@ impl ChunkMeshState {
             }
             _ => unreachable!(),
         }
+    }
+
+    pub fn set_as_unmeshed(&mut self) {
+        let Self::Meshed(entry) = self else {
+            unreachable!()
+        };
+        let total_face_count = Self::unpack_face_count(entry.negative_face_count).element_sum()
+            + Self::unpack_face_count(entry.positive_face_count).element_sum();
+        let unmeshed_entry = ChunkMeshUnmeshedEntry {
+            negative_faces: entry.negative_face_count,
+            positive_faces: entry.positive_face_count,
+            total_faces: total_face_count,
+        };
+        *self = ChunkMeshState::Unmeshed(unmeshed_entry);
     }
 
     pub fn entry_with_meshing_flag(&self) -> GPUChunkMeshEntry {

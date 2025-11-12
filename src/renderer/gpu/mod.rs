@@ -5,8 +5,4 @@ mod chunk_session_types;
 pub mod vx_gpu_camera;
 mod chunk_session_mesh_data;
 
-pub use chunk_session_shader_types::{
-    GPUChunkMeshEntry, GPUDispatchIndirectArgsAtomic, GPUDrawIndirectArgs,
-    GPUPackedIndirectArgsAtomic, GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent,
-    GPUVoxelChunkHeader, GPUVoxelFaceData,
-};
+pub use chunk_session_shader_types::*;

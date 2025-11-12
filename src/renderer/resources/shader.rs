@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use wgpu::ShaderSource;
 use crate::compute::geo::Plane;
-use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry, GPUVoxelChunkHeader, GPUDispatchIndirectArgsAtomic, GPUPackedIndirectArgsAtomic};
+use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry, GPUVoxelChunkHeader, GPUDispatchIndirectArgsAtomic, GPUPackedIndirectArgsAtomic, GPUChunkMeshEntryWrite};
 use crate::renderer::gpu::vx_gpu_camera::VxGPUCamera;
 use crate::world::{CHUNK_DIM, CHUNK_DIM_HALF};
 
@@ -94,7 +94,8 @@ include_shaders!(
     VOXEL_CHUNK_MESH_ENTRY => "voxel/chunk_mesh_entry.wgsl",
     VOXEL_CHUNK_MESH_FACES => "voxel/chunk_mesh_faces.wgsl",
     VOXEL_CHUNK_MESH_VAO => "voxel/chunk_mesh_vao.wgsl",
-    VOXEL_CHUNK_WRITE_ENTRY => "voxel/chunk_scattered_write.wgsl",
+    VOXEL_CHUNK_WRITE_ENTRY => "voxel/chunk_write.wgsl",
+    VOXEL_CHUNK_VIEW_CANDIDATES_WRITE_ENTRY => "voxel/chunk_view_candidate_write.wgsl",
     VOXEL_CHUNK_CULL_ENTRY => "voxel/chunk_mdi_args.wgsl",
 );
 
@@ -149,6 +150,7 @@ fn voxel_common() -> String {
         GPUVoxelChunkHeader,
         GPUVoxelFaceData,
         GPUChunkMeshEntry,
+        GPUChunkMeshEntryWrite,
     );
     concat_shaders!(&consts, &types)
 }
@@ -205,6 +207,15 @@ pub fn chunk_write_wgsl() -> String {
         &voxel_common(),
         F_THREAD_MAPPING,
         VOXEL_CHUNK_WRITE_ENTRY,
+    )
+}
+
+pub fn chunk_view_candidates_write_wgsl() -> String {
+    concat_shaders!(
+        &cfg_constants(),
+        &voxel_common(),
+        F_THREAD_MAPPING,
+        VOXEL_CHUNK_VIEW_CANDIDATES_WRITE_ENTRY,
     )
 }
 

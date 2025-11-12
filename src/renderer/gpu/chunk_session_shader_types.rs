@@ -90,6 +90,19 @@ impl GPUChunkMeshEntry {
 
 #[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUChunkMeshEntryWrite {
+    entry: GPUChunkMeshEntry,
+    index: u32,
+}
+
+impl GPUChunkMeshEntryWrite {
+    pub fn new(entry: GPUChunkMeshEntry, index: u32) -> Self {
+        Self { entry, index }
+    }
+}
+
+#[repr(C, align(4))]
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkContent {
     blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; CHUNK_DIM],
 }
