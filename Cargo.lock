@@ -2132,7 +2132,7 @@ checksum = "7a2ae44ef20feb57a68b23d846850f861394c2e02dc425a50098ae8c90267589"
 [[package]]
 name = "slabmap"
 version = "0.1.0"
-source = "git+https://github.com/yogevh022/slabmap?branch=bitslab#cb044bfe59bf46fbac1d20e1618e4f2335cfc495"
+source = "git+https://github.com/yogevh022/slabmap?branch=bitslab#b30cc231350ddc4e6d10c3f1d2f7dbae582de38f"
 dependencies = [
  "rustc-hash 2.1.1",
  "word_bitmap",

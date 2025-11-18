@@ -14,7 +14,7 @@ use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
 fn run_app() {
-    const SIMULATION_AND_RENDER_DISTANCE: usize = 4;
+    const SIMULATION_AND_RENDER_DISTANCE: usize = 16;
 
     let server_config = ServerWorldConfig {
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
@@ -44,6 +44,7 @@ fn run_app() {
 
 fn main() {
     run_app();
+    // debug();
 }
 
 fn debug() {
@@ -52,11 +53,23 @@ fn debug() {
     use crate::renderer::gpu::{
         GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData,
     };
-    use glam::IVec3;
+    use glam::{IVec3, Vec3};
     use rustc_hash::{FxHashMap, FxHashSet};
     use slabmap;
     use smallhash;
     use std::hint::black_box;
     use std::time::Duration;
     use std::time::Instant;
+
+    let lmin = Vec3::new(-8.0, -2.0, 7.0);
+    let lmax = Vec3::new(8.0, 7.0, 14.0);
+    let l = compute::geo::AABB::new(lmin, lmax);
+    let rmin = Vec3::new(-8.0, -2.0, 8.0);
+    let rmax = Vec3::new(8.0, 7.0, 15.0);
+    let r = compute::geo::AABB::new(rmin, rmax);
+    let (only_l, only_r) = compute::geo::AABB::sym_diff(l, r);
+    println!("L: {:?}", l);
+    println!("R: {:?}", r);
+    println!("only L: {:?}", only_l);
+    println!("only R: {:?}", only_r);
 }

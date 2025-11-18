@@ -4,7 +4,7 @@ var<storage, read> view_candidates_write_buffer: array<GPUChunkMeshEntryWrite>;
 @group(0) @binding(1)
 var<storage, read_write> view_candidates_buffer: array<GPUChunkMeshEntry>;
 
-var<push_constant>  input_length: u32;
+var<push_constant> input_length: u32;
 
 @compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_1D)
 fn view_candidate_write_entry(

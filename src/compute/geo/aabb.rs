@@ -25,6 +25,15 @@ impl AABB {
         }
     }
 
+    pub fn contains_point(&self, point: Vec3) -> bool {
+        point.x >= self.min.x
+            && point.x <= self.max.x
+            && point.y >= self.min.y
+            && point.y <= self.max.y
+            && point.z >= self.min.z
+            && point.z <= self.max.z
+    }
+
     pub fn within_aabb(a: AABB, b: AABB) -> bool {
         a.min.x <= b.max.x
             && a.max.x >= b.min.x
@@ -34,7 +43,12 @@ impl AABB {
             && a.max.z >= b.min.z
     }
 
-    pub fn sym_diff_out(left: AABB, right: AABB, left_only_out: &mut Vec<AABB>, right_only_out: &mut Vec<AABB>) {
+    pub fn sym_diff_out(
+        left: AABB,
+        right: AABB,
+        left_only_out: &mut Vec<AABB>,
+        right_only_out: &mut Vec<AABB>,
+    ) {
         let mut in_left: [Option<AABB>; 6] = [None; 6];
         let mut in_right: [Option<AABB>; 6] = [None; 6];
 
@@ -49,7 +63,7 @@ impl AABB {
                 q.max.x = lmx;
                 in_right[0] = Some(q);
             }
-            _ => ()
+            _ => (),
         };
 
         match (left.max.x, right.max.x) {
@@ -63,7 +77,7 @@ impl AABB {
                 q.min.x = rmx;
                 in_left[1] = Some(q);
             }
-            _ => ()
+            _ => (),
         };
 
         match (left.min.y, right.min.y) {
@@ -89,7 +103,7 @@ impl AABB {
                 }
                 in_right[2] = Some(q);
             }
-            _ => ()
+            _ => (),
         };
 
         match (left.max.y, right.max.y) {
@@ -115,7 +129,7 @@ impl AABB {
                 }
                 in_left[3] = Some(q);
             }
-            _ => ()
+            _ => (),
         };
 
         match (left.min.z, right.min.z) {
@@ -153,7 +167,7 @@ impl AABB {
                 }
                 in_right[4] = Some(q);
             }
-            _ => ()
+            _ => (),
         };
 
         match (left.max.z, right.max.z) {
@@ -191,7 +205,7 @@ impl AABB {
                 }
                 in_left[5] = Some(q);
             }
-            _ => ()
+            _ => (),
         };
 
         left_only_out.clear();

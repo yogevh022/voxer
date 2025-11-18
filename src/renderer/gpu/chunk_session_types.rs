@@ -2,98 +2,86 @@ use crate::renderer::gpu::GPUChunkMeshEntry;
 use crate::renderer::gpu::chunk_session_mesh_data::VoxelChunkMeshMeta;
 use glam::UVec3;
 
-#[derive(Debug, Clone, Copy)]
-pub enum MeshStateError {
-    Missing,
-    Empty,
-    FailedAllocation,
-}
-
 #[derive(Debug, Clone)]
 pub enum ChunkMeshState {
-    Meshed(GPUChunkMeshEntry),
-    Unmeshed(ChunkMeshUnmeshedEntry),
+    Allocated(GPUChunkMeshEntry),
+    Unallocated(ChunkUnmeshedEntry),
     Uninitialized,
+    AllocatedEmpty,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ChunkMeshUnmeshedEntry {
+pub struct ChunkUnmeshedEntry {
     negative_faces: u32,
     positive_faces: u32,
-    pub total_faces: u32,
 }
 
-impl ChunkMeshUnmeshedEntry {
-    pub fn has_faces(&self) -> bool {
-        self.total_faces > 0
+impl ChunkUnmeshedEntry {
+    pub fn face_count(&self) -> u32 {
+        unpack_face_count(self.negative_faces).element_sum()
+            + unpack_face_count(self.positive_faces).element_sum()
     }
 }
 
 impl ChunkMeshState {
-    fn pack_face_count(face_count: UVec3) -> u32 {
-        face_count.x | face_count.y << 10 | face_count.z << 20
+    pub fn new(mesh_meta: VoxelChunkMeshMeta) -> Self {
+        Self::Unallocated(ChunkUnmeshedEntry {
+            negative_faces: pack_face_count(mesh_meta.negative_faces.as_uvec3()),
+            positive_faces: pack_face_count(mesh_meta.positive_faces.as_uvec3()),
+        })
     }
 
-    fn unpack_face_count(face_count: u32) -> UVec3 {
-        let x = face_count & 0x3FF;
-        let y = (face_count >> 10) & 0x3FF;
-        let z = face_count >> 20;
-        UVec3::new(x, y, z)
-    }
-
-    pub fn new_unmeshed(mesh_meta: VoxelChunkMeshMeta) -> Self {
-        let negative_uvec3 = mesh_meta.negative_faces.as_uvec3();
-        let positive_uvec3 = mesh_meta.positive_faces.as_uvec3();
-
-        let total_faces = negative_uvec3.element_sum() + positive_uvec3.element_sum();
-
-        let negative_faces: u32 = Self::pack_face_count(negative_uvec3);
-        let positive_faces: u32 = Self::pack_face_count(positive_uvec3);
-
-        let unmeshed_entry = ChunkMeshUnmeshedEntry {
-            negative_faces,
-            positive_faces,
-            total_faces,
+    pub fn set_allocated(&mut self, index: u32, allocation: u32) {
+        let Self::Unallocated(unmeshed_entry) = self else {
+            unreachable!(".set_meshed() called on non Unallocated state: {:?}", self);
         };
-        Self::Unmeshed(unmeshed_entry)
+        *self = Self::Allocated(GPUChunkMeshEntry {
+            index,
+            negative_faces: unmeshed_entry.negative_faces,
+            positive_faces: unmeshed_entry.positive_faces,
+            face_alloc: allocation,
+        });
     }
 
-    pub fn set_as_meshed(&mut self, index: u32, allocation: u32) {
-        match self {
-            ChunkMeshState::Unmeshed(unmeshed_entry) => {
-                let mesh_entry = GPUChunkMeshEntry::new(
-                    index,
-                    unmeshed_entry.negative_faces,
-                    unmeshed_entry.positive_faces,
-                    allocation,
-                );
-                *self = ChunkMeshState::Meshed(mesh_entry);
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn set_as_unmeshed(&mut self) {
-        let Self::Meshed(entry) = self else {
-            unreachable!()
+    pub fn set_unallocated(&mut self) {
+        let unmeshed_entry = match self {
+            Self::Allocated(entry) => ChunkUnmeshedEntry {
+                negative_faces: entry.negative_faces,
+                positive_faces: entry.positive_faces,
+            },
+            Self::AllocatedEmpty => ChunkUnmeshedEntry {
+                negative_faces: 0,
+                positive_faces: 0,
+            },
+            _ => unreachable!(".set_unmeshed() called on Unallocated: {:?}", self),
         };
-        let total_face_count = Self::unpack_face_count(entry.negative_face_count).element_sum()
-            + Self::unpack_face_count(entry.positive_face_count).element_sum();
-        let unmeshed_entry = ChunkMeshUnmeshedEntry {
-            negative_faces: entry.negative_face_count,
-            positive_faces: entry.positive_face_count,
-            total_faces: total_face_count,
-        };
-        *self = ChunkMeshState::Unmeshed(unmeshed_entry);
+        *self = Self::Unallocated(unmeshed_entry);
     }
 
-    pub fn entry_with_meshing_flag(&self) -> GPUChunkMeshEntry {
-        let mut entry = match self {
-            Self::Meshed(entry) => entry.clone(),
-            _ => unreachable!(),
+    pub fn set_empty(&mut self) {
+        *self = Self::AllocatedEmpty;
+    }
+
+    pub fn meshing_flagged_entry(&self) -> GPUChunkMeshEntry {
+        let Self::Allocated(mut entry) = self.clone() else {
+            unreachable!(
+                ".meshing_flagged_entry() called on non Allocated state: {:?}",
+                self
+            );
         };
         // flag this entry to be meshed (meshing flag)
-        entry.negative_face_count |= 1 << 31;
+        entry.negative_faces |= 1 << 31;
         entry
     }
+}
+
+fn pack_face_count(face_count: UVec3) -> u32 {
+    face_count.x | face_count.y << 10 | face_count.z << 20
+}
+
+fn unpack_face_count(face_count: u32) -> UVec3 {
+    let x = face_count & 0x3FF;
+    let y = (face_count >> 10) & 0x3FF;
+    let z = face_count >> 20;
+    UVec3::new(x, y, z)
 }

@@ -4,5 +4,6 @@ mod constants;
 pub mod geo;
 pub mod num;
 pub mod throttler;
+pub mod utils;
 
 pub use constants::*;
