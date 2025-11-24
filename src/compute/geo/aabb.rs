@@ -230,12 +230,12 @@ impl AABB {
 
     pub fn discrete_points<F>(&self, mut func: F)
     where
-        F: FnMut(IVec3),
+        F: FnMut([i32; 3]),
     {
         for x in (self.min.x as i32)..(self.max.x as i32) {
             for y in (self.min.y as i32)..(self.max.y as i32) {
                 for z in (self.min.z as i32)..(self.max.z as i32) {
-                    func(IVec3::new(x, y, z));
+                    func([x, y, z]);
                 }
             }
         }

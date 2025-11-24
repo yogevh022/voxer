@@ -4,5 +4,6 @@ mod chunk_session_shader_types;
 mod chunk_session_types;
 pub mod vx_gpu_camera;
 mod chunk_session_mesh_data;
+mod vx_gpu_delta_vec;
 
 pub use chunk_session_shader_types::*;

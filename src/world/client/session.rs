@@ -39,7 +39,7 @@ impl<'window> ClientWorldSession<'window> {
         chunks.reserve((config.render_distance * 2).pow(3));
         Self {
             player,
-            app_renderer: AppRenderer::new(window),
+            app_renderer: AppRenderer::new(window, config.render_distance),
             view_frustum: [Plane::default(); 6],
             chunks,
             render_max: config.render_distance as i32, // fixme config
@@ -71,7 +71,6 @@ impl<'window> ClientWorldSession<'window> {
         let position_range = self.chunk_gc_batch.len().saturating_sub(CHUNKS_PER_PASS)..;
         for position in self.chunk_gc_batch.drain(position_range) {
             if camera_ch_position.distance_squared(position) > self.render_max_sq {
-                self.app_renderer.chunk_session.drop_chunk(&position);
                 self.chunks.remove(&position);
             }
         }
