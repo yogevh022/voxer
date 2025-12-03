@@ -82,6 +82,7 @@ impl ClientWorld<'_> {
             return;
         }
         let chunk_data_request = MsgChunkDataRequest::new_with_positions(positions);
+        self.session.temp_clear_crb(); // fixme
         let msg = Box::new(chunk_data_request);
         self.network.send_to(msg, &self.temp_server_addr).unwrap();
     }

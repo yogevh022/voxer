@@ -1,23 +1,23 @@
 use crate::compute::num::MaybeUsize;
 
-pub trait GpuIndexedItem: Clone {
-    type WriteEntry: Clone;
+pub trait GpuIndexedItem: Copy {
+    type WriteEntry: Copy;
     fn index(&self) -> usize;
     fn init(self) -> Self;
     fn reused(self) -> Self;
     fn write(self, index: usize) -> Self::WriteEntry;
 }
 
-pub struct VxGpuDeltaVec<T: GpuIndexedItem> {
+pub struct VxGpuSyncVec<T: GpuIndexedItem> {
     capacity: usize,
     buffer: Vec<T>,
-    pub push_queue: Vec<T>,
+    push_queue: Vec<T>,
     remove_queue: Vec<usize>,
     write_queue: Vec<T::WriteEntry>,
-    id_to_index: Box<[MaybeUsize]>,
+    buffer_mapping: Box<[MaybeUsize]>,
 }
 
-impl<T: GpuIndexedItem> VxGpuDeltaVec<T> {
+impl<T: GpuIndexedItem> VxGpuSyncVec<T> {
     pub fn new(capacity: usize, queue_capacity: usize) -> Self {
         Self {
             capacity,
@@ -25,7 +25,7 @@ impl<T: GpuIndexedItem> VxGpuDeltaVec<T> {
             remove_queue: Vec::with_capacity(queue_capacity),
             push_queue: Vec::with_capacity(queue_capacity),
             write_queue: Vec::with_capacity(queue_capacity),
-            id_to_index: vec![MaybeUsize::default(); capacity].into_boxed_slice(),
+            buffer_mapping: vec![MaybeUsize::default(); capacity].into_boxed_slice(),
         }
     }
 
@@ -34,11 +34,8 @@ impl<T: GpuIndexedItem> VxGpuDeltaVec<T> {
     }
 
     pub fn remove(&mut self, id: usize) {
-        self.remove_queue.push(id);
-    }
-
-    pub fn gpu_exists(&self, id: usize) -> bool {
-        self.id_to_index[id].is_some()
+        let index = self.buffer_mapping[id].take().unwrap();
+        self.remove_queue.push(index);
     }
 
     pub fn cpu_len(&self) -> usize {
@@ -57,84 +54,76 @@ impl<T: GpuIndexedItem> VxGpuDeltaVec<T> {
         // clear write queue
         self.write_queue.clear();
 
-        // asc sort remove_queue by buffer index (for non-overlapping swap removals)
-        self.remove_queue
-            .sort_by_key(|&idx| self.id_to_index[idx].unwrap());
+        // asc sort remove_queue (by index, for non-overlapping swap removals)
+        self.remove_queue.sort();
 
-        // record swap removals
-        self.generate_remove_delta();
-
-        // record pushes
-        self.generate_push_delta();
+        self.cpu_write_delta();
 
         &self.write_queue
     }
 
-    fn clear_index_mapping(&mut self, id: usize) {
-        self.id_to_index[id] = MaybeUsize::default();
-    }
-
     fn set_index_mapping(&mut self, id: usize, index: usize) {
-        self.id_to_index[id] = MaybeUsize::new(index);
+        self.buffer_mapping[id] = MaybeUsize::new(index);
     }
 
-    fn buffer_pop(&mut self, id: usize) {
-        self.clear_index_mapping(id);
-        self.buffer.pop().unwrap();
+    fn buffer_exists(&self, id: usize) -> bool {
+        self.buffer_mapping[id].is_some()
+    }
+
+    fn buffer_pop(&mut self) -> T {
+        self.buffer.pop().unwrap()
     }
 
     fn buffer_push(&mut self, item: T) {
         let buffer_index = self.buffer.len();
-        let item_index = item.index();
-        if self.gpu_exists(item_index) {
-            return;
-        }
-        self.set_index_mapping(item_index, buffer_index);
-        self.buffer.push(item.clone());
-        self.write_queue.push(item.init().write(buffer_index));
+        self.set_index_mapping(item.index(), buffer_index);
+        self.write_queue.push(item.write(buffer_index));
+        self.buffer.push(item);
     }
 
-    fn buffer_swap_remove(&mut self, item_index: usize, buffer_index: usize) {
-        let swap_item = self.buffer.pop().unwrap().reused();
-        let swap_item_index = swap_item.index();
-        self.clear_index_mapping(item_index);
-        self.set_index_mapping(swap_item_index, buffer_index);
-        self.buffer[buffer_index] = swap_item.clone();
-        self.write_queue.push(swap_item.write(buffer_index));
+    fn buffer_insert(&mut self, item: T, buffer_index: usize) {
+        self.set_index_mapping(item.index(), buffer_index);
+        self.write_queue.push(item.write(buffer_index));
+        self.buffer[buffer_index] = item;
     }
 
-    fn generate_remove_delta(&mut self) {
-        if self.remove_queue.is_empty() {
-            return;
-        }
+    fn cpu_write_delta(&mut self) {
         let mut drop_min = 0;
         let mut drop_max = self.remove_queue.len();
+
+        for i in 0..self.push_queue.len() {
+            let item = unsafe { *self.push_queue.get_unchecked(i) }.init();
+            if self.buffer_exists(item.index()) {
+                continue;
+            }
+            if drop_min < drop_max {
+                let remove_index = self.remove_queue[drop_min];
+                self.buffer_insert(item, remove_index);
+                drop_min += 1;
+            } else {
+                self.buffer_push(item);
+            }
+        }
+        self.push_queue.clear();
+
         let mut buff_max = self.buffer.len();
         while drop_min < drop_max {
-            let drop_min_id = self.remove_queue[drop_min];
-            let drop_min_index = self.id_to_index[drop_min_id].unwrap();
+            let drop_min_index = self.remove_queue[drop_min];
             if drop_min_index >= buff_max {
                 break;
             }
-            let drop_max_id = self.remove_queue[drop_max - 1];
-            let drop_max_index = self.id_to_index[drop_max_id].unwrap();
+            let drop_max_index = self.remove_queue[drop_max - 1];
 
             if drop_max_index == buff_max - 1 {
-                self.buffer_pop(drop_max_id);
+                self.buffer_pop();
                 drop_max -= 1;
             } else {
-                self.buffer_swap_remove(drop_min_id, drop_min_index);
+                let swap = self.buffer_pop().reused();
+                self.buffer_insert(swap, drop_min_index);
                 drop_min += 1;
             }
             buff_max -= 1;
         }
         self.remove_queue.clear();
-    }
-
-    fn generate_push_delta(&mut self) {
-        for _ in 0..self.push_queue.len() {
-            let item = unsafe { self.push_queue.pop().unwrap_unchecked() };
-            self.buffer_push(item);
-        }
     }
 }

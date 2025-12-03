@@ -18,6 +18,7 @@ pub struct VxDepth {
     pub mip_texture_array: Texture,
     pub mip_texture_array_view: TextureView,
     pub mip_views: Box<[TextureView]>,
+    mip_bind_groups: Box<[BindGroup]>,
     mip_one_compute_bgl: BindGroupLayout,
     mip_one_compute_pipeline: ComputePipeline,
     mip_x_compute_bgl: BindGroupLayout,
@@ -46,6 +47,15 @@ impl VxDepth {
         let mip_x_compute_bgl = depth_mip_x_bgl(device);
         let mip_x_compute_pipeline = depth_mip_x_pipeline(device, &[&mip_x_compute_bgl]);
 
+        let mip_bind_groups = Self::mip_bind_groups(
+            device,
+            &mip_one_compute_bgl,
+            &mip_x_compute_bgl,
+            &view,
+            &mip_views,
+            mip_count as usize,
+        );
+
         Self {
             surface_extent,
             texture,
@@ -53,6 +63,7 @@ impl VxDepth {
             mip_texture_array,
             mip_texture_array_view,
             mip_views,
+            mip_bind_groups,
             mip_one_compute_bgl,
             mip_one_compute_pipeline,
             mip_x_compute_bgl,
@@ -85,45 +96,58 @@ impl VxDepth {
         mip_views.into_boxed_slice()
     }
 
-    fn mip_one_bind_group(&self, device: &Device) -> BindGroup {
+    fn mip_bind_group(
+        device: &Device,
+        bgl: &BindGroupLayout,
+        src: &TextureView,
+        dst: &TextureView,
+    ) -> BindGroup {
         let entries = [
             BindGroupEntry {
                 binding: 0,
-                resource: BindingResource::TextureView(&self.view),
+                resource: BindingResource::TextureView(src),
             },
             BindGroupEntry {
                 binding: 1,
-                resource: BindingResource::TextureView(&self.mip_views[1]),
+                resource: BindingResource::TextureView(dst),
             },
         ];
         device.create_bind_group(&BindGroupDescriptor {
             label: None,
-            layout: &self.mip_one_compute_bgl,
+            layout: bgl,
             entries: &entries,
         })
     }
 
-    fn mip_x_bind_group(&self, device: &Device, src_mip: usize, dst_mip: usize) -> BindGroup {
-        let entries = [
-            BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::TextureView(&self.mip_views[src_mip]),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: BindingResource::TextureView(&self.mip_views[dst_mip]),
-            },
-        ];
-        device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &self.mip_x_compute_bgl,
-            entries: &entries,
-        })
+    fn mip_bind_groups(
+        device: &Device,
+        one_bgl: &BindGroupLayout,
+        x_bgl: &BindGroupLayout,
+        depth_view: &TextureView,
+        mip_depth_views: &[TextureView],
+        mip_count: usize,
+    ) -> Box<[BindGroup]> {
+        let mut mip_bind_groups = Vec::with_capacity(mip_count);
+        mip_bind_groups.push(Self::mip_bind_group(
+            device,
+            one_bgl,
+            depth_view,
+            &mip_depth_views[1],
+        ));
+        for mip in 2..mip_count - 1 {
+            mip_bind_groups.push(Self::mip_bind_group(
+                device,
+                x_bgl,
+                &mip_depth_views[mip - 1],
+                &mip_depth_views[mip],
+            ));
+        }
+        mip_bind_groups.into_boxed_slice()
     }
 
-    fn generate_depth_mip_one(&self, device: &Device, compute_pass: &mut ComputePass) {
+    fn generate_depth_mip_one(&self, compute_pass: &mut ComputePass) {
         compute_pass.set_pipeline(&self.mip_one_compute_pipeline);
-        compute_pass.set_bind_group(0, &self.mip_one_bind_group(device), &[]);
+        compute_pass.set_bind_group(0, &self.mip_bind_groups[0], &[]);
         let mip_width = self.surface_extent.width >> 1;
         let mip_height = self.surface_extent.height >> 1;
         let groups_x = ceil_div(mip_width, MAX_WORKGROUP_DIM_2D);
@@ -132,12 +156,13 @@ impl VxDepth {
         compute_pass.dispatch_workgroups(groups_x, groups_y, 1);
     }
 
-    pub fn generate_depth_mips(&self, device: &Device, compute_pass: &mut ComputePass) {
-        self.generate_depth_mip_one(device, compute_pass);
+    pub fn generate_depth_mips(&self, compute_pass: &mut ComputePass) {
+        self.generate_depth_mip_one(compute_pass);
         compute_pass.set_pipeline(&self.mip_x_compute_pipeline);
-        for mip in 2..self.mip_views.len() - 1 { // last mip unused
-            let mip_bg = self.mip_x_bind_group(device, mip - 1, mip);
-            compute_pass.set_bind_group(0, &mip_bg, &[]);
+        for mip in 1..self.mip_bind_groups.len() {
+            // last mip unused
+            let mip_bg = &self.mip_bind_groups[mip];
+            compute_pass.set_bind_group(0, mip_bg, &[]);
             let mip_width = (self.surface_extent.width >> mip).max(1);
             let mip_height = (self.surface_extent.height >> mip).max(1);
             let groups_x = ceil_div(mip_width, MAX_WORKGROUP_DIM_2D);

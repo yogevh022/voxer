@@ -13,6 +13,12 @@ impl MaybeUsize {
             n => n,
         }
     }
+    
+    pub fn take(&mut self) -> MaybeUsize {
+        let inner = self.0;
+        self.0 = usize::MAX;
+        MaybeUsize(inner)
+    }
 
     pub fn inner(&self) -> Option<usize> {
         match self.0 {

@@ -12,9 +12,10 @@ use crate::world::{ClientWorldConfig, ServerWorld, ServerWorldConfig, WorldConfi
 use voxer_network;
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
+use crate::compute::geo::AABB;
 
 fn run_app() {
-    const SIMULATION_AND_RENDER_DISTANCE: usize = 12;
+    const SIMULATION_AND_RENDER_DISTANCE: usize = 16;
 
     let server_config = ServerWorldConfig {
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
@@ -61,15 +62,30 @@ fn debug() {
     use std::time::Duration;
     use std::time::Instant;
 
-    let lmin = Vec3::new(-8.0, -2.0, 7.0);
-    let lmax = Vec3::new(8.0, 7.0, 14.0);
-    let l = compute::geo::AABB::new(lmin, lmax);
-    let rmin = Vec3::new(-8.0, -2.0, 8.0);
-    let rmax = Vec3::new(8.0, 7.0, 15.0);
-    let r = compute::geo::AABB::new(rmin, rmax);
-    let (only_l, only_r) = compute::geo::AABB::sym_diff(l, r);
-    println!("L: {:?}", l);
-    println!("R: {:?}", r);
-    println!("only L: {:?}", only_l);
-    println!("only R: {:?}", only_r);
+    // let a = AABB::new(Vec3::new(-1.4, 2.4, 2.2), Vec3::new(0.0, 1.4, 44.0));
+    let x = AABB::new(Vec3::new(0.0, 1.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
+    let xd = AABB::new(Vec3::new(1.0, 1.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
+    let x_diff = x.diff(xd);
+
+    let y = AABB::new(Vec3::new(0.0, 1.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
+    let yd = AABB::new(Vec3::new(0.0, 2.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
+    let y_diff = y.diff(yd);
+
+    let z = AABB::new(Vec3::new(0.0, 1.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
+    let zd = AABB::new(Vec3::new(0.0, 1.0, 3.0), Vec3::new(3.0, 3.0, 3.0));
+    let z_diff = z.diff(zd);
+
+    let xy = AABB::new(Vec3::new(0.0, 1.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
+    let xyd = AABB::new(Vec3::new(1.0, 2.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
+    let xy_diff = xy.diff(xyd);
+
+    let t = AABB::new(Vec3::new(1.0, 1.0, 1.0), Vec3::new(4.0, 4.0, 4.0));
+    let td = AABB::new(Vec3::new(2.0, 2.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
+    let t_diff = t.diff(td);
+
+    println!("xdiff: {:?}", x_diff);
+    println!("ydiff: {:?}", y_diff);
+    println!("zdiff: {:?}", z_diff);
+    println!("xydiff: {:?}", xy_diff);
+    println!("tdiff: {:?}", t_diff);
 }

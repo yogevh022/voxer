@@ -105,10 +105,11 @@ impl CameraController {
 impl VoxerObject for CameraController {
     fn update(&mut self, voxer: &mut Voxer) {
         let input = voxer.input.read();
-        self.look((
-            input.mouse.delta[0] * self.sensitivity,
-            input.mouse.delta[1] * self.sensitivity,
-        ));
+        // self.look((
+        //     input.mouse.delta[0] * self.sensitivity,
+        //     input.mouse.delta[1] * self.sensitivity,
+        // ));
+        self.yaw = self.yaw * Quat::from_rotation_y(std::f32::consts::PI / 1.33); // fixme
         voxer.camera.transform.rotation = self.get_rotation();
     }
 }

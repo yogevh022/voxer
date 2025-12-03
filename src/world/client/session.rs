@@ -21,7 +21,7 @@ pub struct ClientWorldSession<'window> {
     pub chunks: FxHashMap<IVec3, VoxelChunk>,
 
     render_max: i32,
-    render_max_sq: i32,
+    chunk_drop_dist: i32,
 
     chunk_request_throttler: Throttler,
     chunk_request_batch: Vec<IVec3>,
@@ -43,7 +43,7 @@ impl<'window> ClientWorldSession<'window> {
             view_frustum: [Plane::default(); 6],
             chunks,
             render_max: config.render_distance as i32, // fixme config
-            render_max_sq: (config.render_distance as i32).pow(2),
+            chunk_drop_dist: (config.render_distance as i32).pow(2) + 1,
             chunk_request_throttler: Throttler::new((1 << 18) + 1, Duration::from_millis(200)),
             chunk_request_batch: Vec::new(),
             chunk_gc_batch: Vec::new(),
@@ -63,14 +63,18 @@ impl<'window> ClientWorldSession<'window> {
         &self.chunk_request_batch
     }
 
+    pub fn temp_clear_crb(&mut self) {
+        self.chunk_request_batch.clear();
+    }
+
     pub fn chunk_gc_pass(&mut self, camera_ch_position: IVec3) {
         if self.chunk_gc_batch.is_empty() {
             self.chunk_gc_batch.extend(self.chunks.keys());
         }
-        const CHUNKS_PER_PASS: usize = 32; // fixme add to centralized config
+        const CHUNKS_PER_PASS: usize = 16; // fixme add to centralized config
         let position_range = self.chunk_gc_batch.len().saturating_sub(CHUNKS_PER_PASS)..;
         for position in self.chunk_gc_batch.drain(position_range) {
-            if camera_ch_position.distance_squared(position) > self.render_max_sq {
+            if camera_ch_position.distance_squared(position) > self.chunk_drop_dist {
                 self.chunks.remove(&position);
             }
         }
@@ -99,6 +103,7 @@ impl<'window> ClientWorldSession<'window> {
                         .push(IVec3::new(x as i32, y as i32, pos.z));
                 }
             });
+            return;
         }
         self.chunk_request_batch.clear();
         self.chunk_request_throttler.set_now(Instant::now());
@@ -122,7 +127,7 @@ impl<'window> ClientWorldSession<'window> {
         self.app_renderer
             .renderer
             .depth
-            .generate_depth_mips(&self.app_renderer.renderer.device, &mut compute_pass);
+            .generate_depth_mips(&mut compute_pass);
 
         self.app_renderer
             .chunk_session

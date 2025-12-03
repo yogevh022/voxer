@@ -8,7 +8,7 @@ voxer_macros = { path = "voxer_macros" }
 voxer_network = { git = "https://github.com/yogevh022/voxer_network" }
 suballoc = { git = "https://github.com/yogevh022/suballoc-rs" }
 smallhash = { git = "https://github.com/yogevh022/smallhash" }
-spatialmap = { git = "https://github.com/yogevh022/spatialmap" }
+spatialmap = { git = "https://github.com/yogevh022/spatialmap", branch = "perf" }
 slabmap = { git = "https://github.com/yogevh022/slabmap", branch = "bitslab" }
 wgpu = { version = "27.0.1", features = ["dx12", "vulkan", "metal"] }
 winit = "0.30.12"

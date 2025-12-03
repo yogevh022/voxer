@@ -43,8 +43,92 @@ impl AABB {
             && a.max.z >= b.min.z
     }
 
+    pub fn diff_out(&self, other: AABB, out: &mut Vec<AABB>) {
+        let mut diffs: [Option<AABB>; 6] = [None; 6];
+
+        if self.min.x < other.min.x {
+            let mut diff = *self;
+            diff.max.x = other.min.x;
+            diffs[0] = Some(diff);
+        }
+
+        if self.max.x > other.max.x {
+            let mut diff = *self;
+            diff.min.x = other.max.x;
+            diffs[1] = Some(diff);
+        }
+
+        if self.min.y < other.min.y {
+            let mut diff = *self;
+            diff.max.y = other.min.y;
+            if let Some(dx) = diffs[0] {
+                diff.min.x = dx.max.x;
+            }
+            if let Some(dx) = diffs[1] {
+                diff.max.x = dx.min.x;
+            }
+            diffs[2] = Some(diff);
+        }
+
+        if self.max.y > other.max.y {
+            let mut diff = *self;
+            diff.min.y = other.max.y;
+            if let Some(dx) = diffs[0] {
+                diff.min.x = dx.max.x;
+            }
+            if let Some(dx) = diffs[1] {
+                diff.max.x = dx.min.x;
+            }
+            diffs[3] = Some(diff);
+        }
+
+        if self.min.z < other.min.z {
+            let mut diff = *self;
+            diff.max.z = other.min.z;
+            if let Some(dx) = diffs[0] {
+                diff.min.x = dx.max.x;
+            }
+            if let Some(dx) = diffs[1] {
+                diff.max.x = dx.min.x;
+            }
+            if let Some(my) = diffs[2] {
+                diff.min.y = my.max.y;
+            }
+            if let Some(my) = diffs[3] {
+                diff.max.y = my.min.y;
+            }
+            diffs[4] = Some(diff);
+        }
+
+        if self.max.z > other.max.z {
+            let mut diff = *self;
+            diff.min.z = other.max.z;
+            if let Some(dx) = diffs[0] {
+                diff.min.x = dx.max.x;
+            }
+            if let Some(dx) = diffs[1] {
+                diff.max.x = dx.min.x;
+            }
+            if let Some(my) = diffs[2] {
+                diff.min.y = my.max.y;
+            }
+            if let Some(my) = diffs[3] {
+                diff.max.y = my.min.y;
+            }
+            diffs[5] = Some(diff);
+        }
+
+        diffs.into_iter().flatten().for_each(|d| out.push(d));
+    }
+
+    pub fn diff(&self, other: AABB) -> Vec<AABB> {
+        let mut out: Vec<AABB> = Vec::with_capacity(6);
+        self.diff_out(other, &mut out);
+        out
+    }
+
     pub fn sym_diff_out(
-        left: AABB,
+        &self,
         right: AABB,
         left_only_out: &mut Vec<AABB>,
         right_only_out: &mut Vec<AABB>,
@@ -52,164 +136,161 @@ impl AABB {
         let mut in_left: [Option<AABB>; 6] = [None; 6];
         let mut in_right: [Option<AABB>; 6] = [None; 6];
 
-        match (left.min.x, right.min.x) {
+        match (self.min.x, right.min.x) {
             (lmx, rmx) if lmx < rmx => {
-                let mut q = left.clone();
-                q.max.x = rmx;
-                in_left[0] = Some(q);
+                let mut diff = *self;
+                diff.max.x = rmx;
+                in_left[0] = Some(diff);
             }
             (lmx, rmx) if lmx > rmx => {
-                let mut q = right.clone();
-                q.max.x = lmx;
-                in_right[0] = Some(q);
+                let mut diff = right;
+                diff.max.x = lmx;
+                in_right[0] = Some(diff);
             }
             _ => (),
         };
 
-        match (left.max.x, right.max.x) {
+        match (self.max.x, right.max.x) {
             (lmx, rmx) if lmx < rmx => {
-                let mut q = right.clone();
-                q.min.x = lmx;
-                in_right[1] = Some(q);
+                let mut diff = right;
+                diff.min.x = lmx;
+                in_right[1] = Some(diff);
             }
             (lmx, rmx) if lmx > rmx => {
-                let mut q = left.clone();
-                q.min.x = rmx;
-                in_left[1] = Some(q);
+                let mut diff = *self;
+                diff.min.x = rmx;
+                in_left[1] = Some(diff);
             }
             _ => (),
         };
 
-        match (left.min.y, right.min.y) {
+        match (self.min.y, right.min.y) {
             (lmy, rmy) if lmy < rmy => {
-                let mut q = left.clone();
-                q.max.y = rmy;
+                let mut diff = *self;
+                diff.max.y = rmy;
                 if let Some(mx) = in_left[0] {
-                    q.min.x = mx.max.x;
+                    diff.min.x = mx.max.x;
                 }
                 if let Some(mx) = in_left[1] {
-                    q.max.x = mx.min.x;
+                    diff.max.x = mx.min.x;
                 }
-                in_left[2] = Some(q);
+                in_left[2] = Some(diff);
             }
             (lmy, rmy) if lmy > rmy => {
-                let mut q = right.clone();
-                q.max.y = lmy;
+                let mut diff = right;
+                diff.max.y = lmy;
                 if let Some(mx) = in_right[0] {
-                    q.min.x = mx.max.x;
+                    diff.min.x = mx.max.x;
                 }
                 if let Some(mx) = in_right[1] {
-                    q.max.x = mx.min.x;
+                    diff.max.x = mx.min.x;
                 }
-                in_right[2] = Some(q);
+                in_right[2] = Some(diff);
             }
             _ => (),
         };
 
-        match (left.max.y, right.max.y) {
+        match (self.max.y, right.max.y) {
             (lmy, rmy) if lmy < rmy => {
-                let mut q = right.clone();
-                q.min.y = lmy;
+                let mut diff = right;
+                diff.min.y = lmy;
                 if let Some(mx) = in_right[0] {
-                    q.min.x = mx.max.x;
+                    diff.min.x = mx.max.x;
                 }
                 if let Some(mx) = in_right[1] {
-                    q.max.x = mx.min.x;
+                    diff.max.x = mx.min.x;
                 }
-                in_right[3] = Some(q);
+                in_right[3] = Some(diff);
             }
             (lmy, rmy) if lmy > rmy => {
-                let mut q = left.clone();
-                q.min.y = rmy;
+                let mut diff = *self;
+                diff.min.y = rmy;
                 if let Some(mx) = in_left[0] {
-                    q.min.x = mx.max.x;
+                    diff.min.x = mx.max.x;
                 }
                 if let Some(mx) = in_left[1] {
-                    q.max.x = mx.min.x;
+                    diff.max.x = mx.min.x;
                 }
-                in_left[3] = Some(q);
+                in_left[3] = Some(diff);
             }
             _ => (),
         };
 
-        match (left.min.z, right.min.z) {
+        match (self.min.z, right.min.z) {
             (lmz, rmz) if lmz < rmz => {
-                let mut q = left.clone();
-                q.max.z = rmz;
+                let mut diff = *self;
+                diff.max.z = rmz;
                 if let Some(mx) = in_left[0] {
-                    q.min.x = mx.max.x;
+                    diff.min.x = mx.max.x;
                 }
                 if let Some(mx) = in_left[1] {
-                    q.max.x = mx.min.x;
+                    diff.max.x = mx.min.x;
                 }
                 if let Some(my) = in_left[2] {
-                    q.min.y = my.max.y;
+                    diff.min.y = my.max.y;
                 }
                 if let Some(my) = in_left[3] {
-                    q.max.y = my.min.y;
+                    diff.max.y = my.min.y;
                 }
-                in_left[4] = Some(q);
+                in_left[4] = Some(diff);
             }
             (lmz, rmz) if lmz > rmz => {
-                let mut q = right.clone();
-                q.max.z = lmz;
+                let mut diff = right;
+                diff.max.z = lmz;
                 if let Some(mx) = in_right[0] {
-                    q.min.x = mx.max.x;
+                    diff.min.x = mx.max.x;
                 }
                 if let Some(mx) = in_right[1] {
-                    q.max.x = mx.min.x;
+                    diff.max.x = mx.min.x;
                 }
                 if let Some(my) = in_right[2] {
-                    q.min.y = my.max.y;
+                    diff.min.y = my.max.y;
                 }
                 if let Some(my) = in_right[3] {
-                    q.max.y = my.min.y;
+                    diff.max.y = my.min.y;
                 }
-                in_right[4] = Some(q);
+                in_right[4] = Some(diff);
             }
             _ => (),
         };
 
-        match (left.max.z, right.max.z) {
+        match (self.max.z, right.max.z) {
             (lmz, rmz) if lmz < rmz => {
-                let mut q = right.clone();
-                q.min.z = lmz;
+                let mut diff = right;
+                diff.min.z = lmz;
                 if let Some(mx) = in_right[0] {
-                    q.min.x = mx.max.x;
+                    diff.min.x = mx.max.x;
                 }
                 if let Some(mx) = in_right[1] {
-                    q.max.x = mx.min.x;
+                    diff.max.x = mx.min.x;
                 }
                 if let Some(my) = in_right[2] {
-                    q.min.y = my.max.y;
+                    diff.min.y = my.max.y;
                 }
                 if let Some(my) = in_right[3] {
-                    q.max.y = my.min.y;
+                    diff.max.y = my.min.y;
                 }
-                in_right[5] = Some(q);
+                in_right[5] = Some(diff);
             }
             (lmz, rmz) if lmz > rmz => {
-                let mut q = left.clone();
-                q.min.z = rmz;
+                let mut diff = *self;
+                diff.min.z = rmz;
                 if let Some(mx) = in_left[0] {
-                    q.min.x = mx.max.x;
+                    diff.min.x = mx.max.x;
                 }
                 if let Some(mx) = in_left[1] {
-                    q.max.x = mx.min.x;
+                    diff.max.x = mx.min.x;
                 }
                 if let Some(my) = in_left[2] {
-                    q.min.y = my.max.y;
+                    diff.min.y = my.max.y;
                 }
                 if let Some(my) = in_left[3] {
-                    q.max.y = my.min.y;
+                    diff.max.y = my.min.y;
                 }
-                in_left[5] = Some(q);
+                in_left[5] = Some(diff);
             }
             _ => (),
         };
-
-        left_only_out.clear();
-        right_only_out.clear();
 
         for i in 0..6 {
             if let Some(a) = in_left[i] {
@@ -221,10 +302,10 @@ impl AABB {
         }
     }
 
-    pub fn sym_diff(left: AABB, right: AABB) -> (Vec<AABB>, Vec<AABB>) {
+    pub fn sym_diff(&self, right: AABB) -> (Vec<AABB>, Vec<AABB>) {
         let mut out_left: Vec<AABB> = Vec::with_capacity(6);
         let mut out_right: Vec<AABB> = Vec::with_capacity(6);
-        Self::sym_diff_out(left, right, &mut out_left, &mut out_right);
+        self.sym_diff_out(right, &mut out_left, &mut out_right);
         (out_left, out_right)
     }
 
