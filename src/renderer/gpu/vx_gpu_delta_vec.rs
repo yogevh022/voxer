@@ -93,9 +93,7 @@ impl<T: GpuIndexedItem> VxGpuSyncVec<T> {
 
         for i in 0..self.push_queue.len() {
             let item = unsafe { *self.push_queue.get_unchecked(i) }.init();
-            if self.buffer_exists(item.index()) {
-                continue;
-            }
+            debug_assert!(!self.buffer_exists(item.index()));
             if drop_min < drop_max {
                 let remove_index = self.remove_queue[drop_min];
                 self.buffer_insert(item, remove_index);

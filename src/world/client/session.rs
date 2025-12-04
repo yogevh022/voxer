@@ -144,14 +144,11 @@ impl<'window> ClientWorldSession<'window> {
             .filter_map(|p| self.chunks.get(&p))
             .take(max_write);
 
-        self.app_renderer
-            .chunk_session
-            .prepare_chunk_writes(mesh_chunks_refs);
-        self.app_renderer.chunk_session.prepare_chunk_visibility();
-
-        self.app_renderer
-            .chunk_session
-            .compute_chunk_writes(&self.app_renderer.renderer, &mut compute_pass);
+        self.app_renderer.chunk_session.compute_chunk_writes(
+            &self.app_renderer.renderer,
+            &mut compute_pass,
+            mesh_chunks_refs,
+        );
         self.app_renderer
             .chunk_session
             .compute_chunk_visibility_and_meshing(&self.app_renderer.renderer, &mut compute_pass);

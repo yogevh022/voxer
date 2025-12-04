@@ -2195,7 +2195,7 @@ dependencies = [
 [[package]]
 name = "spatialmap"
 version = "0.1.0"
-source = "git+https://github.com/yogevh022/spatialmap?branch=perf#d153e09bb2694ea262faa1149485ead2b9e0c8d6"
+source = "git+https://github.com/yogevh022/spatialmap?branch=perf#4deeea0a6d71062f2c7e407bde023f9f187b410f"
 
 [[package]]
 name = "spirv"

@@ -67,17 +67,6 @@ impl ChunkMeshEntry {
     }
 }
 
-// impl ChunkMeshState {
-//     pub fn meshing_flagged_entry(&self) -> GPUChunkMeshEntry {
-//         let Self::Allocated(mut entry) = self.clone() else {
-//             unreachable!(".meshing_flagged_entry() called on: {:?}", self);
-//         };
-//         // flag this entry to be meshed (meshing flag)
-//         entry.negative_faces |= 1 << 31;
-//         entry
-//     }
-// }
-
 fn pack_face_count(face_count: UVec3) -> u32 {
     face_count.x | face_count.y << 10 | face_count.z << 20
 }

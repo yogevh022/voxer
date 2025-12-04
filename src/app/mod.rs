@@ -5,7 +5,6 @@ use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld, CHUNK_DIM};
 use crate::{call_every, vtypes};
 use std::sync::Arc;
-use wgpu::ComputePassDescriptor;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -80,7 +79,7 @@ impl<'a> ApplicationHandler for App<'a> {
         let window_desc = WindowDescriptor {
             size: (1280, 720),
             title: "Tech".to_string(),
-            cursor_grab: CursorGrabMode::None,
+            cursor_grab: CursorGrabMode::Locked,
             cursor_visible: false,
         };
         let window = initialize_window(event_loop, &window_desc).unwrap();
