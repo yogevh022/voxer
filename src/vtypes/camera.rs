@@ -109,7 +109,7 @@ impl VoxerObject for CameraController {
         //     input.mouse.delta[0] * self.sensitivity,
         //     input.mouse.delta[1] * self.sensitivity,
         // ));
-        self.yaw *= Quat::from_axis_angle(glam::Vec3::Y, 0.05);
+        self.yaw *= Quat::from_axis_angle(glam::Vec3::Y, 0.1);
         // self.yaw = self.yaw * Quat::from_rotation_y(std::f32::consts::PI * 1.33); // fixme
         voxer.camera.transform.rotation = self.get_rotation();
     }

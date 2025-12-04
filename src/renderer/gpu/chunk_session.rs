@@ -265,10 +265,10 @@ impl CPUResources {
             self.deallocate_mesh(&mut prev_mesh_state.value);
         }
 
-        // // add view entry if on screen
-        // if self.view_box.contains_point(ch_pos.as_vec3()) {
-        //     self.view_delta_positions.push(ch_pos);
-        // }
+        // add view entry if on screen
+        if self.view_box.contains_point(ch_pos.as_vec3()) {
+            self.view_delta_positions.push(ch_pos);
+        }
 
         let header = GPUVoxelChunkHeader::new(ch_index as u32, ch_pos);
         GPUVoxelChunk::new_uninit(header, chunk.blocks)
@@ -432,48 +432,47 @@ impl GpuChunkSession {
         renderer: &Renderer<'_>,
         compute_pass: &mut ComputePass,
     ) {
-        // if !self.cpu.view_chunks.cpu_dirty() {
-        //     return;
-        // }
-        // // reset indirect args
-        // let dispatch_indirect = GPUDispatchIndirectArgsAtomic::new(0, 1, 1);
-        // let packed_indirect_args = GPUPackedIndirectArgsAtomic::new(0u32, dispatch_indirect);
-        // renderer.write_buffer(
-        //     &self.gpu.packed_indirect_buffer,
-        //     0,
-        //     packed_indirect_args.as_bytes(),
-        // );
+        if !self.cpu.view_chunks.cpu_dirty() {
+            return;
+        }
+        // reset indirect args
+        let dispatch_indirect = GPUDispatchIndirectArgsAtomic::new(0, 1, 1);
+        let packed_indirect_args = GPUPackedIndirectArgsAtomic::new(0u32, dispatch_indirect);
+        renderer.write_buffer(
+            &self.gpu.packed_indirect_buffer,
+            0,
+            packed_indirect_args.as_bytes(),
+        );
         let view_write_delta = self.cpu.view_chunks.sync_delta();
-        // let batch_size = view_write_delta.len() as u32;
-        // renderer.write_buffer(
-        //     &self.gpu.view_write_buffer,
-        //     0,
-        //     bytemuck::cast_slice(view_write_delta),
-        // );
-        // // write view candidates delta
-        // compute_pass.set_pipeline(&self.gpu.view_chunks_write_pipeline);
-        // compute_pass.set_bind_group(0, &self.gpu.view_chunks_write_bg, &[]);
-        // compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
-        //
-        // let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_1d);
-        // compute_pass.dispatch_workgroups(wg_count, 1, 1);
-        //
-        // // update mdi args and meshing queue
-        // compute_pass.set_pipeline(&self.gpu.mdi_args_pipeline);
-        // compute_pass.set_bind_group(0, &self.gpu.mdi_args_bind_group, &[]);
-        // let batch_size = self.cpu.view_chunks.cpu_len() as u32;
-        // compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
-        // let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_2d);
-        // compute_pass.dispatch_workgroups(wg_count, 1, 1);
-        //
-        // // handle meshing queue
-        // compute_pass.set_pipeline(&self.gpu.meshing_pipeline);
-        // compute_pass.set_bind_group(0, &self.gpu.meshing_bind_group, &[]);
-        // compute_pass.dispatch_workgroups_indirect(&self.gpu.packed_indirect_buffer, 4 * 4);
+        let batch_size = view_write_delta.len() as u32;
+        renderer.write_buffer(
+            &self.gpu.view_write_buffer,
+            0,
+            bytemuck::cast_slice(view_write_delta),
+        );
+        // write view candidates delta
+        compute_pass.set_pipeline(&self.gpu.view_chunks_write_pipeline);
+        compute_pass.set_bind_group(0, &self.gpu.view_chunks_write_bg, &[]);
+        compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
+
+        let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_1d);
+        compute_pass.dispatch_workgroups(wg_count, 1, 1);
+
+        // update mdi args and meshing queue
+        compute_pass.set_pipeline(&self.gpu.mdi_args_pipeline);
+        compute_pass.set_bind_group(0, &self.gpu.mdi_args_bind_group, &[]);
+        let batch_size = self.cpu.view_chunks.cpu_len() as u32;
+        compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
+        let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_2d);
+        compute_pass.dispatch_workgroups(wg_count, 1, 1);
+
+        // handle meshing queue
+        compute_pass.set_pipeline(&self.gpu.meshing_pipeline);
+        compute_pass.set_bind_group(0, &self.gpu.meshing_bind_group, &[]);
+        compute_pass.dispatch_workgroups_indirect(&self.gpu.packed_indirect_buffer, 4 * 4);
     }
 
     pub fn render_chunks(&mut self, renderer: &Renderer<'_>, render_pass: &mut RenderPass) {
-        return;
         if self.cpu.view_chunks.cpu_empty() {
             return;
         }
