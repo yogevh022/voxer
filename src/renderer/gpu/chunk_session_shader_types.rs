@@ -1,6 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
 use voxer_macros::ShaderType;
+use crate::renderer::gpu::vx_gpu_delta_vec::GpuIndexedItem;
 use crate::world::{VoxelChunkBlocks, CHUNK_DIM, CHUNK_DIM_HALF};
 
 type ShaderAtomic<T> = T;
@@ -88,17 +89,38 @@ impl GPUChunkMeshEntry {
     }
 }
 
+impl GpuIndexedItem for GPUChunkMeshEntry {
+    type WriteEntry = GPUChunkMeshEntryWrite;
+
+    fn index(&self) -> usize {
+        self.index as usize
+    }
+
+    fn init(mut self) -> Self {
+        // set meshing flag to true
+        self.negative_faces |= 1 << 31;
+        self
+    }
+
+    fn reused(mut self) -> Self {
+        // set meshing flag to false
+        self.negative_faces &= !(1 << 31);
+        self
+    }
+
+    fn write(self, index: usize) -> Self::WriteEntry {
+        Self::WriteEntry {
+            entry: self,
+            index: index as u32,
+        }
+    }
+}
+
 #[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkMeshEntryWrite {
-    entry: GPUChunkMeshEntry,
-    index: u32,
-}
-
-impl GPUChunkMeshEntryWrite {
-    pub fn new(entry: GPUChunkMeshEntry, index: u32) -> Self {
-        Self { entry, index }
-    }
+    pub entry: GPUChunkMeshEntry,
+    pub index: u32,
 }
 
 #[repr(C, align(4))]
@@ -117,7 +139,7 @@ pub struct GPUVoxelChunkAdjContent {
 #[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkHeader {
-    pub(crate) index: u32,
+    index: u32,
     chunk_x: i32,
     chunk_y: i32,
     chunk_z: i32,
@@ -132,7 +154,13 @@ impl GPUVoxelChunkHeader {
             chunk_z: chunk_position.z,
         }
     }
-    
+
+    #[inline]
+    pub(crate) fn index(&self) -> u32 {
+        self.index
+    }
+
+    #[inline]
     pub(crate) fn position(&self) -> IVec3 {
         IVec3::new(self.chunk_x, self.chunk_y, self.chunk_z)
     }

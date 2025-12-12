@@ -21,7 +21,7 @@ pub struct AppRenderer<'window> {
 }
 
 impl AppRenderer<'_> {
-    pub fn new(window: Arc<Window>) -> Self {
+    pub fn new(window: Arc<Window>, chunk_render_distance: usize) -> Self {
         let renderer = Renderer::new(window);
 
         let view_projection_buffer = renderer.device.create_vx_buffer::<VxGPUCamera>(
@@ -31,14 +31,15 @@ impl AppRenderer<'_> {
         );
 
         // fixme move to a config and fix arbitrary numbers
-        let near_chunks = ((48.0 * 48.0 * 48.0) * 0.55) as usize;
+        let near_chunks = (48.0 * 48.0 * 48.0) as usize;
         let cm_config = GpuChunkSessionConfig {
             max_chunks: near_chunks,
             max_write_count: 1 << 14, // arbitrary
-            max_face_count: (near_chunks as f32 * 0.4f32) as usize * 4096, // rough temp fov + face estimate
+            max_face_count: (near_chunks as f32 * 0.2f32) as usize * 4096, // rough temp fov + face estimate
             max_workgroup_size_1d: MAX_WORKGROUP_DIM_1D,
             max_workgroup_size_2d: MAX_WORKGROUP_DIM_2D,
             max_indirect_count: 1 << 16, // arbitrary
+            chunk_render_distance,
         };
         let chunk_session = GpuChunkSession::new(&renderer, &view_projection_buffer, cm_config);
 

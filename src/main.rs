@@ -7,8 +7,9 @@ mod renderer;
 mod vtypes;
 mod world;
 
-use glam::USizeVec3;
+use crate::compute::geo::AABB;
 use crate::world::{ClientWorldConfig, ServerWorld, ServerWorldConfig, WorldConfig};
+use glam::{IVec2, USizeVec3};
 use voxer_network;
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
@@ -55,21 +56,14 @@ fn debug() {
     };
     use glam::{IVec3, Vec3};
     use rustc_hash::{FxHashMap, FxHashSet};
-    use slabmap;
     use smallhash;
     use std::hint::black_box;
     use std::time::Duration;
     use std::time::Instant;
 
-    let lmin = Vec3::new(-8.0, -2.0, 7.0);
-    let lmax = Vec3::new(8.0, 7.0, 14.0);
-    let l = compute::geo::AABB::new(lmin, lmax);
-    let rmin = Vec3::new(-8.0, -2.0, 8.0);
-    let rmax = Vec3::new(8.0, 7.0, 15.0);
-    let r = compute::geo::AABB::new(rmin, rmax);
-    let (only_l, only_r) = compute::geo::AABB::sym_diff(l, r);
-    println!("L: {:?}", l);
-    println!("R: {:?}", r);
-    println!("only L: {:?}", only_l);
-    println!("only R: {:?}", only_r);
+    let pos = black_box(IVec3::new(100, 100, 100));
+    let rad = black_box(128isize);
+
+    let mut c = 0;
+    let mut c2 = 0;
 }

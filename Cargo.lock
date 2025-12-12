@@ -789,9 +789,9 @@ dependencies = [
 
 [[package]]
 name = "glam"
-version = "0.30.8"
+version = "0.30.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e12d847aeb25f41be4c0ec9587d624e9cd631bc007a8fd7ce3f5851e064c6460"
+checksum = "bd47b05dddf0005d850e5644cae7f2b14ac3df487979dbfff3b56f20b1a6ae46"
 dependencies = [
  "bytemuck",
 ]
@@ -1084,7 +1084,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.53.3",
 ]
 
 [[package]]
@@ -1861,6 +1861,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d6831663a5098ea164f89cff59c6284e95f4e3c76ce9848d4529f5ccca9bde"
 
 [[package]]
+name = "range3d"
+version = "0.1.1"
+source = "git+https://github.com/yogevh022/range3d#329dc567b6296831b2c8924a0d02ab9f8c5d875e"
+
+[[package]]
 name = "rav1e"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2130,15 +2135,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2ae44ef20feb57a68b23d846850f861394c2e02dc425a50098ae8c90267589"
 
 [[package]]
-name = "slabmap"
-version = "0.1.0"
-source = "git+https://github.com/yogevh022/slabmap?branch=bitslab#b30cc231350ddc4e6d10c3f1d2f7dbae582de38f"
-dependencies = [
- "rustc-hash 2.1.1",
- "word_bitmap",
-]
-
-[[package]]
 name = "slotmap"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2190,6 +2186,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd538fb6910ac1099850255cf94a94df6551fbdd602454387d0adb2d1ca6dead"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "spatialmap"
+version = "0.2.3"
+source = "git+https://github.com/yogevh022/spatialmap#17d2bc54ce76bd00b1763c5d2c56d5912702c116"
+dependencies = [
+ "glam",
 ]
 
 [[package]]
@@ -2441,10 +2445,11 @@ dependencies = [
  "image",
  "parking_lot",
  "pollster",
+ "range3d",
  "rayon",
  "rustc-hash 2.1.1",
- "slabmap",
  "smallhash",
+ "spatialmap",
  "suballoc",
  "voxer_macros",
  "voxer_network",
@@ -3280,11 +3285,6 @@ checksum = "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1"
 dependencies = [
  "bitflags 2.9.1",
 ]
-
-[[package]]
-name = "word_bitmap"
-version = "0.1.0"
-source = "git+https://github.com/yogevh022/word_bitmap#c8cf48ec0cc27b5c096ea2d6461f42471013540d"
 
 [[package]]
 name = "x11-dl"

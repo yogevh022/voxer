@@ -1,16 +1,22 @@
+mod network;
 mod session;
+
 use crate::compute::MIB;
-use crate::compute::geo::Plane;
+use crate::compute::geo::{Plane, world_to_chunk_pos};
+use crate::world::client::network::ClientWorldNetwork;
 use crate::world::client::session::ClientWorldSession;
-use crate::world::network::{MsgChunkData, MsgChunkDataEmpty, MsgChunkDataRequest, MsgConnectRequest, MsgSetPositionRequest, NetworkHandle, ServerMessage, ServerMessageTag};
+use crate::world::network::{
+    MAX_CHUNKS_PER_BATCH, MsgChunkData, MsgChunkDataEmpty, NetworkHandle, ServerMessage,
+    ServerMessageTag,
+};
+use crate::world::server::chunk::VoxelChunk;
 use crate::world::session::{PlayerLocation, PlayerSession};
-use glam::Vec3;
+use glam::{IVec3, Vec3};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use voxer_network::NetworkDeserializable;
-use wgpu::{CommandEncoder, ComputePass};
+use wgpu::CommandEncoder;
 use winit::window::Window;
-use crate::world::server::chunk::VoxelChunk;
 
 #[derive(Clone, Copy)]
 pub struct ClientWorldConfig {
@@ -20,13 +26,15 @@ pub struct ClientWorldConfig {
 pub struct ClientWorld<'window> {
     pub config: ClientWorldConfig,
     pub session: ClientWorldSession<'window>,
-    network: NetworkHandle,
+
+    player: PlayerSession,
+
+    network: ClientWorldNetwork,
     temp_server_addr: SocketAddr,
 }
 
 impl ClientWorld<'_> {
     pub fn new(window: Arc<Window>, config: ClientWorldConfig) -> Self {
-        let socket_addr = SocketAddr::from(([0, 0, 0, 0], 0));
         let player = PlayerSession {
             id: 0,
             name: "bill".to_string(),
@@ -35,68 +43,70 @@ impl ClientWorld<'_> {
                 position: Vec3::ZERO,
             },
         };
-        let mut network = NetworkHandle::bind(socket_addr, MIB * 4);
-        network.listen();
+        let socket_addr = SocketAddr::from(([0, 0, 0, 0], 0));
         let temp_server_addr = SocketAddr::from(([127, 0, 0, 1], 3100));
+
+        let network_handle = NetworkHandle::bind(socket_addr, MIB * 4);
+        let mut network = ClientWorldNetwork::new(network_handle);
+        network.set_server_addr(temp_server_addr); // fixme temp
         Self {
             config,
-            session: ClientWorldSession::new(window, player, config),
+            session: ClientWorldSession::new(
+                window,
+                config,
+                world_to_chunk_pos(player.location.position),
+            ),
             network,
+            player,
             temp_server_addr,
         }
     }
 
-    pub fn temp_set_player_position(&mut self, position: Vec3) {
-        self.session.player.location.position = position;
+    pub(crate) fn temp_set_player_position(&mut self, position: Vec3) {
+        self.player.location.position = position;
     }
 
-    pub fn temp_send_player_position(&self) {
-        let set_position_request = MsgSetPositionRequest {
-            position: self.session.player.location.position,
-        };
-        let msg = Box::new(set_position_request);
-        self.network.send_to(msg, &self.temp_server_addr).unwrap();
-    }
-
-    pub fn temp_send_req_conn(&self) {
-        let connection_request = MsgConnectRequest { byte: 62 };
-        let msg = Box::new(connection_request);
-        self.network.send_to(msg, &self.temp_server_addr).unwrap();
-    }
-
-    pub fn temp_set_view_frustum(&mut self, frustum: [Plane; 6]) {
+    pub(crate) fn temp_set_view_frustum(&mut self, frustum: [Plane; 6]) {
         self.session.view_frustum = frustum;
     }
 
+    pub(crate) fn temp_send_req_conn(&self) {
+        self.network.send_connection_request(self.temp_server_addr);
+    }
+
+    pub(crate) fn temp_send_player_position(&self) {
+        self.network.send_player_position(self.player.location.position);
+    }
+
+    fn request_interest_chunks(&mut self, origin: IVec3) {
+        self.network.prepare_to_batch_requests();
+        self.session
+            .missing_interest_chunks(origin, MAX_CHUNKS_PER_BATCH, |p| {
+                self.network.batch_chunk_request(p);
+            });
+        self.network.request_chunk_batch();
+    }
+
     pub fn tick(&mut self, encoder: &mut CommandEncoder) {
-        for message in self.network.take_messages(64) {
-            self.handle_network_message(message);
-        }
-        self.session.tick(encoder);
-        self.request_chunk_batch();
+        self.network.receive_messages(|msg| {
+            Self::handle_network_message(&mut self.session, msg);
+        });
+        let player_ch_pos = world_to_chunk_pos(self.player.location.position);
+        self.session.tick(encoder, player_ch_pos);
+        self.request_interest_chunks(player_ch_pos);
     }
 
-    fn request_chunk_batch(&mut self) {
-        let positions = self.session.chunk_request_batch();
-        if positions.is_empty() {
-            return;
-        }
-        let chunk_data_request = MsgChunkDataRequest::new_with_positions(positions);
-        let msg = Box::new(chunk_data_request);
-        self.network.send_to(msg, &self.temp_server_addr).unwrap();
-    }
-
-    fn handle_network_message(&mut self, message: ServerMessage) {
+    fn handle_network_message(session: &mut ClientWorldSession<'_>, message: ServerMessage) {
         match message.tag {
             ServerMessageTag::ChunkData => {
                 let chunk_data_msg = MsgChunkData::deserialize(message.message.data);
                 let chunk = VoxelChunk::from(chunk_data_msg);
-                self.session.add_new_chunk(chunk);
+                session.add_new_chunk(chunk);
             }
             ServerMessageTag::ChunkDataEmpty => {
                 let chunk_data_msg = MsgChunkDataEmpty::deserialize(message.message.data);
                 let chunk = VoxelChunk::from(chunk_data_msg);
-                self.session.add_new_chunk(chunk);
+                session.add_new_chunk(chunk);
             }
             ServerMessageTag::SetPosition => {
                 todo!()

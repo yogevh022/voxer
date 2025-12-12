@@ -166,7 +166,7 @@ impl GpuChunkSessionResources {
                     binding: 4, // chunks in view
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: true },
+                        ty: BufferBindingType::Storage { read_only: false },
                         has_dynamic_offset: false,
                         min_binding_size: Some(chunks_in_view_size),
                     },

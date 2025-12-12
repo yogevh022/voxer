@@ -74,7 +74,7 @@ impl MsgChunkDataRequest {
         }
     }
 
-    pub fn new_with_positions(positions: &[IVec3]) -> Self {
+    pub fn with_positions(positions: &[IVec3]) -> Self {
         let mut request = Self::new();
         request.count = positions.len() as u8;
         request.positions[..positions.len()].copy_from_slice(positions);

@@ -5,7 +5,6 @@ use crate::vtypes::{Scene, Voxer, VoxerObject};
 use crate::world::{ClientWorld, ClientWorldConfig, ServerWorld, CHUNK_DIM};
 use crate::{call_every, vtypes};
 use std::sync::Arc;
-use wgpu::ComputePassDescriptor;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
@@ -80,7 +79,7 @@ impl<'a> ApplicationHandler for App<'a> {
         let window_desc = WindowDescriptor {
             size: (1280, 720),
             title: "Tech".to_string(),
-            cursor_grab: CursorGrabMode::None,
+            cursor_grab: CursorGrabMode::Locked,
             cursor_visible: false,
         };
         let window = initialize_window(event_loop, &window_desc).unwrap();
@@ -114,7 +113,7 @@ impl<'a> ApplicationHandler for App<'a> {
 
                 call_every!(WINDOW_TITLE_UPDATE, 200, || {
                     let p = self.v.camera.transform.position;
-                    let fps = self.v.time.fps().floor() as u32;
+                    let fps = self.v.time.fps_avg().floor() as u32;
                     let title =
                         format!("FPS: {:>4} ({:>8.1},{:>8.1},{:>8.1})", fps, p.x, p.y, p.z,);
                     window.set_title(&title);
@@ -196,7 +195,7 @@ impl<'a> App<'a> {
             let move_vec = forward_input as f32 * self.v.camera.transform.forward()
                 + right_input as f32 * self.v.camera.transform.right();
             self.v.camera.transform.position +=
-                move_vec * MOVE_SPEED * sprint_mul * self.v.time.delta();
+                move_vec * MOVE_SPEED * sprint_mul * self.v.time.dt();
         }
 
         let culling_camera = &self.v.camera;
@@ -209,7 +208,7 @@ impl<'a> App<'a> {
         let m_client = self.client.as_mut().unwrap();
         m_client.temp_set_player_position(camera_position);
         m_client.temp_set_view_frustum(safe_culling_vf);
-        
+
         call_every!(CLIENT_POS_SEND, 20, || {
             m_client.temp_send_player_position()
         });
