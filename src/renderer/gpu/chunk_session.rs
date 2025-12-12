@@ -1,9 +1,7 @@
 use crate::compute::geo::{AABB, Frustum, Plane};
 use crate::compute::num::ceil_div;
 use crate::compute::utils::free_ptr;
-use crate::renderer::gpu::chunk_session_mesh_data::{
-    TRANSPARENT_LAYER_BLOCKS, VoxelChunkMeshMeta, chunk_mesh_data,
-};
+use crate::renderer::gpu::chunk_session_mesh_data::{TRANSPARENT_LAYER_BLOCKS, chunk_mesh_data};
 use crate::renderer::gpu::chunk_session_resources::GpuChunkSessionResources;
 use crate::renderer::gpu::chunk_session_shader_types::{
     GPUChunkMeshEntry, GPUPackedIndirectArgsAtomic, GPUVoxelChunkHeader,
@@ -224,6 +222,7 @@ struct CPUResources {
     chunks: SpatialMap<ChunkMeshEntry>,
     chunks_adj: SpatialMap<VoxelChunkAdjBlocks>,
     chunks_write: Vec<GPUVoxelChunk>,
+    chunks_write_headers: Vec<GPUVoxelChunkHeader>,
     view_chunks: VxGpuSyncVec<GPUChunkMeshEntry>,
 
     view_box: AABB,
@@ -241,6 +240,7 @@ impl CPUResources {
             chunks: SpatialMap::with_capacity([config.chunk_render_distance as u32 * 2; 3]),
             chunks_adj: SpatialMap::with_capacity([config.chunk_render_distance as u32 * 2; 3]),
             chunks_write: Vec::with_capacity(config.max_chunks),
+            chunks_write_headers: Vec::with_capacity(config.max_chunks),
             view_chunks: VxGpuSyncVec::new(config.max_chunks, max_view_count_est),
 
             view_box: AABB::zero(),
@@ -252,19 +252,17 @@ impl CPUResources {
 
     fn insert_chunk(&mut self, chunk: &VoxelChunk) -> GPUVoxelChunk {
         let pos = chunk.position;
-        let pos_f = pos.as_vec3();
-        let pos_arr = pos.to_array();
-        let index = self.chunks.index(pos_arr);
+        let index = self.chunks.index(pos);
 
         // insert chunk and deallocate pre-existing mesh
         let blocks_as_adj = chunk.blocks_as_adj();
-        self.chunks_adj.insert_index(index, pos_arr, blocks_as_adj);
-        if let Some(mut prev) = self.chunks.insert_index(index, pos_arr, Default::default()) {
+        self.chunks_adj.insert_index(index, pos, blocks_as_adj);
+        if let Some(mut prev) = self.chunks.insert_index(index, pos, Default::default()) {
             self.deallocate_mesh(&mut prev.value);
         }
 
         // add view entry if on screen
-        if self.view_box.contains_point(pos_f) {
+        if self.view_box.contains_point(pos.as_vec3()) {
             self.view_delta_add_pos.push(pos);
         }
 
@@ -274,29 +272,27 @@ impl CPUResources {
 
     fn prepare_chunk_writes<'a>(&mut self, chunks: impl Iterator<Item = &'a VoxelChunk>) {
         self.chunks_write.clear();
+        self.chunks_write_headers.clear();
         for chunk in chunks {
             let gpu_chunk = self.insert_chunk(chunk);
+            self.chunks_write_headers.push(gpu_chunk.header);
             self.chunks_write.push(gpu_chunk);
         }
 
         for i in 0..self.chunks_write.len() {
-            let gpu_chunk = free_ptr(&mut self.chunks_write[i]);
-            let (index, mesh_meta) = self.init_chunk_mesh(gpu_chunk);
-            let mesh_state = ChunkMeshEntry::new(mesh_meta, index);
-            let prev = unsafe { self.chunks.get_index_mut_unchecked(index as usize) };
-            (*prev).value = mesh_state; // fixme
+            let header = unsafe { self.chunks_write_headers.get_unchecked(i) };
+            let index = header.index();
+            let adj_blocks = self.adj_blocks_of(header.position());
+            let gpu_chunk = &mut self.chunks_write[i];
+
+            unsafe {
+                let blocks = std::mem::transmute(gpu_chunk.content);
+                gpu_chunk.adj_content = std::mem::transmute(adj_blocks);
+                let mesh_state = ChunkMeshEntry::new(chunk_mesh_data(&blocks, &adj_blocks), index);
+                let prev = self.chunks.get_index_mut_unchecked(index as usize);
+                prev.value = mesh_state;
+            };
         }
-    }
-
-    fn init_chunk_mesh(&self, uninit_gpu_chunk: &mut GPUVoxelChunk) -> (u32, VoxelChunkMeshMeta) {
-        let index = uninit_gpu_chunk.header.index;
-        let pos = uninit_gpu_chunk.header.position().to_array();
-        let adj_blocks = self.adj_blocks_of(&pos);
-        let blocks = unsafe { std::mem::transmute(&uninit_gpu_chunk.content) };
-
-        uninit_gpu_chunk.adj_content = unsafe { std::mem::transmute(adj_blocks) };
-        let mesh_meta = chunk_mesh_data(blocks, &adj_blocks);
-        (index, mesh_meta)
     }
 
     fn deallocate_mesh(&mut self, mesh_entry: &mut ChunkMeshEntry) {
@@ -320,32 +316,26 @@ impl CPUResources {
     }
 
     fn allocate_view_delta(&mut self) {
-        for i in 0..self.view_delta_del.len() {
-            let delta_box = unsafe { *self.view_delta_del.get_unchecked(i) };
-            delta_box.discrete_points(|pos| {
-                if let Some(mesh_entry) = self.chunks.get_exact_mut(pos) {
-                    let mesh_entry = free_ptr(mesh_entry);
-                    self.deallocate_mesh(&mut mesh_entry.value);
-                }
-            });
+        let delta_del = free_ptr(&mut self.view_delta_del);
+        for pos in delta_del.drain(..).flat_map(|db| db.discrete_points()) {
+            if let Some(mesh_entry_cell) = self.chunks.get_exact_mut(pos) {
+                let mesh_entry = free_ptr(mesh_entry_cell);
+                self.deallocate_mesh(&mut mesh_entry.value);
+            }
         }
-        for i in 0..self.view_delta_add.len() {
-            let delta_box = unsafe { *self.view_delta_add.get_unchecked(i) };
-            delta_box.discrete_points(|pos| {
-                if let Some(mesh_entry) = self.chunks.get_exact_mut(pos) {
-                    let mesh_entry = free_ptr(mesh_entry);
-                    self.allocate_mesh(&mut mesh_entry.value);
-                }
-            });
-        }
-        for i in 0..self.view_delta_add_pos.len() {
-            let pos = unsafe { self.view_delta_add_pos.get_unchecked(i).to_array() };
-            if let Some(mesh_entry) = self.chunks.get_exact_mut(pos) {
-                let mesh_entry = free_ptr(mesh_entry);
+        let delta_add = free_ptr(&mut self.view_delta_add);
+        for pos in delta_add.drain(..).flat_map(|db| db.discrete_points()) {
+            if let Some(mesh_entry_cell) = self.chunks.get_exact_mut(pos) {
+                let mesh_entry = free_ptr(mesh_entry_cell);
                 self.allocate_mesh(&mut mesh_entry.value);
             }
         }
-        self.view_delta_add_pos.clear();
+        for pos in free_ptr(&mut self.view_delta_add_pos).drain(..) {
+            if let Some(mesh_entry_cell) = self.chunks.get_exact_mut(pos) {
+                let mesh_entry = free_ptr(mesh_entry_cell);
+                self.allocate_mesh(&mut mesh_entry.value);
+            };
+        }
     }
 
     fn update_view_delta(&mut self, new_box: AABB) {
@@ -356,20 +346,21 @@ impl CPUResources {
         self.view_box = new_box;
     }
 
-    fn adj_or_transparent(&self, position: [i32; 3], index: usize) -> [[VoxelBlock; 16]; 16] {
-        self.chunks_adj
-            .get_exact(position)
-            .map_or(TRANSPARENT_LAYER_BLOCKS, |adj| adj.value[index])
+    fn adj_or_transparent(&self, position: IVec3, index: usize) -> [[VoxelBlock; 16]; 16] {
+        match self.chunks_adj.get_exact(position) {
+            Some(adj) => adj.value[index],
+            None => TRANSPARENT_LAYER_BLOCKS,
+        }
     }
 
-    fn adj_blocks_of(&self, position: &[i32; 3]) -> VoxelChunkAdjBlocks {
+    fn adj_blocks_of(&self, position: IVec3) -> VoxelChunkAdjBlocks {
         [
-            self.adj_or_transparent([position[0] + 1, position[1], position[2]], 0), // px
-            self.adj_or_transparent([position[0], position[1] + 1, position[2]], 1), // py
-            self.adj_or_transparent([position[0], position[1], position[2] + 1], 2), // pz
-            self.adj_or_transparent([position[0] - 1, position[1], position[2]], 3), // mx
-            self.adj_or_transparent([position[0], position[1] - 1, position[2]], 4), // my
-            self.adj_or_transparent([position[0], position[1], position[2] - 1], 5), // mz
+            self.adj_or_transparent(position.with_x(position.x + 1), 0), // px
+            self.adj_or_transparent(position.with_y(position.y + 1), 1), // py
+            self.adj_or_transparent(position.with_z(position.z + 1), 2), // pz
+            self.adj_or_transparent(position.with_x(position.x - 1), 3), // mx
+            self.adj_or_transparent(position.with_y(position.y - 1), 4), // my
+            self.adj_or_transparent(position.with_z(position.z - 1), 5), // mz
         ]
     }
 }
@@ -463,10 +454,10 @@ impl GpuChunkSession {
         let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_2d);
         compute_pass.dispatch_workgroups(wg_count, 1, 1);
 
-        // // handle meshing queue
-        // compute_pass.set_pipeline(&self.gpu.meshing_pipeline);
-        // compute_pass.set_bind_group(0, &self.gpu.meshing_bind_group, &[]);
-        // compute_pass.dispatch_workgroups_indirect(&self.gpu.packed_indirect_buffer, 4 * 4);
+        // handle meshing queue
+        compute_pass.set_pipeline(&self.gpu.meshing_pipeline);
+        compute_pass.set_bind_group(0, &self.gpu.meshing_bind_group, &[]);
+        compute_pass.dispatch_workgroups_indirect(&self.gpu.packed_indirect_buffer, 4 * 4);
     }
 
     pub fn render_chunks(&mut self, renderer: &Renderer<'_>, render_pass: &mut RenderPass) {

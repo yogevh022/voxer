@@ -16,11 +16,12 @@ struct GPUChunkMeshEntryNoMeshing {
 }
 
 fn mesh_entry_consume_meshing_flag(mesh_entry: GPUChunkMeshEntry) -> GPUChunkMeshEntryNoMeshing {
+    var out: GPUChunkMeshEntryNoMeshing;
     var local_entry = mesh_entry;
-    let negative_faces = local_entry.negative_faces;
-    let meshing_flag = negative_faces >> 31;
-    local_entry.negative_faces = negative_faces & 0x7FFFFFFFu;
-    return GPUChunkMeshEntryNoMeshing(meshing_flag, local_entry);
+    out.flag = local_entry.negative_faces >> 31;
+    local_entry.negative_faces = local_entry.negative_faces & 0x7FFFFFFFu;
+    out.entry = local_entry;
+    return out;
 }
 
 fn mesh_entry_face_offsets(offset: u32, counts: array<u32, 6>) -> array<u32, 6> {

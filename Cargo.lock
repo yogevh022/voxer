@@ -789,9 +789,9 @@ dependencies = [
 
 [[package]]
 name = "glam"
-version = "0.30.8"
+version = "0.30.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e12d847aeb25f41be4c0ec9587d624e9cd631bc007a8fd7ce3f5851e064c6460"
+checksum = "bd47b05dddf0005d850e5644cae7f2b14ac3df487979dbfff3b56f20b1a6ae46"
 dependencies = [
  "bytemuck",
 ]
@@ -1084,7 +1084,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.53.3",
 ]
 
 [[package]]
@@ -1861,6 +1861,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d6831663a5098ea164f89cff59c6284e95f4e3c76ce9848d4529f5ccca9bde"
 
 [[package]]
+name = "range3d"
+version = "0.1.1"
+source = "git+https://github.com/yogevh022/range3d#329dc567b6296831b2c8924a0d02ab9f8c5d875e"
+
+[[package]]
 name = "rav1e"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2185,8 +2190,11 @@ dependencies = [
 
 [[package]]
 name = "spatialmap"
-version = "0.1.0"
-source = "git+https://github.com/yogevh022/spatialmap#a835ad0df2982fdac7d8b5e0b2597a5a7be123aa"
+version = "0.2.3"
+source = "git+https://github.com/yogevh022/spatialmap#17d2bc54ce76bd00b1763c5d2c56d5912702c116"
+dependencies = [
+ "glam",
+]
 
 [[package]]
 name = "spirv"
@@ -2437,6 +2445,7 @@ dependencies = [
  "image",
  "parking_lot",
  "pollster",
+ "range3d",
  "rayon",
  "rustc-hash 2.1.1",
  "smallhash",

@@ -1,4 +1,5 @@
 use glam::{IVec3, Vec3};
+use range3d::Range3D;
 
 #[derive(Debug, Clone, Copy)]
 pub struct AABB {
@@ -309,16 +310,14 @@ impl AABB {
         (out_left, out_right)
     }
 
-    pub fn discrete_points<F>(&self, mut func: F)
-    where
-        F: FnMut([i32; 3]),
-    {
-        for x in (self.min.x as i32)..(self.max.x as i32) {
-            for y in (self.min.y as i32)..(self.max.y as i32) {
-                for z in (self.min.z as i32)..(self.max.z as i32) {
-                    func([x, y, z]);
-                }
-            }
-        }
+    pub fn discrete_points(&self) -> Range3D {
+        Range3D::new(
+            self.min.x as isize,
+            self.min.y as isize,
+            self.min.z as isize,
+            self.max.x as isize,
+            self.max.y as isize,
+            self.max.z as isize,
+        )
     }
 }

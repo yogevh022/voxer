@@ -8,13 +8,14 @@ voxer_macros = { path = "voxer_macros" }
 voxer_network = { git = "https://github.com/yogevh022/voxer_network" }
 suballoc = { git = "https://github.com/yogevh022/suballoc-rs" }
 smallhash = { git = "https://github.com/yogevh022/smallhash" }
-spatialmap = { git = "https://github.com/yogevh022/spatialmap" }
+spatialmap = { git = "https://github.com/yogevh022/spatialmap", features = ["glam"] }
+range3d = { git = "https://github.com/yogevh022/range3d" }
 wgpu = { version = "27.0.1", features = ["dx12", "vulkan", "metal"] }
 winit = "0.30.12"
 pollster = "0.4.0"
 bytemuck = "1.23.1"
 image = "0.25.6"
-glam = { version = "0.30.5", features = ["bytemuck"] }
+glam = { version = "0.30.9", features = ["bytemuck"] }
 parking_lot = "0.12.4"
 fastnoise2 = "0.3.2"
 rayon = "1.10.0"

@@ -139,7 +139,7 @@ pub struct GPUVoxelChunkAdjContent {
 #[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkHeader {
-    pub(crate) index: u32,
+    index: u32,
     chunk_x: i32,
     chunk_y: i32,
     chunk_z: i32,
@@ -154,7 +154,13 @@ impl GPUVoxelChunkHeader {
             chunk_z: chunk_position.z,
         }
     }
-    
+
+    #[inline]
+    pub(crate) fn index(&self) -> u32 {
+        self.index
+    }
+
+    #[inline]
     pub(crate) fn position(&self) -> IVec3 {
         IVec3::new(self.chunk_x, self.chunk_y, self.chunk_z)
     }
