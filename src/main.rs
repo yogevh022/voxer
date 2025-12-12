@@ -7,15 +7,15 @@ mod renderer;
 mod vtypes;
 mod world;
 
-use glam::USizeVec3;
+use crate::compute::geo::AABB;
 use crate::world::{ClientWorldConfig, ServerWorld, ServerWorldConfig, WorldConfig};
+use glam::{IVec2, USizeVec3};
 use voxer_network;
 use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
-use crate::compute::geo::AABB;
 
 fn run_app() {
-    const SIMULATION_AND_RENDER_DISTANCE: usize = 16;
+    const SIMULATION_AND_RENDER_DISTANCE: usize = 8;
 
     let server_config = ServerWorldConfig {
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
@@ -56,36 +56,14 @@ fn debug() {
     };
     use glam::{IVec3, Vec3};
     use rustc_hash::{FxHashMap, FxHashSet};
-    use slabmap;
     use smallhash;
     use std::hint::black_box;
     use std::time::Duration;
     use std::time::Instant;
 
-    // let a = AABB::new(Vec3::new(-1.4, 2.4, 2.2), Vec3::new(0.0, 1.4, 44.0));
-    let x = AABB::new(Vec3::new(0.0, 1.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
-    let xd = AABB::new(Vec3::new(1.0, 1.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
-    let x_diff = x.diff(xd);
+    let pos = black_box(IVec3::new(100, 100, 100));
+    let rad = black_box(128isize);
 
-    let y = AABB::new(Vec3::new(0.0, 1.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
-    let yd = AABB::new(Vec3::new(0.0, 2.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
-    let y_diff = y.diff(yd);
-
-    let z = AABB::new(Vec3::new(0.0, 1.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
-    let zd = AABB::new(Vec3::new(0.0, 1.0, 3.0), Vec3::new(3.0, 3.0, 3.0));
-    let z_diff = z.diff(zd);
-
-    let xy = AABB::new(Vec3::new(0.0, 1.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
-    let xyd = AABB::new(Vec3::new(1.0, 2.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
-    let xy_diff = xy.diff(xyd);
-
-    let t = AABB::new(Vec3::new(1.0, 1.0, 1.0), Vec3::new(4.0, 4.0, 4.0));
-    let td = AABB::new(Vec3::new(2.0, 2.0, 2.0), Vec3::new(3.0, 3.0, 3.0));
-    let t_diff = t.diff(td);
-
-    println!("xdiff: {:?}", x_diff);
-    println!("ydiff: {:?}", y_diff);
-    println!("zdiff: {:?}", z_diff);
-    println!("xydiff: {:?}", xy_diff);
-    println!("tdiff: {:?}", t_diff);
+    let mut c = 0;
+    let mut c2 = 0;
 }

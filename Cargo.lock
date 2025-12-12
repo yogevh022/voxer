@@ -2130,15 +2130,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2ae44ef20feb57a68b23d846850f861394c2e02dc425a50098ae8c90267589"
 
 [[package]]
-name = "slabmap"
-version = "0.1.0"
-source = "git+https://github.com/yogevh022/slabmap?branch=bitslab#b30cc231350ddc4e6d10c3f1d2f7dbae582de38f"
-dependencies = [
- "rustc-hash 2.1.1",
- "word_bitmap",
-]
-
-[[package]]
 name = "slotmap"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2195,7 +2186,7 @@ dependencies = [
 [[package]]
 name = "spatialmap"
 version = "0.1.0"
-source = "git+https://github.com/yogevh022/spatialmap?branch=perf#4deeea0a6d71062f2c7e407bde023f9f187b410f"
+source = "git+https://github.com/yogevh022/spatialmap#a835ad0df2982fdac7d8b5e0b2597a5a7be123aa"
 
 [[package]]
 name = "spirv"
@@ -2448,7 +2439,6 @@ dependencies = [
  "pollster",
  "rayon",
  "rustc-hash 2.1.1",
- "slabmap",
  "smallhash",
  "spatialmap",
  "suballoc",
@@ -3286,11 +3276,6 @@ checksum = "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1"
 dependencies = [
  "bitflags 2.9.1",
 ]
-
-[[package]]
-name = "word_bitmap"
-version = "0.1.0"
-source = "git+https://github.com/yogevh022/word_bitmap#c8cf48ec0cc27b5c096ea2d6461f42471013540d"
 
 [[package]]
 name = "x11-dl"

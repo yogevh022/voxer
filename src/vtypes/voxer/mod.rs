@@ -1,14 +1,14 @@
 pub mod input;
 mod timer;
 pub use input::Input;
-pub use timer::Timer;
+pub use timer::VxTime;
 
 use crate::vtypes::Camera;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
 pub struct Voxer {
-    pub time: Timer,
+    pub time: VxTime,
     pub input: Arc<RwLock<Input>>,
     pub camera: Camera,
 }
@@ -16,7 +16,7 @@ pub struct Voxer {
 impl Default for Voxer {
     fn default() -> Self {
         Self {
-            time: Timer::default(),
+            time: VxTime::default(),
             input: Arc::new(RwLock::new(Input::default())),
             camera: Camera::default(),
         }

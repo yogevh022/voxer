@@ -30,6 +30,9 @@ impl NetworkHandle {
     pub fn take_messages(&self, max: usize) -> Vec<ServerMessage> {
         self.recv_handle.try_iter().take(max).collect()
     }
+    pub fn take_messages_out(&self, max: usize, out: &mut Vec<ServerMessage>) {
+        out.extend(self.recv_handle.try_iter().take(max))
+    }
 
     pub fn send_to(
         &self,

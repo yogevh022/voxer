@@ -83,8 +83,8 @@ include_shaders!(
     F_THREAD_MAPPING => "functions/thread_mapping.wgsl",
     F_MATH => "functions/math.wgsl",
     F_GEO => "functions/geo.wgsl",
-    F_UNPACK_GPU_CHUNK_MESH_ENTRY => "functions/unpack_GPUChunkMeshEntry.wgsl",
-    F_UNPACK_GPU_VOXEL_FACE_DATA => "functions/unpack_GPUVoxelFaceData.wgsl",
+    F_UNPACK_GPU_CHUNK_MESH_ENTRY => "functions/GPUChunkMeshEntry_methods.wgsl",
+    F_UNPACK_GPU_VOXEL_FACE_DATA => "functions/GPUVoxelFaceData_methods.wgsl",
     F_MASK_INDEX => "functions/mask_index.wgsl",
 );
 

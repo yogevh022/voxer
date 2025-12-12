@@ -8,7 +8,7 @@ mod vec3;
 
 pub use functions::*;
 pub use circle::Circle;
-pub use sphere::Sphere;
+pub use sphere::{Sphere, SpherePointsRange};
 pub use frustum::Frustum;
 pub use plane::Plane;
 pub use aabb::AABB;
