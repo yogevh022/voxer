@@ -6,7 +6,7 @@ var<storage, read_write> indirect_dispatch_buffer: array<GPUPackedIndirectArgsAt
 @group(0) @binding(2)
 var<storage, read_write> meshing_batch_buffer: array<GPUChunkMeshEntry>;
 @group(0) @binding(3)
-var<storage, read> chunks_buffer: array<GPUVoxelChunk>;
+var<storage, read> chunks_meta_buffer: array<GPUVoxelChunkHeader>;
 @group(0) @binding(4)
 var<storage, read_write> chunks_view_buffer: array<GPUChunkMeshEntry>;
 @group(0) @binding(5)
@@ -43,7 +43,7 @@ fn write_culled_mdi(
     let mesh_entry: GPUChunkMeshEntry = consumed_entry.entry;
     (*mesh_entry_ref) = mesh_entry;
 
-    let header: GPUVoxelChunkHeader = chunks_buffer[mesh_entry.index].header;
+    let header: GPUVoxelChunkHeader = chunks_meta_buffer[mesh_entry.index];
     let chunk_pos = vec3<i32>(header.chunk_x, header.chunk_y, header.chunk_z);
     let chunk_world_pos = vec3<f32>(chunk_pos * i32(CHUNK_DIM));
     let chunk_center_world_pos: vec3<f32> = chunk_world_pos + f32(CHUNK_DIM_HALF);

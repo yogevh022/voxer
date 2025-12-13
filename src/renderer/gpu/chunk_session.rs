@@ -9,7 +9,8 @@ use crate::renderer::gpu::chunk_session_shader_types::{
 use crate::renderer::gpu::chunk_session_types::ChunkMeshEntry;
 use crate::renderer::gpu::vx_gpu_delta_vec::VxGpuSyncVec;
 use crate::renderer::gpu::{
-    GPUChunkMeshEntryWrite, GPUDispatchIndirectArgsAtomic, GPUVoxelChunk, GPUVoxelFaceData,
+    CPUVoxelChunk, GPUChunkMeshEntryWrite, GPUDispatchIndirectArgsAtomic, GPUVoxelChunk,
+    GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData,
 };
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::{Renderer, resources};
@@ -32,11 +33,14 @@ pub struct GpuChunkSessionConfig {
     pub max_chunks: usize,
     pub max_write_count: usize,
     pub max_face_count: usize,
+    pub max_visible_chunks: usize,
     pub chunk_render_distance: usize,
 }
 
 struct GPUResources {
-    chunks_buffer: VxBuffer,
+    chunks_data_a_buffer: VxBuffer,
+    chunks_data_b_buffer: VxBuffer,
+    chunks_meta_buffer: VxBuffer,
     view_buffer: VxBuffer,
     view_write_buffer: VxBuffer,
     chunks_write_buffer: VxBuffer,
@@ -66,38 +70,50 @@ impl GPUResources {
         camera_buffer: &VxBuffer,
         config: GpuChunkSessionConfig,
     ) -> Self {
-        let chunks_buffer = renderer.device.create_vx_buffer::<GPUVoxelChunk>(
-            "Chunk Manager Chunks Buffer",
+        let chunks_data_a_buffer = renderer.device.create_vx_buffer::<GPUVoxelChunkContent>(
+            "ChunkSession Chunks Data A Buffer",
             config.max_chunks,
-            BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            BufferUsages::STORAGE,
         );
 
-        let chunks_write_buffer = renderer.device.create_vx_buffer::<GPUVoxelChunk>(
-            "Chunk Manager Chunks Write Buffer",
+        let chunks_data_b_buffer = renderer.device.create_vx_buffer::<GPUVoxelChunkAdjContent>(
+            "ChunkSession Chunks Data B Buffer",
+            config.max_chunks,
+            BufferUsages::STORAGE,
+        );
+
+        let chunks_meta_buffer = renderer.device.create_vx_buffer::<GPUVoxelChunkHeader>(
+            "ChunkSession Chunks Meta Buffer",
+            config.max_chunks,
+            BufferUsages::STORAGE,
+        );
+
+        let chunks_staging_buffer = renderer.device.create_vx_buffer::<GPUVoxelChunk>(
+            "ChunkSession Chunks Staging Buffer",
             config.max_write_count,
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
 
         let voxel_face_buffer = renderer.device.create_vx_buffer::<GPUVoxelFaceData>(
-            "Chunk Manager Face Data Buffer",
+            "ChunkSession Face Data Buffer",
             config.max_face_count,
             BufferUsages::VERTEX | BufferUsages::STORAGE,
         );
 
-        let meshing_buffer = renderer.device.create_vx_buffer::<GPUChunkMeshEntry>(
-            "Chunk Manager Mesh Queue Buffer",
+        let chunk_mesh_batch_buffer = renderer.device.create_vx_buffer::<GPUChunkMeshEntry>(
+            "ChunkSession Mesh Batch Buffer",
             config.max_write_count,
-            BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            BufferUsages::STORAGE,
         );
 
-        let view_buffer = renderer.device.create_vx_buffer::<GPUChunkMeshEntry>(
-            "Chunk Manager View Candidates Buffer",
+        let chunk_view_buffer = renderer.device.create_vx_buffer::<GPUChunkMeshEntry>(
+            "ChunkSession View Buffer",
             config.max_chunks, // fixme overkill but cheap anyway?
             BufferUsages::STORAGE,
         );
 
-        let view_write_buffer = renderer.device.create_vx_buffer::<GPUChunkMeshEntryWrite>(
-            "Chunk Manager View Candidates Write Buffer",
+        let chunk_view_staging_buffer = renderer.device.create_vx_buffer::<GPUChunkMeshEntryWrite>(
+            "ChunkSession View Staging Buffer",
             config.max_chunks, // fixme overkill but cheap anyway?
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
@@ -105,7 +121,7 @@ impl GPUResources {
         let packed_indirect_buffer = renderer
             .device
             .create_vx_buffer::<GPUPackedIndirectArgsAtomic>(
-                "Chunk Manager Draw Count And Dispatch Indirect Buffer",
+                "ChunkSession Draw Count And Dispatch Indirect Buffer",
                 1,
                 BufferUsages::INDIRECT | BufferUsages::STORAGE | BufferUsages::COPY_DST,
             );
@@ -114,9 +130,9 @@ impl GPUResources {
             &renderer.device,
             renderer.indirect_buffer.buffer_size,
             packed_indirect_buffer.buffer_size,
-            meshing_buffer.buffer_size,
-            chunks_buffer.buffer_size,
-            view_buffer.buffer_size,
+            chunk_mesh_batch_buffer.buffer_size,
+            chunks_meta_buffer.buffer_size,
+            chunk_view_buffer.buffer_size,
             camera_buffer.buffer_size,
         );
         let mdi_args_pipeline =
@@ -127,36 +143,42 @@ impl GPUResources {
             entries: &resources::utils::bind_entries([
                 renderer.indirect_buffer.as_entire_binding(),
                 packed_indirect_buffer.as_entire_binding(),
-                meshing_buffer.as_entire_binding(),
-                chunks_buffer.as_entire_binding(),
-                view_buffer.as_entire_binding(),
+                chunk_mesh_batch_buffer.as_entire_binding(),
+                chunks_meta_buffer.as_entire_binding(),
+                chunk_view_buffer.as_entire_binding(),
                 BindingResource::TextureView(&renderer.depth.mip_texture_array_view),
                 camera_buffer.as_entire_binding(),
             ]),
         });
 
-        let chunk_write_bgl = GpuChunkSessionResources::write_bgl(
+        let chunks_staging_bgl = GpuChunkSessionResources::chunk_staging_bgl(
             &renderer.device,
-            chunks_write_buffer.buffer_size,
-            chunks_buffer.buffer_size,
+            chunks_staging_buffer.buffer_size,
+            chunks_data_a_buffer.buffer_size,
+            chunks_data_b_buffer.buffer_size,
+            chunks_meta_buffer.buffer_size,
         );
-        let chunk_write_pipeline =
-            GpuChunkSessionResources::chunk_write_pipeline(&renderer.device, &[&chunk_write_bgl]);
-        let chunk_write_bind_group = renderer.device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Chunk Write Bind Group"),
-            layout: &chunk_write_bgl,
+        let chunk_write_pipeline = GpuChunkSessionResources::chunks_staging_pipeline(
+            &renderer.device,
+            &[&chunks_staging_bgl],
+        );
+        let chunks_staging_bg = renderer.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("Chunks Staging Bind Group"),
+            layout: &chunks_staging_bgl,
             entries: &resources::utils::bind_entries([
-                chunks_write_buffer.as_entire_binding(),
-                chunks_buffer.as_entire_binding(),
+                chunks_staging_buffer.as_entire_binding(),
+                chunks_data_a_buffer.as_entire_binding(),
+                chunks_data_b_buffer.as_entire_binding(),
+                chunks_meta_buffer.as_entire_binding(),
             ]),
         });
 
-        let view_chunks_write_bgl = GpuChunkSessionResources::write_bgl(
+        let view_chunks_write_bgl = GpuChunkSessionResources::chunks_view_staging_bgl(
             &renderer.device,
-            view_write_buffer.buffer_size,
-            view_buffer.buffer_size,
+            chunk_view_staging_buffer.buffer_size,
+            chunk_view_buffer.buffer_size,
         );
-        let view_chunks_write_pipeline = GpuChunkSessionResources::view_candidate_write_pipeline(
+        let view_chunks_write_pipeline = GpuChunkSessionResources::chunks_view_staging_pipeline(
             &renderer.device,
             &[&view_chunks_write_bgl],
         );
@@ -164,16 +186,18 @@ impl GPUResources {
             label: Some("Chunk Visible Candidate Write Bind Group"),
             layout: &view_chunks_write_bgl,
             entries: &resources::utils::bind_entries([
-                view_write_buffer.as_entire_binding(),
-                view_buffer.as_entire_binding(),
+                chunk_view_staging_buffer.as_entire_binding(),
+                chunk_view_buffer.as_entire_binding(),
             ]),
         });
 
         let meshing_bgl = GpuChunkSessionResources::chunk_meshing_bgl(
             &renderer.device,
-            chunks_buffer.buffer_size,
+            chunks_data_a_buffer.buffer_size,
+            chunks_data_b_buffer.buffer_size,
+            chunks_meta_buffer.buffer_size,
             voxel_face_buffer.buffer_size,
-            meshing_buffer.buffer_size,
+            chunk_mesh_batch_buffer.buffer_size,
         );
         let meshing_pipeline =
             GpuChunkSessionResources::chunk_meshing_pipeline(&renderer.device, &[&meshing_bgl]);
@@ -181,9 +205,11 @@ impl GPUResources {
             label: Some("Chunk Meshing Bind Group"),
             layout: &meshing_bgl,
             entries: &resources::utils::bind_entries([
-                chunks_buffer.as_entire_binding(),
+                chunks_data_a_buffer.as_entire_binding(),
+                chunks_data_b_buffer.as_entire_binding(),
+                chunks_meta_buffer.as_entire_binding(),
                 voxel_face_buffer.as_entire_binding(),
-                meshing_buffer.as_entire_binding(),
+                chunk_mesh_batch_buffer.as_entire_binding(),
             ]),
         });
 
@@ -195,18 +221,20 @@ impl GPUResources {
             );
 
         Self {
-            chunks_buffer,
-            view_buffer,
-            view_write_buffer,
-            chunks_write_buffer,
-            meshing_buffer,
+            chunks_data_a_buffer,
+            chunks_data_b_buffer,
+            chunks_meta_buffer,
+            view_buffer: chunk_view_buffer,
+            view_write_buffer: chunk_view_staging_buffer,
+            chunks_write_buffer: chunks_staging_buffer,
+            meshing_buffer: chunk_mesh_batch_buffer,
             voxel_face_buffer,
             packed_indirect_buffer,
 
             mdi_args_pipeline,
             mdi_args_bind_group,
             chunk_write_pipeline,
-            chunk_write_bind_group,
+            chunk_write_bind_group: chunks_staging_bg,
             view_chunks_write_pipeline,
             view_chunks_write_bg,
             meshing_pipeline,
@@ -221,8 +249,7 @@ struct CPUResources {
 
     chunks: SpatialMap<ChunkMeshEntry>,
     chunks_adj: SpatialMap<VoxelChunkAdjBlocks>,
-    chunks_write: Vec<GPUVoxelChunk>,
-    chunks_write_headers: Vec<GPUVoxelChunkHeader>,
+    chunks_write: Vec<CPUVoxelChunk>,
     view_chunks: VxGpuSyncVec<GPUChunkMeshEntry>,
 
     view_box: AABB,
@@ -239,8 +266,7 @@ impl CPUResources {
 
             chunks: SpatialMap::with_capacity([config.chunk_render_distance as u32 * 2; 3]),
             chunks_adj: SpatialMap::with_capacity([config.chunk_render_distance as u32 * 2; 3]),
-            chunks_write: Vec::with_capacity(config.max_chunks),
-            chunks_write_headers: Vec::with_capacity(config.max_chunks),
+            chunks_write: Vec::with_capacity(config.max_write_count),
             view_chunks: VxGpuSyncVec::new(config.max_chunks, max_view_count_est),
 
             view_box: AABB::zero(),
@@ -250,7 +276,7 @@ impl CPUResources {
         }
     }
 
-    fn insert_chunk(&mut self, chunk: &VoxelChunk) -> GPUVoxelChunk {
+    fn insert_chunk(&mut self, chunk: &VoxelChunk) -> CPUVoxelChunk {
         let pos = chunk.position;
         let index = self.chunks.index(pos);
 
@@ -267,31 +293,25 @@ impl CPUResources {
         }
 
         let header = GPUVoxelChunkHeader::new(index as u32, pos);
-        GPUVoxelChunk::new_uninit(header, chunk.blocks)
+        CPUVoxelChunk::new_uninit(header, chunk.blocks)
     }
 
     fn prepare_chunk_writes<'a>(&mut self, chunks: impl Iterator<Item = &'a VoxelChunk>) {
         self.chunks_write.clear();
-        self.chunks_write_headers.clear();
         for chunk in chunks {
             let gpu_chunk = self.insert_chunk(chunk);
-            self.chunks_write_headers.push(gpu_chunk.header);
             self.chunks_write.push(gpu_chunk);
         }
 
         for i in 0..self.chunks_write.len() {
-            let header = unsafe { self.chunks_write_headers.get_unchecked(i) };
-            let index = header.index();
-            let adj_blocks = self.adj_blocks_of(header.position());
-            let gpu_chunk = &mut self.chunks_write[i];
+            let cpu_chunk = free_ptr(&mut self.chunks_write[i]);
+            let position = cpu_chunk.header.position();
+            let index = cpu_chunk.header.index();
+            cpu_chunk.adj_content = self.adj_blocks_of(position);
 
-            unsafe {
-                let blocks = std::mem::transmute(gpu_chunk.content);
-                gpu_chunk.adj_content = std::mem::transmute(adj_blocks);
-                let mesh_state = ChunkMeshEntry::new(chunk_mesh_data(&blocks, &adj_blocks), index);
-                let prev = self.chunks.get_index_mut_unchecked(index as usize);
-                prev.value = mesh_state;
-            };
+            let mesh_meta = chunk_mesh_data(&cpu_chunk.content, &cpu_chunk.adj_content);
+            let mesh_state = ChunkMeshEntry::new(mesh_meta, index);
+            unsafe { self.chunks.get_index_mut_unchecked(index as usize).value = mesh_state };
         }
     }
 

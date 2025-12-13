@@ -31,11 +31,12 @@ impl AppRenderer<'_> {
         );
 
         // fixme move to a config and fix arbitrary numbers
-        let near_chunks = (48.0 * 48.0 * 48.0) as usize;
+        let max_visible_chunks = (chunk_render_distance.pow(3) as f32 * 0.86) as usize; // rough estimate
         let cm_config = GpuChunkSessionConfig {
-            max_chunks: near_chunks,
+            max_chunks: (chunk_render_distance * 2).pow(3),
             max_write_count: 1 << 14, // arbitrary
-            max_face_count: (near_chunks as f32 * 0.2f32) as usize * 4096, // rough temp fov + face estimate
+            max_visible_chunks,
+            max_face_count: max_visible_chunks * 4096, // fixme rough optimistic estimate
             max_workgroup_size_1d: MAX_WORKGROUP_DIM_1D,
             max_workgroup_size_2d: MAX_WORKGROUP_DIM_2D,
             max_indirect_count: 1 << 16, // arbitrary

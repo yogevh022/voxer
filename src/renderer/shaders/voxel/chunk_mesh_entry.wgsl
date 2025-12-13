@@ -1,10 +1,14 @@
 const MAX_DIR_FACES_PER_THREAD: u32 = CHUNK_DIM + VOID_OFFSET;
 
 @group(0) @binding(0)
-var<storage, read> chunks_buffer: array<GPUVoxelChunk>;
+var<storage, read> chunks_data_a_buffer: array<GPUVoxelChunkContent>;
 @group(0) @binding(1)
-var<storage, read_write> face_data_buffer: array<GPUVoxelFaceData>;
+var<storage, read> chunks_data_b_buffer: array<GPUVoxelChunkAdjContent>;
 @group(0) @binding(2)
+var<storage, read> chunks_meta_buffer: array<GPUVoxelChunkHeader>;
+@group(0) @binding(3)
+var<storage, read_write> face_data_buffer: array<GPUVoxelFaceData>;
+@group(0) @binding(4)
 var<storage, read> mesh_queue_buffer: array<GPUChunkMeshEntry>;
 
 var<workgroup> wg_face_buffer_write_offsets: array<atomic<u32>, 6>;
@@ -31,15 +35,14 @@ fn mesh_chunks_entry(
         atomicStore(&wg_face_buffer_write_offsets[4], face_offsets[4]);
         atomicStore(&wg_face_buffer_write_offsets[5], face_offsets[5]);
 
-        wg_chunk_content = chunks_buffer[mesh_entry.index].content;
-        wg_chunk_adj_content = chunks_buffer[mesh_entry.index].adj_content;
-        let chunk_header = chunks_buffer[mesh_entry.index].header;
-        let chunk_position = vec3<i32>(
+        wg_chunk_content = chunks_data_a_buffer[mesh_entry.index];
+        wg_chunk_adj_content = chunks_data_b_buffer[mesh_entry.index];
+        let chunk_header = chunks_meta_buffer[mesh_entry.index];
+        wg_chunk_position = vec3<i32>(
             chunk_header.chunk_x,
             chunk_header.chunk_y,
             chunk_header.chunk_z,
         );
-        wg_chunk_position = chunk_position;
     }
     workgroupBarrier();
 

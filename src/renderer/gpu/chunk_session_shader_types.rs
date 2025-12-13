@@ -1,8 +1,8 @@
+use crate::renderer::gpu::vx_gpu_delta_vec::GpuIndexedItem;
+use crate::world::{CHUNK_DIM, CHUNK_DIM_HALF, VoxelChunkAdjBlocks, VoxelChunkBlocks};
 use bytemuck::{Pod, Zeroable};
 use glam::IVec3;
 use voxer_macros::ShaderType;
-use crate::renderer::gpu::vx_gpu_delta_vec::GpuIndexedItem;
-use crate::world::{VoxelChunkBlocks, CHUNK_DIM, CHUNK_DIM_HALF};
 
 type ShaderAtomic<T> = T;
 
@@ -26,7 +26,7 @@ impl GPUPackedIndirectArgsAtomic {
             dispatch,
         }
     }
-    
+
     pub fn as_bytes(&self) -> &[u8] {
         bytemuck::bytes_of(self)
     }
@@ -74,12 +74,7 @@ pub struct GPUChunkMeshEntry {
 }
 
 impl GPUChunkMeshEntry {
-    pub fn new(
-        index: u32,
-        negative_faces: u32,
-        positive_faces: u32,
-        face_alloc: u32,
-    ) -> Self {
+    pub fn new(index: u32, negative_faces: u32, positive_faces: u32, face_alloc: u32) -> Self {
         Self {
             index,
             negative_faces,
@@ -167,24 +162,31 @@ impl GPUVoxelChunkHeader {
 }
 
 #[repr(C, align(4))]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub struct CPUVoxelChunk {
+    // 11,280 bytes total
+    pub header: GPUVoxelChunkHeader,      // 16 bytes
+    pub adj_content: VoxelChunkAdjBlocks, // 3072 bytes
+    pub content: VoxelChunkBlocks,        // 8192 bytes
+}
+
+impl CPUVoxelChunk {
+    pub fn new_uninit(header: GPUVoxelChunkHeader, blocks: VoxelChunkBlocks) -> Self {
+        Self {
+            header,
+            adj_content: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
+            content: blocks,
+        }
+    }
+}
+
+#[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunk {
     // 11,280 bytes total
     pub header: GPUVoxelChunkHeader,          // 16 bytes
     pub adj_content: GPUVoxelChunkAdjContent, // 3072 bytes
     pub content: GPUVoxelChunkContent,        // 8192 bytes
-}
-
-impl GPUVoxelChunk {
-    pub fn new_uninit(header: GPUVoxelChunkHeader, blocks: VoxelChunkBlocks) -> Self {
-        let gpu_content: GPUVoxelChunkContent = unsafe { std::mem::transmute(blocks) };
-        let gpu_adj_content = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
-        Self {
-            header,
-            adj_content: gpu_adj_content,
-            content: gpu_content,
-        }
-    }
 }
 
 #[repr(C, align(4))]
