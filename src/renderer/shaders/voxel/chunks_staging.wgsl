@@ -11,7 +11,7 @@ var<storage, read_write> chunks_meta_buffer: array<GPUVoxelChunkHeader>;
 var<push_constant>  input_length: u32;
 
 @compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_1D)
-fn chunk_write_entry(
+fn chunks_staging_entry(
     @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
 ) {

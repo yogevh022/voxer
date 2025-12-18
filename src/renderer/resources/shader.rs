@@ -94,8 +94,8 @@ include_shaders!(
     VOXEL_CHUNK_MESH_ENTRY => "voxel/chunk_mesh_entry.wgsl",
     VOXEL_CHUNK_MESH_FACES => "voxel/chunk_mesh_faces.wgsl",
     VOXEL_CHUNK_MESH_VAO => "voxel/chunk_mesh_vao.wgsl",
-    VOXEL_CHUNK_WRITE_ENTRY => "voxel/chunk_write.wgsl",
-    VOXEL_CHUNK_VIEW_CANDIDATES_WRITE_ENTRY => "voxel/chunks_view_staging.wgsl",
+    VOXEL_CHUNK_STAGING_ENTRY => "voxel/chunks_staging.wgsl",
+    VOXEL_CHUNK_VIEW_STAGING_ENTRY => "voxel/chunks_view_staging.wgsl",
     VOXEL_CHUNK_CULL_ENTRY => "voxel/chunk_mdi_args.wgsl",
 );
 
@@ -201,12 +201,12 @@ pub fn chunk_mdi_args_wgsl() -> String {
     )
 }
 
-pub fn chunk_write_wgsl() -> String {
+pub fn chunk_staging_wgsl() -> String {
     concat_shaders!(
         &cfg_constants(),
         &voxel_common(),
         F_THREAD_MAPPING,
-        VOXEL_CHUNK_WRITE_ENTRY,
+        VOXEL_CHUNK_STAGING_ENTRY,
     )
 }
 
@@ -215,7 +215,7 @@ pub fn chunks_view_staging_wgsl() -> String {
         &cfg_constants(),
         &voxel_common(),
         F_THREAD_MAPPING,
-        VOXEL_CHUNK_VIEW_CANDIDATES_WRITE_ENTRY,
+        VOXEL_CHUNK_VIEW_STAGING_ENTRY,
     )
 }
 

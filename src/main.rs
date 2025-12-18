@@ -64,6 +64,8 @@ fn debug() {
     let pos = black_box(IVec3::new(100, 100, 100));
     let rad = black_box(128isize);
 
+    dbg!(size_of::<crate::renderer::gpu::GPUVoxelChunkHeader>());
+
     let mut c = 0;
     let mut c2 = 0;
 }

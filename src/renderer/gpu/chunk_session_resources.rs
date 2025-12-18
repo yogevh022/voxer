@@ -331,11 +331,11 @@ impl GpuChunkSessionResources {
     ) -> ComputePipeline {
         let shader = resources::shader::create_shader(
             device,
-            resources::shader::chunk_write_wgsl().into(),
-            "Chunk Write Pipeline Shader",
+            resources::shader::chunk_staging_wgsl().into(),
+            "Chunk Staging Pipeline Shader",
         );
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("Chunk Write Pipeline Layout"),
+            label: Some("Chunk Staging Pipeline Layout"),
             bind_group_layouts,
             push_constant_ranges: &[PushConstantRange {
                 stages: ShaderStages::COMPUTE,
@@ -344,10 +344,10 @@ impl GpuChunkSessionResources {
         });
 
         device.create_compute_pipeline(&ComputePipelineDescriptor {
-            label: Some("Chunk Write Pipeline"),
+            label: Some("Chunk Staging Pipeline"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: Some("chunk_write_entry"),
+            entry_point: Some("chunks_staging_entry"),
             compilation_options: Default::default(),
             cache: None,
         })
