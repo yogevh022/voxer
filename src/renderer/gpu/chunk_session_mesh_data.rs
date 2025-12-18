@@ -1,17 +1,23 @@
-use crate::compute::array::{Array3D, array_and, array_not, array_pop_count_u16, array_xor};
+use crate::compute::array::{array_and, array_not, array_pop_count_u16, array_xor};
 use crate::compute::bytes::bit_at;
-use glam::U16Vec3;
-use std::array;
-use crate::world::{VoxelChunkAdjBlocks, VoxelChunkBlocks, CHUNK_DIM};
 use crate::world::block::VoxelBlock;
+use crate::world::{CHUNK_DIM, VoxelChunkAdjBlocks, VoxelChunkBlocks};
+use glam::UVec3;
+use std::array;
 
 pub const TRANSPARENT_LAYER_BLOCKS: [[VoxelBlock; CHUNK_DIM]; CHUNK_DIM] =
     [[VoxelBlock { value: 0 }; CHUNK_DIM]; CHUNK_DIM];
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct VoxelChunkMeshMeta {
-    pub positive_faces: U16Vec3,
-    pub negative_faces: U16Vec3,
+    pub faces_positive: UVec3,
+    pub faces_negative: UVec3,
+}
+
+impl VoxelChunkMeshMeta {
+    pub fn total_faces(&self) -> u32 {
+        self.faces_positive.element_sum() + self.faces_negative.element_sum()
+    }
 }
 
 pub(crate) fn chunk_mesh_data(
@@ -50,32 +56,32 @@ fn face_count_from_packed(
         prep_adj_z(packed_adj_blocks[Y_OFFSET + i], xa, zb);
 
         let x_face_counts = bi_direction_face_counts(xa, xb);
-        mesh_meta.negative_faces.x += x_face_counts.0 as u16;
-        mesh_meta.positive_faces.x += x_face_counts.1 as u16;
+        mesh_meta.faces_negative.x += x_face_counts.0;
+        mesh_meta.faces_positive.x += x_face_counts.1;
 
         let y_face_counts = bi_direction_face_counts(ya, yb);
-        mesh_meta.negative_faces.y += y_face_counts.0 as u16;
-        mesh_meta.positive_faces.y += y_face_counts.1 as u16;
+        mesh_meta.faces_negative.y += y_face_counts.0;
+        mesh_meta.faces_positive.y += y_face_counts.1;
 
         let z_face_counts = bi_direction_face_counts(xa, zb);
-        mesh_meta.negative_faces.z += z_face_counts.0 as u16;
-        mesh_meta.positive_faces.z += z_face_counts.1 as u16;
+        mesh_meta.faces_negative.z += z_face_counts.0;
+        mesh_meta.faces_positive.z += z_face_counts.1;
     }
     prep_adj_y(&packed_blocks, packed_adj_blocks[LAST_Y], ya, yb, LAST_X);
     prep_adj_z(packed_adj_blocks[LAST_Z], xb, zb);
     let adj_x = into_array_slice(&packed_adj_blocks[0..CHUNK_DIM]);
 
     let x_face_counts = bi_direction_face_counts(xb, adj_x);
-    mesh_meta.negative_faces.x += x_face_counts.0 as u16;
-    mesh_meta.positive_faces.x += x_face_counts.1 as u16;
+    mesh_meta.faces_negative.x += x_face_counts.0;
+    mesh_meta.faces_positive.x += x_face_counts.1;
 
     let y_face_counts = bi_direction_face_counts(ya, yb);
-    mesh_meta.negative_faces.y += y_face_counts.0 as u16;
-    mesh_meta.positive_faces.y += y_face_counts.1 as u16;
+    mesh_meta.faces_negative.y += y_face_counts.0;
+    mesh_meta.faces_positive.y += y_face_counts.1;
 
     let z_face_counts = bi_direction_face_counts(xb, zb);
-    mesh_meta.negative_faces.z += z_face_counts.0 as u16;
-    mesh_meta.positive_faces.z += z_face_counts.1 as u16;
+    mesh_meta.faces_negative.z += z_face_counts.0;
+    mesh_meta.faces_positive.z += z_face_counts.1;
 
     mesh_meta
 }

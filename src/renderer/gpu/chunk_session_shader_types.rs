@@ -1,7 +1,7 @@
 use crate::renderer::gpu::vx_gpu_delta_vec::GpuIndexedItem;
 use crate::world::{CHUNK_DIM, CHUNK_DIM_HALF, VoxelChunkAdjBlocks, VoxelChunkBlocks};
 use bytemuck::{Pod, Zeroable};
-use glam::IVec3;
+use glam::{IVec3, UVec3};
 use voxer_macros::ShaderType;
 
 type ShaderAtomic<T> = T;
@@ -10,7 +10,7 @@ type ShaderAtomic<T> = T;
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUPackedIndirectArgsAtomic {
     draw: ShaderAtomic<u32>,
-    _padding: u32,
+    _padding0: u32, // fixme _cpu_padding
     _padding1: u32,
     _padding2: u32,
     dispatch: GPUDispatchIndirectArgsAtomic,
@@ -20,7 +20,7 @@ impl GPUPackedIndirectArgsAtomic {
     pub fn new(draw: u32, dispatch: GPUDispatchIndirectArgsAtomic) -> Self {
         Self {
             draw,
-            _padding: 0,
+            _padding0: 0,
             _padding1: 0,
             _padding2: 0,
             dispatch,
@@ -59,30 +59,39 @@ pub struct GPUDrawIndirectArgs {
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUChunkMeshEntry {
     pub index: u32,
-    pub negative_faces: u32,
-    // x: 10b,
-    // y: 10b,
-    // z: 10b,
-    // free :1b,
-    // meshing_flag: 1b,
-    pub positive_faces: u32,
-    // x: 10b,
-    // y: 10b,
-    // z: 10b,
-    // free :2b,
     pub face_alloc: u32,
+    // face_alloc: 31b,
+    // meshing_flag: 1b,
 }
 
-impl GPUChunkMeshEntry {
-    pub fn new(index: u32, negative_faces: u32, positive_faces: u32, face_alloc: u32) -> Self {
-        Self {
-            index,
-            negative_faces,
-            positive_faces,
-            face_alloc,
-        }
-    }
-}
+// #[repr(C, align(4))]
+// #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+// pub struct GPUChunkMeshEntry {
+//     pub index: u32,
+//     pub negative_faces: u32,
+//     // x: 10b,
+//     // y: 10b,
+//     // z: 10b,
+//     // free :1b,
+//     // meshing_flag: 1b,
+//     pub positive_faces: u32,
+//     // x: 10b,
+//     // y: 10b,
+//     // z: 10b,
+//     // free :2b,
+//     pub face_alloc: u32,
+// }
+//
+// impl GPUChunkMeshEntry {
+//     pub fn new(index: u32, negative_faces: u32, positive_faces: u32, face_alloc: u32) -> Self {
+//         Self {
+//             index,
+//             negative_faces,
+//             positive_faces,
+//             face_alloc,
+//         }
+//     }
+// }
 
 impl GpuIndexedItem for GPUChunkMeshEntry {
     type WriteEntry = GPUChunkMeshEntryWrite;
@@ -92,14 +101,14 @@ impl GpuIndexedItem for GPUChunkMeshEntry {
     }
 
     fn init(mut self) -> Self {
-        // set meshing flag to true
-        self.negative_faces |= 1 << 31;
+        // meshing flag as true
+        self.face_alloc |= 1 << 31;
         self
     }
 
     fn reused(mut self) -> Self {
-        // set meshing flag to false
-        self.negative_faces &= !(1 << 31);
+        // meshing flag as false
+        self.face_alloc &= !(1 << 31);
         self
     }
 
@@ -131,47 +140,45 @@ pub struct GPUVoxelChunkAdjContent {
     prev_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
 }
 
-#[repr(C, align(4))]
+#[repr(C)] // pad-aligned to 16
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkHeader {
-    index: u32,
-    chunk_x: i32,
-    chunk_y: i32,
-    chunk_z: i32,
+    pub index: u32,
+    _cpu_padding0: [u32; 3],
+    pub faces_positive: UVec3,
+    _cpu_padding1: u32,
+    pub faces_negative: UVec3,
+    _cpu_padding2: u32,
+    pub position: IVec3,
+    _cpu_padding3: u32,
 }
 
 impl GPUVoxelChunkHeader {
-    pub fn new(chunk_index: u32, chunk_position: IVec3) -> Self {
+    pub fn new(index: u32, position: IVec3) -> Self {
         Self {
-            index: chunk_index,
-            chunk_x: chunk_position.x,
-            chunk_y: chunk_position.y,
-            chunk_z: chunk_position.z,
+            index,
+            _cpu_padding0: [0; 3],
+            faces_positive: UVec3::ZERO,
+            _cpu_padding1: 0,
+            faces_negative: UVec3::ZERO,
+            _cpu_padding2: 0,
+            position,
+            _cpu_padding3: 0,
         }
-    }
-
-    #[inline]
-    pub(crate) fn index(&self) -> u32 {
-        self.index
-    }
-
-    #[inline]
-    pub(crate) fn position(&self) -> IVec3 {
-        IVec3::new(self.chunk_x, self.chunk_y, self.chunk_z)
     }
 }
 
 #[repr(C, align(4))]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct CPUVoxelChunk {
-    // 11,280 bytes total
-    pub header: GPUVoxelChunkHeader,      // 16 bytes
+    // 11,328 bytes total
     pub adj_content: VoxelChunkAdjBlocks, // 3072 bytes
     pub content: VoxelChunkBlocks,        // 8192 bytes
+    pub header: GPUVoxelChunkHeader,      // 64 bytes
 }
 
 impl CPUVoxelChunk {
-    pub fn new_uninit(header: GPUVoxelChunkHeader, blocks: VoxelChunkBlocks) -> Self {
+    pub fn new(header: GPUVoxelChunkHeader, blocks: VoxelChunkBlocks) -> Self {
         Self {
             header,
             adj_content: unsafe { std::mem::MaybeUninit::uninit().assume_init() },

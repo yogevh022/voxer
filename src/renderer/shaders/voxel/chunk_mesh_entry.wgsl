@@ -26,8 +26,9 @@ fn mesh_chunks_entry(
 ) {
     if (lid.x + lid.y == 0u) {
         let mesh_entry = mesh_queue_buffer[wid.x];
-        let face_counts = mesh_entry_face_counts(mesh_entry);
-        let face_offsets = mesh_entry_face_offsets(mesh_entry.face_alloc, face_counts);
+        let header = chunks_meta_buffer[mesh_entry.index];
+        let face_counts: array<u32, 6> = mesh_face_counts(header.faces_positive, header.faces_negative);
+        let face_offsets: array<u32, 6> = mesh_entry_face_offsets(mesh_entry.face_alloc, face_counts);
         atomicStore(&wg_face_buffer_write_offsets[0], face_offsets[0]);
         atomicStore(&wg_face_buffer_write_offsets[1], face_offsets[1]);
         atomicStore(&wg_face_buffer_write_offsets[2], face_offsets[2]);
@@ -37,12 +38,7 @@ fn mesh_chunks_entry(
 
         wg_chunk_content = chunks_data_a_buffer[mesh_entry.index];
         wg_chunk_adj_content = chunks_data_b_buffer[mesh_entry.index];
-        let chunk_header = chunks_meta_buffer[mesh_entry.index];
-        wg_chunk_position = vec3<i32>(
-            chunk_header.chunk_x,
-            chunk_header.chunk_y,
-            chunk_header.chunk_z,
-        );
+        wg_chunk_position = header.position;
     }
     workgroupBarrier();
 

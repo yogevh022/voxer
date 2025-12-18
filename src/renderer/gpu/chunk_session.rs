@@ -17,7 +17,7 @@ use crate::renderer::{Renderer, resources};
 use crate::world::block::VoxelBlock;
 use crate::world::chunk::VoxelChunk;
 use crate::world::{CHUNK_DIM, VoxelChunkAdjBlocks};
-use glam::IVec3;
+use glam::{IVec3, UVec3};
 use spatialmap::SpatialMap;
 use suballoc::SubAllocator;
 use wgpu::{
@@ -276,62 +276,71 @@ impl CPUResources {
         }
     }
 
-    fn insert_chunk(&mut self, chunk: &VoxelChunk) -> CPUVoxelChunk {
-        let pos = chunk.position;
-        let index = self.chunks.index(pos);
+    fn prepare_chunk(&mut self, chunk: &VoxelChunk) -> CPUVoxelChunk {
+        let index = self.chunks.index(chunk.position);
 
-        // insert chunk and deallocate pre-existing mesh
-        let blocks_as_adj = chunk.blocks_as_adj();
-        self.chunks_adj.insert_index(index, pos, blocks_as_adj);
-        if let Some(mut prev) = self.chunks.insert_index(index, pos, Default::default()) {
+        // insert edge blocks into adj blocks
+        self.chunks_adj
+            .insert_index(index, chunk.position, chunk.blocks_as_adj());
+
+        // return chunk with uninit adj_content
+        let header = GPUVoxelChunkHeader::new(index as u32, chunk.position);
+        CPUVoxelChunk::new(header, chunk.blocks)
+    }
+
+    fn finalize_chunk(&mut self, cpu_chunk: &mut CPUVoxelChunk) {
+        // set neighbor-dependant metadata
+        let header = &mut cpu_chunk.header;
+        cpu_chunk.adj_content = self.adj_blocks_of(header.position);
+        let mesh_meta = chunk_mesh_data(&cpu_chunk.content, &cpu_chunk.adj_content);
+        header.faces_positive = mesh_meta.faces_positive;
+        header.faces_negative = mesh_meta.faces_negative;
+
+        // insert chunk entry and deallocate pre-existing mesh
+        if let Some(mut prev) = self.chunks.insert_index(
+            header.index as usize,
+            header.position,
+            ChunkMeshEntry::new(*header, mesh_meta.total_faces()),
+        ) {
             self.deallocate_mesh(&mut prev.value);
         }
-
-        // add view entry if on screen
-        if self.view_box.contains_point(pos.as_vec3()) {
-            self.view_delta_add_pos.push(pos);
-        }
-
-        let header = GPUVoxelChunkHeader::new(index as u32, pos);
-        CPUVoxelChunk::new_uninit(header, chunk.blocks)
     }
 
     fn prepare_chunk_writes<'a>(&mut self, chunks: impl Iterator<Item = &'a VoxelChunk>) {
+        // first pass: insert adj blocks, prepare gpu write,
         self.chunks_write.clear();
         for chunk in chunks {
-            let gpu_chunk = self.insert_chunk(chunk);
-            self.chunks_write.push(gpu_chunk);
+            let cpu_chunk = self.prepare_chunk(chunk);
+            self.chunks_write.push(cpu_chunk);
         }
 
+        // second pass: neighbor-dependant metadata, deallocate pre-existing meshes, add to view delta
         for i in 0..self.chunks_write.len() {
             let cpu_chunk = free_ptr(&mut self.chunks_write[i]);
-            let position = cpu_chunk.header.position();
-            let index = cpu_chunk.header.index();
-            cpu_chunk.adj_content = self.adj_blocks_of(position);
+            self.finalize_chunk(cpu_chunk);
 
-            let mesh_meta = chunk_mesh_data(&cpu_chunk.content, &cpu_chunk.adj_content);
-            let mesh_state = ChunkMeshEntry::new(mesh_meta, index);
-            unsafe { self.chunks.get_index_mut_unchecked(index as usize).value = mesh_state };
+            // add to view delta if on screen
+            let position = cpu_chunk.header.position;
+            if self.view_box.contains_point(position.as_vec3()) {
+                self.view_delta_add_pos.push(position);
+            }
         }
     }
 
     fn deallocate_mesh(&mut self, mesh_entry: &mut ChunkMeshEntry) {
-        if let ChunkMeshEntry::GPU(gpu_entry) = mesh_entry {
-            let alloc = gpu_entry.face_alloc;
+        if mesh_entry.is_allocated() {
+            let alloc = mesh_entry.face_alloc.take().unwrap();
             self.mesh_allocator.deallocate(alloc).unwrap();
-            self.view_chunks.remove(gpu_entry.index as usize);
-            *mesh_entry = ChunkMeshEntry::CPU(gpu_entry.as_cpu());
+            self.view_chunks.remove(mesh_entry.index() as usize);
         }
     }
 
     fn allocate_mesh(&mut self, mesh_entry: &mut ChunkMeshEntry) {
-        if let ChunkMeshEntry::CPU(cpu_entry) = mesh_entry {
-            if cpu_entry.face_count != 0 {
-                let alloc = self.mesh_allocator.allocate(cpu_entry.face_count).unwrap();
-                let gpu_entry = cpu_entry.as_gpu(cpu_entry.index, alloc);
-                *mesh_entry = ChunkMeshEntry::GPU(gpu_entry);
-                self.view_chunks.push(gpu_entry);
-            }
+        if !mesh_entry.is_allocated() && !mesh_entry.is_empty() {
+            let faces_count = mesh_entry.faces_count();
+            let alloc = self.mesh_allocator.allocate(faces_count).unwrap();
+            mesh_entry.set_face_alloc(alloc);
+            self.view_chunks.push(mesh_entry.gpu_entry());
         }
     }
 

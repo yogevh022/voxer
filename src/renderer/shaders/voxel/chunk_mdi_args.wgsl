@@ -25,7 +25,7 @@ var<workgroup> wg_indirect_meshing_count: atomic<u32>;
 var<push_constant> input_length: u32;
 
 const SUPER_NEAR: u32 = 2u;
-const SUPER_NEAR_SQ: u32 = SUPER_NEAR * SUPER_NEAR;
+const SUPER_NEAR_SQ: u32 = SUPER_NEAR * SUPER_NEAR; // consider making this hard 3 (remove SUPER_NEAR)
 
 @compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_1D)
 fn write_culled_mdi(
@@ -38,13 +38,15 @@ fn write_culled_mdi(
     let camera_chunk_pos: vec3<i32> = vec3<i32>(floor(camera_pos * INV_CHUNK_DIM));
     let mdi_arg_index: u32 = thread_index_1d(lid.x, wid.x, CFG_MAX_WORKGROUP_DIM_1D);
 
+    // fixme mdi_arg_index can overflow, instead of exists_mask, use if { .. }
     let mesh_entry_ref: ptr<storage, GPUChunkMeshEntry, read_write> = &chunks_view_buffer[mdi_arg_index];
     let consumed_entry = mesh_entry_consume_meshing_flag(*mesh_entry_ref);
     let mesh_entry: GPUChunkMeshEntry = consumed_entry.entry;
+    let meshing_flag: u32 = consumed_entry.flag;
     (*mesh_entry_ref) = mesh_entry;
 
     let header: GPUVoxelChunkHeader = chunks_meta_buffer[mesh_entry.index];
-    let chunk_pos = vec3<i32>(header.chunk_x, header.chunk_y, header.chunk_z);
+    let chunk_pos: vec3<i32> = header.position;
     let chunk_world_pos = vec3<f32>(chunk_pos * i32(CHUNK_DIM));
     let chunk_center_world_pos: vec3<f32> = chunk_world_pos + f32(CHUNK_DIM_HALF);
 
@@ -54,9 +56,9 @@ fn write_culled_mdi(
     let within_view: bool = vx_screenspace_sphere_visible(chunk_center_world_pos, CHUNK_BOUNDING_SPHERE_R);
     let exists_mask: u32 = u32(mdi_arg_index < input_length);
     let draw_mask: u32 = exists_mask * u32(within_culling_dist && (super_nearby || within_view));
-    let mesh_mask: u32 = exists_mask * consumed_entry.flag;
+    let mesh_mask: u32 = exists_mask * meshing_flag;
 
-    push_to_draw_batch(mesh_entry, camera_chunk_pos, chunk_pos, draw_mask);
+    push_to_draw_batch(mesh_entry.face_alloc, header, camera_chunk_pos, draw_mask);
     push_to_meshing_batch(mesh_entry, mesh_mask);
     workgroupBarrier();
 
@@ -77,10 +79,12 @@ fn write_culled_mdi(
     }
 }
 
-fn push_to_draw_batch(mesh_entry: GPUChunkMeshEntry, camera_chunk_pos: vec3<i32>, chunk_pos: vec3<i32>, draw_mask: u32) {
+fn push_to_draw_batch(face_alloc: u32, header: GPUVoxelChunkHeader, camera_chunk_pos: vec3<i32>, draw_mask: u32) {
+    let chunk_pos: vec3<i32> = header.position;
+    let face_counts: array<u32, 6> = mesh_face_counts(header.faces_positive, header.faces_negative);
+    let face_offsets = mesh_entry_face_offsets(face_alloc, face_counts);
+
     let fids_facing_camera = fids_facing_camera(camera_chunk_pos, chunk_pos);
-    let face_counts = mesh_entry_face_counts(mesh_entry);
-    let face_offsets = mesh_entry_face_offsets(mesh_entry.face_alloc, face_counts);
     let packed_xy: u32 = bitcast<u32>((chunk_pos.x & 0xFFFFF) | ((chunk_pos.z & 0xFFF) << 20));
     for (var fid = 0u; fid < 6u; fid++) {
         let draw_args = GPUDrawIndirectArgs(
@@ -89,9 +93,9 @@ fn push_to_draw_batch(mesh_entry: GPUChunkMeshEntry, camera_chunk_pos: vec3<i32>
             face_offsets[fid] * 6u,     // first_vertex
             packed_xy,                  // first_instance
         );
-        let has_faces: bool = face_counts[fid] > 0u;
+        let axis_has_faces: bool = face_counts[fid] > 0u;
         let facing_camera: bool = fids_facing_camera[fid];
-        let draw_fid_mask = draw_mask * u32(has_faces && facing_camera);
+        let draw_fid_mask = draw_mask * u32(axis_has_faces && facing_camera);
         let draw_args_idx = atomicAdd(&wg_indirect_draw_args_count, draw_fid_mask);
         let draw_args_idx_masked = mask_index(draw_args_idx, draw_fid_mask);
         wg_indirect_draw_args[draw_args_idx_masked] = draw_args;

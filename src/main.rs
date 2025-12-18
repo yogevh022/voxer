@@ -15,7 +15,7 @@ use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
 fn run_app() {
-    const SIMULATION_AND_RENDER_DISTANCE: usize = 16;
+    const SIMULATION_AND_RENDER_DISTANCE: usize = 8;
 
     let server_config = ServerWorldConfig {
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
@@ -63,6 +63,8 @@ fn debug() {
 
     let pos = black_box(IVec3::new(100, 100, 100));
     let rad = black_box(128isize);
+
+    dbg!(size_of::<crate::renderer::gpu::GPUVoxelChunkHeader>());
 
     let mut c = 0;
     let mut c2 = 0;
