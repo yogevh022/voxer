@@ -79,8 +79,8 @@ impl<'a> ApplicationHandler for App<'a> {
         let window_desc = WindowDescriptor {
             size: (1280, 720),
             title: "Tech".to_string(),
-            cursor_grab: CursorGrabMode::None,
-            cursor_visible: true,
+            cursor_grab: CursorGrabMode::Locked,
+            cursor_visible: false,
         };
         let window = initialize_window(event_loop, &window_desc).unwrap();
         self.window = Some(window.clone());

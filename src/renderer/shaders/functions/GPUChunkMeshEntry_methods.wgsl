@@ -1,17 +1,5 @@
-//fn mesh_entry_face_counts(mesh_entry: GPUChunkMeshEntry) -> array<u32, 6> {
-//    let px_count = mesh_entry.positive_faces & 0x3FF;
-//    let py_count = (mesh_entry.positive_faces >> 10) & 0x3FF;
-//    let pz_count = (mesh_entry.positive_faces >> 20) & 0x3FF;
-//
-//    let mx_count = mesh_entry.negative_faces & 0x3FF;
-//    let my_count = (mesh_entry.negative_faces >> 10) & 0x3FF;
-//    let mz_count = (mesh_entry.negative_faces >> 20) & 0x3FF;
-//
-//    return array<u32, 6>(px_count, mx_count, py_count, my_count, pz_count, mz_count);
-//}
 
-// fixme where does this belong?
-fn mesh_face_counts(faces_p: vec3<u32>, faces_m: vec3<u32>) -> array<u32, 6> {
+fn mesh_entry_face_counts(faces_p: vec3<u32>, faces_m: vec3<u32>) -> array<u32, 6> {
     return array<u32, 6>(faces_p.x, faces_m.x, faces_p.y, faces_m.y, faces_p.z, faces_m.z);
 }
 

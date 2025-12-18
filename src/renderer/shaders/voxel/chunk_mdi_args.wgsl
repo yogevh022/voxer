@@ -81,7 +81,7 @@ fn write_culled_mdi(
 
 fn push_to_draw_batch(face_alloc: u32, header: GPUVoxelChunkHeader, camera_chunk_pos: vec3<i32>, draw_mask: u32) {
     let chunk_pos: vec3<i32> = header.position;
-    let face_counts: array<u32, 6> = mesh_face_counts(header.faces_positive, header.faces_negative);
+    let face_counts: array<u32, 6> = mesh_entry_face_counts(header.faces_positive, header.faces_negative);
     let face_offsets = mesh_entry_face_offsets(face_alloc, face_counts);
 
     let fids_facing_camera = fids_facing_camera(camera_chunk_pos, chunk_pos);

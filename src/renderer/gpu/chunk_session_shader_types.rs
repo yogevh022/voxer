@@ -10,7 +10,7 @@ type ShaderAtomic<T> = T;
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUPackedIndirectArgsAtomic {
     draw: ShaderAtomic<u32>,
-    _padding0: u32, // fixme _cpu_padding
+    _padding0: u32, // cpu and gpu padding
     _padding1: u32,
     _padding2: u32,
     dispatch: GPUDispatchIndirectArgsAtomic,
@@ -64,35 +64,6 @@ pub struct GPUChunkMeshEntry {
     // meshing_flag: 1b,
 }
 
-// #[repr(C, align(4))]
-// #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
-// pub struct GPUChunkMeshEntry {
-//     pub index: u32,
-//     pub negative_faces: u32,
-//     // x: 10b,
-//     // y: 10b,
-//     // z: 10b,
-//     // free :1b,
-//     // meshing_flag: 1b,
-//     pub positive_faces: u32,
-//     // x: 10b,
-//     // y: 10b,
-//     // z: 10b,
-//     // free :2b,
-//     pub face_alloc: u32,
-// }
-//
-// impl GPUChunkMeshEntry {
-//     pub fn new(index: u32, negative_faces: u32, positive_faces: u32, face_alloc: u32) -> Self {
-//         Self {
-//             index,
-//             negative_faces,
-//             positive_faces,
-//             face_alloc,
-//         }
-//     }
-// }
-
 impl GpuIndexedItem for GPUChunkMeshEntry {
     type WriteEntry = GPUChunkMeshEntryWrite;
 
@@ -140,7 +111,7 @@ pub struct GPUVoxelChunkAdjContent {
     prev_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
 }
 
-#[repr(C)] // pad-aligned to 16
+#[repr(C, align(4))] // pad-aligned to 16
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkHeader {
     pub index: u32,
@@ -172,9 +143,9 @@ impl GPUVoxelChunkHeader {
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct CPUVoxelChunk {
     // 11,328 bytes total
+    pub header: GPUVoxelChunkHeader,      // 64 bytes
     pub adj_content: VoxelChunkAdjBlocks, // 3072 bytes
     pub content: VoxelChunkBlocks,        // 8192 bytes
-    pub header: GPUVoxelChunkHeader,      // 64 bytes
 }
 
 impl CPUVoxelChunk {
@@ -190,8 +161,8 @@ impl CPUVoxelChunk {
 #[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunk {
-    // 11,280 bytes total
-    pub header: GPUVoxelChunkHeader,          // 16 bytes
+    // 11,328 bytes total
+    pub header: GPUVoxelChunkHeader,          // 64 bytes
     pub adj_content: GPUVoxelChunkAdjContent, // 3072 bytes
     pub content: GPUVoxelChunkContent,        // 8192 bytes
 }

@@ -329,7 +329,7 @@ impl CPUResources {
 
     fn deallocate_mesh(&mut self, mesh_entry: &mut ChunkMeshEntry) {
         if mesh_entry.is_allocated() {
-            let alloc = mesh_entry.face_alloc.take().unwrap();
+            let alloc = mesh_entry.take_face_alloc().unwrap();
             self.mesh_allocator.deallocate(alloc).unwrap();
             self.view_chunks.remove(mesh_entry.index() as usize);
         }
