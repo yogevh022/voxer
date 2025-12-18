@@ -1,4 +1,4 @@
-use crate::renderer::gpu::vx_gpu_delta_vec::GpuIndexedItem;
+use crate::renderer::gpu::vx_gpu_sync_vec::GpuIndexedItem;
 use crate::world::{CHUNK_DIM, CHUNK_DIM_HALF, VoxelChunkAdjBlocks, VoxelChunkBlocks};
 use bytemuck::{Pod, Zeroable};
 use glam::{IVec3, UVec3};

@@ -7,7 +7,7 @@ use crate::renderer::gpu::chunk_session_shader_types::{
     GPUChunkMeshEntry, GPUPackedIndirectArgsAtomic, GPUVoxelChunkHeader,
 };
 use crate::renderer::gpu::chunk_session_types::ChunkMeshEntry;
-use crate::renderer::gpu::vx_gpu_delta_vec::VxGpuSyncVec;
+use crate::renderer::gpu::vx_gpu_sync_vec::VxGpuSyncVec;
 use crate::renderer::gpu::{
     CPUVoxelChunk, GPUChunkMeshEntryWrite, GPUDispatchIndirectArgsAtomic, GPUVoxelChunk,
     GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData,
@@ -18,6 +18,7 @@ use crate::world::block::VoxelBlock;
 use crate::world::chunk::VoxelChunk;
 use crate::world::{CHUNK_DIM, VoxelChunkAdjBlocks};
 use glam::{IVec3, UVec3};
+use rustc_hash::FxHashSet;
 use spatialmap::SpatialMap;
 use suballoc::SubAllocator;
 use wgpu::{
@@ -255,7 +256,6 @@ struct CPUResources {
     view_box: AABB,
     view_delta_add_pos: Vec<IVec3>,
     view_delta_add: Vec<AABB>,
-    view_delta_del: Vec<AABB>,
 }
 
 impl CPUResources {
@@ -272,7 +272,6 @@ impl CPUResources {
             view_box: AABB::zero(),
             view_delta_add_pos: Vec::with_capacity(max_view_count_est),
             view_delta_add: Vec::with_capacity(6),
-            view_delta_del: Vec::with_capacity(6),
         }
     }
 
@@ -345,18 +344,14 @@ impl CPUResources {
     }
 
     fn allocate_view_delta(&mut self) {
-        let delta_del = free_ptr(&mut self.view_delta_del);
-        for pos in delta_del.drain(..).flat_map(|db| db.discrete_points()) {
-            if let Some(mesh_entry_cell) = self.chunks.get_exact_mut(pos) {
-                let mesh_entry = free_ptr(mesh_entry_cell);
-                self.deallocate_mesh(&mut mesh_entry.value);
-            }
-        }
         let delta_add = free_ptr(&mut self.view_delta_add);
         for pos in delta_add.drain(..).flat_map(|db| db.discrete_points()) {
-            if let Some(mesh_entry_cell) = self.chunks.get_exact_mut(pos) {
+            if let Some(mesh_entry_cell) = self.chunks.get_mut(pos) {
                 let mesh_entry = free_ptr(mesh_entry_cell);
-                self.allocate_mesh(&mut mesh_entry.value);
+                match mesh_entry.position_eq(pos) {
+                    true => self.allocate_mesh(&mut mesh_entry.value),
+                    false => self.deallocate_mesh(&mut mesh_entry.take().value),
+                }
             }
         }
         for pos in free_ptr(&mut self.view_delta_add_pos).drain(..) {
@@ -369,9 +364,7 @@ impl CPUResources {
 
     fn update_view_delta(&mut self, new_box: AABB) {
         self.view_delta_add.clear();
-        self.view_delta_del.clear();
         new_box.diff_out(self.view_box, &mut self.view_delta_add);
-        self.view_box.diff_out(new_box, &mut self.view_delta_del);
         self.view_box = new_box;
     }
 
@@ -416,7 +409,7 @@ impl GpuChunkSession {
     pub fn set_view_box(&mut self, view_planes: &[Plane; 6]) {
         let mut frustum_aabb = Frustum::aabb(view_planes);
         frustum_aabb.min = (frustum_aabb.min / CHUNK_DIM as f32).floor();
-        frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).ceil();
+        frustum_aabb.max = (frustum_aabb.max / CHUNK_DIM as f32).floor();
         self.cpu.update_view_delta(frustum_aabb);
     }
 

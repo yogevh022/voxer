@@ -2190,8 +2190,8 @@ dependencies = [
 
 [[package]]
 name = "spatialmap"
-version = "0.2.5"
-source = "git+https://github.com/yogevh022/spatialmap#8212e38fe97301500195de78e2a1173c818995f8"
+version = "0.2.6"
+source = "git+https://github.com/yogevh022/spatialmap#ee1d1242d79ae4c29bf047ca56f9c791e2fd9ce4"
 dependencies = [
  "glam",
 ]
