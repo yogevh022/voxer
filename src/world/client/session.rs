@@ -84,77 +84,6 @@ impl<'window> ClientWorldSession<'window> {
                 f(pos);
             }
         }
-
-        // for pos in (&mut self.chunk_interest_positions).take(MAX_CHUNKS_PER_BATCH - 1) {
-        //     if !self.chunks.contains_key(&pos) {
-        //         let throttle_idx = smallhash::u32x3_to_18_bits(pos.to_array());
-        //         if self.chunk_request_throttler.request(throttle_idx as usize) {
-        //             self.chunk_request_batch.push(pos);
-        //         }
-        //     }
-        // }
-
-        // if let Some(pos) = self.chunk_interest_positions.next() {
-        //     if let Some(pos) = pos {
-        //         let throttle_idx = smallhash::u32x3_to_18_bits(pos.to_array());
-        //         if self.chunk_request_throttler.request(throttle_idx as usize) {
-        //             self.chunk_request_batch.push(pos);
-        //         }
-        //     }
-        // } else {
-        //     self.chunk_interest_positions = Sphere::iter_discrete(
-        //         world_to_chunk_pos(self.player.location.position),
-        //         self.render_max as isize - 1,
-        //     );
-        // }
-
-        // let origin_2d = origin.truncate();
-        // Sphere::iter_discrete_circles(radius).flat_map(move |(d, r)| {
-        //     let z = origin.z + d;
-        //     let circle_origin = IVec2::new(origin_2d.x + d, origin_2d.y);
-        //     Circle::iter_discrete(circle_origin, r).map(move |p| IVec3::new(p.0, p.1, z))
-        // })
-        //
-        // for i in (&mut self.chunk_interest_positions).take(MAX_CHUNKS_PER_BATCH) {
-
-        // }
-        // if self.chunk_interest_origin_circles.is_empty() {
-        //     Sphere::circles_on_z(
-        //         world_to_chunk_pos(self.player.location.position),
-        //         self.render_max as isize - 1,
-        //         |p, r| {
-        //             self.chunk_interest_origin_circles.push((p, r));
-        //         },
-        //     );
-        // }
-        // let (origin, origin_rad) = self.chunk_interest_origin_circles.pop().unwrap();
-        // for (x, y) in Circle::iter_discrete(origin.truncate(), origin_rad as i32) {
-        //     let pos = IVec3::new(x as i32, y as i32, origin.z);
-        //     if !self.chunks.contains_key(&origin) {}
-        // }
-        // if self.chunk_nearby_positions.is_empty() {
-        //     let (pos, rad) = self.chunk_interest_origin_circles.pop().unwrap();
-        //     Circle::discrete_points(pos.truncate(), rad, |x, y| {
-        //         let ch_pos = IVec3::new(x as i32, y as i32, pos.z);
-        //         if !self.chunks.contains_key(&ch_pos) {
-        //             self.chunk_nearby_positions
-        //                 .push(IVec3::new(x as i32, y as i32, pos.z));
-        //         }
-        //     });
-        //     return;
-        // }
-        // self.chunk_request_batch.clear();
-        // self.chunk_request_throttler.set_now(Instant::now());
-        // let position_range = self
-        //     .chunk_nearby_positions
-        //     .len()
-        //     .saturating_sub(MAX_CHUNKS_PER_BATCH)..;
-        // for ch_pos in self.chunk_nearby_positions.drain(position_range) {
-        //     let throttle_idx = smallhash::u32x3_to_18_bits(ch_pos.to_array());
-        //     if self.chunk_request_throttler.request(throttle_idx as usize) {
-        //         self.chunk_request_batch.push(ch_pos);
-        //     }
-        // }
     }
 
     pub fn tick(&mut self, encoder: &mut CommandEncoder, camera_origin: IVec3) {
@@ -169,7 +98,7 @@ impl<'window> ClientWorldSession<'window> {
 
         self.app_renderer
             .chunk_session
-            .set_view_box(&self.view_frustum);
+            .set_view_box(&self.view_frustum, camera_origin);
 
         self.chunk_gc_pass(camera_origin);
 
