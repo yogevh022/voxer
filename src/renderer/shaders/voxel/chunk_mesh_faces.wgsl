@@ -107,38 +107,19 @@ fn write_xyz_faces(
 }
 
 fn meshing_pass_at(x: u32, y: u32) {
-    let px = min(x + 1, CHUNK_DIM - 1);
-    let py = min(y + 1, CHUNK_DIM - 1);
-    let mx = max(x, 1) - 1;
-    let my = max(y, 1) - 1;
     var neighbors: array<array<array<u32, 3>, 3>, 3>;
-
-    var first_voxel = vec2<bool>(x == 0, y == 0);
-    var last_voxel = vec2<bool>(x == CHUNK_DIM - 1, y == CHUNK_DIM - 1);
     var face_position = vec3<u32>(x, y, 0);
     var this_voxel: u32;
 
-    // xy at (z != first/last)
-    for (var z: u32 = 1u; z < CHUNK_DIM - 1; z++) {
+    for (var z: u32 = 0u; z < CHUNK_DIM; z++) {
         face_position.z = z;
-        let mz = z - 1;
-        let pz = z + 1;
-        neighbors = voxel_neighbors_safe_z(first_voxel, last_voxel, mx, x, px, my, y, py, mz, z, pz);
-        this_voxel = get_u16(wg_chunk_content.blocks[x][y][z / 2], z % 2);
+        let offs_x = x + 1;
+        let offs_y = y + 1;
+        let offs_z = z + 2;
+        voxel_neighbors(&neighbors, offs_x, offs_y, offs_z);
+        this_voxel = get_u16(wg_chunk_content.blocks[offs_x][offs_y][offs_z / 2], offs_z % 2);
         write_xyz_faces(this_voxel, &neighbors, face_position);
     }
-
-    // xy at first z
-    face_position.z = 0;
-    neighbors = voxel_neighbors_first_z(first_voxel, last_voxel, mx, x, px, my, y, py);
-    this_voxel = get_u16(wg_chunk_content.blocks[x][y][0], 0);
-    write_xyz_faces(this_voxel, &neighbors, face_position);
-
-    // xy at last z
-    face_position.z = CHUNK_DIM - 1;
-    neighbors = voxel_neighbors_last_z(first_voxel, last_voxel, mx, x, px, my, y, py);
-    this_voxel = get_u16(wg_chunk_content.blocks[x][y][CHUNK_DIM_HALF - 1], 1);
-    write_xyz_faces(this_voxel, &neighbors, face_position);
 
     for (var fid = 0u; fid < 6u; fid++) {
         let offset: u32 = atomicAdd(&wg_face_buffer_write_offsets[fid], pr_face_counts[fid]);
@@ -146,62 +127,6 @@ fn meshing_pass_at(x: u32, y: u32) {
             face_data_buffer[offset + i] = pr_face_data[fid][VOID_OFFSET + i];
         }
     }
-}
-
-fn px_safe(adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(
-        wg_chunk_content.blocks[safe_x][safe_y][half_z],
-        wg_chunk_adj_content.next_blocks[0u][safe_y][half_z],
-        adj,
-    );
-}
-
-fn mx_safe(adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(
-        wg_chunk_content.blocks[safe_x][safe_y][half_z],
-        wg_chunk_adj_content.prev_blocks[0u][safe_y][half_z],
-        adj,
-    );
-}
-
-fn py_safe(adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(
-        wg_chunk_content.blocks[safe_x][safe_y][half_z],
-        wg_chunk_adj_content.next_blocks[1u][safe_x][half_z],
-        adj,
-    );
-}
-
-fn my_safe(adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(
-        wg_chunk_content.blocks[safe_x][safe_y][half_z],
-        wg_chunk_adj_content.prev_blocks[1u][safe_x][half_z],
-        adj,
-    );
-}
-
-fn pz_safe(safe_x: u32, safe_y: u32) -> u32 {
-    return get_u16(wg_chunk_adj_content.next_blocks[2u][safe_x][safe_y / 2u], safe_y % 2);
-}
-
-fn mz_safe(safe_x: u32, safe_y: u32) -> u32 {
-    return get_u16(wg_chunk_adj_content.prev_blocks[2u][safe_x][safe_y / 2u], safe_y % 2);
-}
-
-fn pxpy_safe(x_adj: bool, y_adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(py_safe(y_adj, safe_x, safe_y, half_z), px_safe(x_adj, safe_x, safe_y, half_z), x_adj);
-}
-
-fn pxmy_safe(x_adj: bool, y_adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(my_safe(y_adj, safe_x, safe_y, half_z), px_safe(x_adj, safe_x, safe_y, half_z), x_adj);
-}
-
-fn mxpy_safe(x_adj: bool, y_adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(py_safe(y_adj, safe_x, safe_y, half_z), mx_safe(x_adj, safe_x, safe_y, half_z), x_adj);
-}
-
-fn mxmy_safe(x_adj: bool, y_adj: bool, safe_x: u32, safe_y: u32, half_z: u32) -> u32 {
-    return select(my_safe(y_adj, safe_x, safe_y, half_z), mx_safe(x_adj, safe_x, safe_y, half_z), x_adj);
 }
 
 fn opaque_bit(voxel: u32) -> u32 {
@@ -212,155 +137,58 @@ fn opaque_bit_of_packed(voxel: u32, packed_bit_pos: u32) -> u32 {
     return opaque_bit(get_u16(voxel, packed_bit_pos));
 }
 
-fn voxel_neighbors_safe_z(
-    first_voxel: vec2<bool>,
-    last_voxel: vec2<bool>,
-    mx: u32,
+fn voxel_neighbors(
+    neighbors_out: ptr<function, array<array<array<u32, 3>, 3>, 3>>,
     x: u32,
-    px: u32,
-    my: u32,
     y: u32,
-    py: u32,
-    mz: u32,
     z: u32,
-    pz: u32,
-) -> array<array<array<u32, 3>, 3>, 3> {
+) {
+    let xm = x - 1;
+    let ym = y - 1;
+    let zm = z - 1;
+    let xp = x + 1;
+    let yp = y + 1;
+    let zp = z + 1;
+
     let half_z = z / 2;
-    let half_z_bit_pos = z % 2;
-    let mhalf_z = mz / 2;
-    let mhalf_z_bit_pos = mz % 2;
-    let phalf_z = pz / 2;
-    let phalf_z_bit_pos = pz % 2;
-    var neighbors: array<array<array<u32, 3>, 3>, 3>;
+    let half_zm = zm / 2;
+    let half_zp = zp / 2;
+    let z_bits_pos = z & 1;
+    let z_alt_bits_pos = zm & 1;
 
-    neighbors[0][0][0] = opaque_bit_of_packed(mxmy_safe(first_voxel.x, first_voxel.y, mx, my, mhalf_z), mhalf_z_bit_pos);
-    neighbors[0][0][1] = opaque_bit_of_packed(mxmy_safe(first_voxel.x, first_voxel.y, mx, my, half_z), half_z_bit_pos);
-    neighbors[0][0][2] = opaque_bit_of_packed(mxmy_safe(first_voxel.x, first_voxel.y, mx, my, phalf_z), phalf_z_bit_pos);
-    neighbors[0][1][0] = opaque_bit_of_packed(mx_safe(first_voxel.x, mx, y, mhalf_z), mhalf_z_bit_pos);
-    neighbors[0][1][1] = opaque_bit_of_packed(mx_safe(first_voxel.x, mx, y, half_z), half_z_bit_pos);
-    neighbors[0][1][2] = opaque_bit_of_packed(mx_safe(first_voxel.x, mx, y, phalf_z), phalf_z_bit_pos);
-    neighbors[0][2][0] = opaque_bit_of_packed(mxpy_safe(first_voxel.x, last_voxel.y, mx, py, mhalf_z), mhalf_z_bit_pos);
-    neighbors[0][2][1] = opaque_bit_of_packed(mxpy_safe(first_voxel.x, last_voxel.y, mx, py, half_z), half_z_bit_pos);
-    neighbors[0][2][2] = opaque_bit_of_packed(mxpy_safe(first_voxel.x, last_voxel.y, mx, py, phalf_z), phalf_z_bit_pos);
+    (*neighbors_out)[0][0][0] = opaque_bit_of_packed(wg_chunk_content.blocks[xm][ym][half_zm], z_alt_bits_pos);
+    (*neighbors_out)[0][0][1] = opaque_bit_of_packed(wg_chunk_content.blocks[xm][ym][half_z], z_bits_pos);
+    (*neighbors_out)[0][0][2] = opaque_bit_of_packed(wg_chunk_content.blocks[xm][ym][half_zp], z_alt_bits_pos);
 
-    neighbors[1][0][0] = opaque_bit_of_packed(my_safe(first_voxel.y, x, my, mhalf_z), mhalf_z_bit_pos);
-    neighbors[1][0][1] = opaque_bit_of_packed(my_safe(first_voxel.y, x, my, half_z), half_z_bit_pos);
-    neighbors[1][0][2] = opaque_bit_of_packed(my_safe(first_voxel.y, x, my, phalf_z), phalf_z_bit_pos);
-    neighbors[1][1][0] = opaque_bit_of_packed(wg_chunk_content.blocks[x][y][mhalf_z], mhalf_z_bit_pos);
-    neighbors[1][1][1] = opaque_bit_of_packed(wg_chunk_content.blocks[x][y][half_z], half_z_bit_pos);
-    neighbors[1][1][2] = opaque_bit_of_packed(wg_chunk_content.blocks[x][y][phalf_z], phalf_z_bit_pos);
-    neighbors[1][2][0] = opaque_bit_of_packed(py_safe(last_voxel.y, x, py, mhalf_z), mhalf_z_bit_pos);
-    neighbors[1][2][1] = opaque_bit_of_packed(py_safe(last_voxel.y, x, py, half_z), half_z_bit_pos);
-    neighbors[1][2][2] = opaque_bit_of_packed(py_safe(last_voxel.y, x, py, phalf_z), phalf_z_bit_pos);
+    (*neighbors_out)[0][1][0] = opaque_bit_of_packed(wg_chunk_content.blocks[xm][y][half_zm], z_alt_bits_pos);
+    (*neighbors_out)[0][1][1] = opaque_bit_of_packed(wg_chunk_content.blocks[xm][y][half_z], z_bits_pos);
+    (*neighbors_out)[0][1][2] = opaque_bit_of_packed(wg_chunk_content.blocks[xm][y][half_zp], z_alt_bits_pos);
 
-    neighbors[2][0][0] = opaque_bit_of_packed(pxmy_safe(last_voxel.x, first_voxel.y, px, my, mhalf_z), mhalf_z_bit_pos);
-    neighbors[2][0][1] = opaque_bit_of_packed(pxmy_safe(last_voxel.x, first_voxel.y, px, my, half_z), half_z_bit_pos);
-    neighbors[2][0][2] = opaque_bit_of_packed(pxmy_safe(last_voxel.x, first_voxel.y, px, my, phalf_z), phalf_z_bit_pos);
-    neighbors[2][1][0] = opaque_bit_of_packed(px_safe(last_voxel.x, px, y, mhalf_z), mhalf_z_bit_pos);
-    neighbors[2][1][1] = opaque_bit_of_packed(px_safe(last_voxel.x, px, y, half_z), half_z_bit_pos);
-    neighbors[2][1][2] = opaque_bit_of_packed(px_safe(last_voxel.x, px, y, phalf_z), phalf_z_bit_pos);
-    neighbors[2][2][0] = opaque_bit_of_packed(pxpy_safe(last_voxel.x, last_voxel.y, px, py, mhalf_z), mhalf_z_bit_pos);
-    neighbors[2][2][1] = opaque_bit_of_packed(pxpy_safe(last_voxel.x, last_voxel.y, px, py, half_z), half_z_bit_pos);
-    neighbors[2][2][2] = opaque_bit_of_packed(pxpy_safe(last_voxel.x, last_voxel.y, px, py, phalf_z), phalf_z_bit_pos);
+    (*neighbors_out)[0][2][0] = opaque_bit_of_packed(wg_chunk_content.blocks[xm][yp][half_zm], z_alt_bits_pos);
+    (*neighbors_out)[0][2][1] = opaque_bit_of_packed(wg_chunk_content.blocks[xm][yp][half_z], z_bits_pos);
+    (*neighbors_out)[0][2][2] = opaque_bit_of_packed(wg_chunk_content.blocks[xm][yp][half_zp], z_alt_bits_pos);
 
-    return neighbors;
-}
+    (*neighbors_out)[1][0][0] = opaque_bit_of_packed(wg_chunk_content.blocks[x][ym][half_zm], z_alt_bits_pos);
+    (*neighbors_out)[1][0][1] = opaque_bit_of_packed(wg_chunk_content.blocks[x][ym][half_z], z_bits_pos);
+    (*neighbors_out)[1][0][2] = opaque_bit_of_packed(wg_chunk_content.blocks[x][ym][half_zp], z_alt_bits_pos);
 
-fn voxel_neighbors_first_z(
-    first_voxel: vec2<bool>,
-    last_voxel: vec2<bool>,
-    mx: u32,
-    x: u32,
-    px: u32,
-    my: u32,
-    y: u32,
-    py: u32,
-) -> array<array<array<u32, 3>, 3>, 3> {
-    let half_z = 0u;
-    let half_z_bit_pos = 0u;
-    let phalf_z = 0u;
-    let phalf_z_bit_pos = 1u;
-    var neighbors: array<array<array<u32, 3>, 3>, 3>;
+    (*neighbors_out)[1][1][0] = opaque_bit_of_packed(wg_chunk_content.blocks[x][y][half_zm], z_alt_bits_pos);
+    (*neighbors_out)[1][1][1] = opaque_bit_of_packed(wg_chunk_content.blocks[x][y][half_z], z_bits_pos);
+    (*neighbors_out)[1][1][2] = opaque_bit_of_packed(wg_chunk_content.blocks[x][y][half_zp], z_alt_bits_pos);
 
-    neighbors[0][0][0] = opaque_bit(mz_safe(mx, my));
-    neighbors[0][0][1] = opaque_bit_of_packed(mxmy_safe(first_voxel.x, first_voxel.y, mx, my, half_z), half_z_bit_pos);
-    neighbors[0][0][2] = opaque_bit_of_packed(mxmy_safe(first_voxel.x, first_voxel.y, mx, my, phalf_z), phalf_z_bit_pos);
-    neighbors[0][1][0] = opaque_bit(mz_safe(mx, y));
-    neighbors[0][1][1] = opaque_bit_of_packed(mx_safe(first_voxel.x, mx, y, half_z), half_z_bit_pos);
-    neighbors[0][1][2] = opaque_bit_of_packed(mx_safe(first_voxel.x, mx, y, phalf_z), phalf_z_bit_pos);
-    neighbors[0][2][0] = opaque_bit(mz_safe(mx, py));
-    neighbors[0][2][1] = opaque_bit_of_packed(mxpy_safe(first_voxel.x, last_voxel.y, mx, py, half_z), half_z_bit_pos);
-    neighbors[0][2][2] = opaque_bit_of_packed(mxpy_safe(first_voxel.x, last_voxel.y, mx, py, phalf_z), phalf_z_bit_pos);
+    (*neighbors_out)[1][2][0] = opaque_bit_of_packed(wg_chunk_content.blocks[x][yp][half_zm], z_alt_bits_pos);
+    (*neighbors_out)[1][2][1] = opaque_bit_of_packed(wg_chunk_content.blocks[x][yp][half_z], z_bits_pos);
+    (*neighbors_out)[1][2][2] = opaque_bit_of_packed(wg_chunk_content.blocks[x][yp][half_zp], z_alt_bits_pos);
 
-    neighbors[1][0][0] = opaque_bit(mz_safe(x, my));
-    neighbors[1][0][1] = opaque_bit_of_packed(my_safe(first_voxel.y, x, my, half_z), half_z_bit_pos);
-    neighbors[1][0][2] = opaque_bit_of_packed(my_safe(first_voxel.y, x, my, phalf_z), phalf_z_bit_pos);
-    neighbors[1][1][0] = opaque_bit(mz_safe(x, y));
-    neighbors[1][1][1] = opaque_bit_of_packed(wg_chunk_content.blocks[x][y][half_z], half_z_bit_pos);
-    neighbors[1][1][2] = opaque_bit_of_packed(wg_chunk_content.blocks[x][y][phalf_z], phalf_z_bit_pos);
-    neighbors[1][2][0] = opaque_bit(mz_safe(x, py));
-    neighbors[1][2][1] = opaque_bit_of_packed(py_safe(last_voxel.y, x, py, half_z), half_z_bit_pos);
-    neighbors[1][2][2] = opaque_bit_of_packed(py_safe(last_voxel.y, x, py, phalf_z), phalf_z_bit_pos);
+    (*neighbors_out)[2][0][0] = opaque_bit_of_packed(wg_chunk_content.blocks[xp][ym][half_zm], z_alt_bits_pos);
+    (*neighbors_out)[2][0][1] = opaque_bit_of_packed(wg_chunk_content.blocks[xp][ym][half_z], z_bits_pos);
+    (*neighbors_out)[2][0][2] = opaque_bit_of_packed(wg_chunk_content.blocks[xp][ym][half_zp], z_alt_bits_pos);
 
-    neighbors[2][0][0] = opaque_bit(mz_safe(px, my));
-    neighbors[2][0][1] = opaque_bit_of_packed(pxmy_safe(last_voxel.x, first_voxel.y, px, my, half_z), half_z_bit_pos);
-    neighbors[2][0][2] = opaque_bit_of_packed(pxmy_safe(last_voxel.x, first_voxel.y, px, my, phalf_z), phalf_z_bit_pos);
-    neighbors[2][1][0] = opaque_bit(mz_safe(px, y));
-    neighbors[2][1][1] = opaque_bit_of_packed(px_safe(last_voxel.x, px, y, half_z), half_z_bit_pos);
-    neighbors[2][1][2] = opaque_bit_of_packed(px_safe(last_voxel.x, px, y, phalf_z), phalf_z_bit_pos);
-    neighbors[2][2][0] = opaque_bit(mz_safe(px, py));
-    neighbors[2][2][1] = opaque_bit_of_packed(pxpy_safe(last_voxel.x, last_voxel.y, px, py, half_z), half_z_bit_pos);
-    neighbors[2][2][2] = opaque_bit_of_packed(pxpy_safe(last_voxel.x, last_voxel.y, px, py, phalf_z), phalf_z_bit_pos);
+    (*neighbors_out)[2][1][0] = opaque_bit_of_packed(wg_chunk_content.blocks[xp][y][half_zm], z_alt_bits_pos);
+    (*neighbors_out)[2][1][1] = opaque_bit_of_packed(wg_chunk_content.blocks[xp][y][half_z], z_bits_pos);
+    (*neighbors_out)[2][1][2] = opaque_bit_of_packed(wg_chunk_content.blocks[xp][y][half_zp], z_alt_bits_pos);
 
-    return neighbors;
-}
-
-fn voxel_neighbors_last_z(
-    first_voxel: vec2<bool>,
-    last_voxel: vec2<bool>,
-    mx: u32,
-    x: u32,
-    px: u32,
-    my: u32,
-    y: u32,
-    py: u32,
-) -> array<array<array<u32, 3>, 3>, 3> {
-    let z = CHUNK_DIM - 1;
-    let half_z = CHUNK_DIM_HALF - 1;
-    let half_z_bit_pos = 1u;
-    let mhalf_z = CHUNK_DIM_HALF - 1;
-    let mhalf_z_bit_pos = 0u;
-    var neighbors: array<array<array<u32, 3>, 3>, 3>;
-
-    neighbors[0][0][0] = opaque_bit_of_packed(mxmy_safe(first_voxel.x, first_voxel.y, mx, my, mhalf_z), mhalf_z_bit_pos);
-    neighbors[0][0][1] = opaque_bit_of_packed(mxmy_safe(first_voxel.x, first_voxel.y, mx, my, half_z), half_z_bit_pos);
-    neighbors[0][0][2] = opaque_bit(pz_safe(mx, my));
-    neighbors[0][1][0] = opaque_bit_of_packed(mx_safe(first_voxel.x, mx, y, mhalf_z), mhalf_z_bit_pos);
-    neighbors[0][1][1] = opaque_bit_of_packed(mx_safe(first_voxel.x, mx, y, half_z), half_z_bit_pos);
-    neighbors[0][1][2] = opaque_bit(pz_safe(mx, y));
-    neighbors[0][2][0] = opaque_bit_of_packed(mxpy_safe(first_voxel.x, last_voxel.y, mx, py, mhalf_z), mhalf_z_bit_pos);
-    neighbors[0][2][1] = opaque_bit_of_packed(mxpy_safe(first_voxel.x, last_voxel.y, mx, py, half_z), half_z_bit_pos);
-    neighbors[0][2][2] = opaque_bit(pz_safe(mx, py));
-
-    neighbors[1][0][0] = opaque_bit_of_packed(my_safe(first_voxel.y, x, my, mhalf_z), mhalf_z_bit_pos);
-    neighbors[1][0][1] = opaque_bit_of_packed(my_safe(first_voxel.y, x, my, half_z), half_z_bit_pos);
-    neighbors[1][0][2] = opaque_bit(pz_safe(x, my));
-    neighbors[1][1][0] = opaque_bit_of_packed(wg_chunk_content.blocks[x][y][mhalf_z], mhalf_z_bit_pos);
-    neighbors[1][1][1] = opaque_bit_of_packed(wg_chunk_content.blocks[x][y][half_z], half_z_bit_pos);
-    neighbors[1][1][2] = opaque_bit(pz_safe(x, y));
-    neighbors[1][2][0] = opaque_bit_of_packed(py_safe(last_voxel.y, x, py, mhalf_z), mhalf_z_bit_pos);
-    neighbors[1][2][1] = opaque_bit_of_packed(py_safe(last_voxel.y, x, py, half_z), half_z_bit_pos);
-    neighbors[1][2][2] = opaque_bit(pz_safe(x, py));
-
-    neighbors[2][0][0] = opaque_bit_of_packed(pxmy_safe(last_voxel.x, first_voxel.y, px, my, mhalf_z), mhalf_z_bit_pos);
-    neighbors[2][0][1] = opaque_bit_of_packed(pxmy_safe(last_voxel.x, first_voxel.y, px, my, half_z), half_z_bit_pos);
-    neighbors[2][0][2] = opaque_bit(pz_safe(px, my));
-    neighbors[2][1][0] = opaque_bit_of_packed(px_safe(last_voxel.x, px, y, mhalf_z), mhalf_z_bit_pos);
-    neighbors[2][1][1] = opaque_bit_of_packed(px_safe(last_voxel.x, px, y, half_z), half_z_bit_pos);
-    neighbors[2][1][2] = opaque_bit(pz_safe(px, y));
-    neighbors[2][2][0] = opaque_bit_of_packed(pxpy_safe(last_voxel.x, last_voxel.y, px, py, mhalf_z), mhalf_z_bit_pos);
-    neighbors[2][2][1] = opaque_bit_of_packed(pxpy_safe(last_voxel.x, last_voxel.y, px, py, half_z), half_z_bit_pos);
-    neighbors[2][2][2] = opaque_bit(pz_safe(px, py));
-
-    return neighbors;
+    (*neighbors_out)[2][2][0] = opaque_bit_of_packed(wg_chunk_content.blocks[xp][yp][half_zm], z_alt_bits_pos);
+    (*neighbors_out)[2][2][1] = opaque_bit_of_packed(wg_chunk_content.blocks[xp][yp][half_z], z_bits_pos);
+    (*neighbors_out)[2][2][2] = opaque_bit_of_packed(wg_chunk_content.blocks[xp][yp][half_zp], z_alt_bits_pos);
 }

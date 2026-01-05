@@ -106,6 +106,12 @@ pub struct GPUVoxelChunkContent {
 
 #[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
+pub struct GPUVoxelChunkContentWithAdj {
+    blocks: [[[u32; CHUNK_DIM_HALF + 2]; CHUNK_DIM + 2]; CHUNK_DIM + 2],
+}
+
+#[repr(C, align(4))]
+#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkAdjContent {
     next_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
     prev_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
