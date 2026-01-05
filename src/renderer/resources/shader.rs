@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use wgpu::ShaderSource;
 use crate::compute::geo::Plane;
-use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry, GPUVoxelChunkHeader, GPUDispatchIndirectArgsAtomic, GPUPackedIndirectArgsAtomic, GPUChunkMeshEntryWrite};
+use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry, GPUVoxelChunkHeader, GPUDispatchIndirectArgsAtomic, GPUPackedIndirectArgsAtomic, GPUChunkMeshEntryWrite, GPUVoxelChunkContentWithAdj};
 use crate::renderer::gpu::vx_gpu_camera::VxGPUCamera;
 use crate::world::{CHUNK_DIM, CHUNK_DIM_HALF};
 
@@ -175,6 +175,7 @@ pub fn chunk_meshing_wgsl() -> String {
         &cfg_constants(),
         &voxel_common(),
         &globals(),
+        &include_shader_types!(GPUVoxelChunkContentWithAdj),
         VOXEL_CHUNK_MESH_ENTRY,
         VOXEL_CHUNK_MESH_FACES,
         VOXEL_CHUNK_MESH_VAO,
