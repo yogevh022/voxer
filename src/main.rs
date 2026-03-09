@@ -15,7 +15,7 @@ use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
 fn run_app() {
-    const SIMULATION_AND_RENDER_DISTANCE: usize = 24;
+    const SIMULATION_AND_RENDER_DISTANCE: usize = 12;
 
     let server_config = ServerWorldConfig {
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
