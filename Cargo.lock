@@ -2144,11 +2144,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "smallhash"
-version = "0.1.0"
-source = "git+https://github.com/yogevh022/smallhash#979c48cb3ad08f639c2e3e681c76991ce5541bf1"
-
-[[package]]
 name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2448,7 +2443,6 @@ dependencies = [
  "range3d",
  "rayon",
  "rustc-hash 2.1.1",
- "smallhash",
  "spatialmap",
  "suballoc",
  "voxer_macros",

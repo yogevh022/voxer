@@ -1,26 +1,26 @@
-use crate::compute::throttler::{PositionThrottler, Throttler};
+use crate::compute::throttler::{SpatialThrottler, Throttler};
 use crate::world::network::{
     MsgChunkDataRequest, MsgConnectRequest, MsgSetPositionRequest, NetworkHandle, ServerMessage,
 };
-use glam::{IVec3, Vec3};
+use glam::{IVec3, UVec3, Vec3};
 use std::net::SocketAddr;
 use std::time::Instant;
 
 pub struct ClientWorldNetwork {
     network_handle: NetworkHandle,
-    chunk_request_throttler: PositionThrottler,
+    chunk_request_throttler: SpatialThrottler,
     chunk_request_batch: Vec<IVec3>,
     message_buffer: Vec<ServerMessage>,
     server_addr: Option<SocketAddr>,
 }
 
 impl ClientWorldNetwork {
-    pub(crate) fn new(mut network_handle: NetworkHandle) -> Self {
+    pub(crate) fn new(mut network_handle: NetworkHandle, render_distance: u32) -> Self {
         network_handle.listen();
         Self {
             network_handle,
-            chunk_request_throttler: PositionThrottler::new(
-                (1 << 18) + 1,
+            chunk_request_throttler: SpatialThrottler::new(
+                UVec3::splat(render_distance),
                 std::time::Duration::from_millis(200),
             ),
             chunk_request_batch: Vec::new(), // fixme capacity
