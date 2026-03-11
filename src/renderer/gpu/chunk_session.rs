@@ -9,8 +9,8 @@ use crate::renderer::gpu::chunk_session_shader_types::{
 use crate::renderer::gpu::chunk_session_types::ChunkMeshEntry;
 use crate::renderer::gpu::vx_gpu_sync_vec::VxGpuSyncVec;
 use crate::renderer::gpu::{
-    CPUVoxelChunk, GPUChunkMeshEntryWrite, GPUVoxelChunk,
-    GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData,
+    CPUVoxelChunk, GPUChunkMeshEntryWrite, GPUVoxelChunk, GPUVoxelChunkAdjContent,
+    GPUVoxelChunkContent, GPUVoxelFaceData,
 };
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::renderer::{Renderer, resources};
@@ -118,13 +118,11 @@ impl GPUResources {
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
 
-        let indirect_draw_count_buffer = renderer
-            .device
-            .create_vx_buffer::<GPUIndirectArgsAtomic>(
-                "ChunkSession Draw Count Indirect Buffer",
-                1,
-                BufferUsages::INDIRECT | BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            );
+        let indirect_draw_count_buffer = renderer.device.create_vx_buffer::<GPUIndirectArgsAtomic>(
+            "ChunkSession Draw Count Indirect Buffer",
+            1,
+            BufferUsages::INDIRECT | BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        );
 
         let mdi_args_bgl = GpuChunkSessionResources::mdi_args_bgl(
             &renderer.device,
@@ -301,19 +299,16 @@ impl CPUResources {
             header.faces_negative = mesh_meta.faces_negative;
 
             let face_count = mesh_meta.total_faces();
-            let non_empty = face_count != 0;
-            let face_alloc = if non_empty {
+            let mesh_entry = if face_count != 0 {
                 let alloc = self.mesh_allocator.allocate(face_count).unwrap();
                 header.face_alloc = alloc;
-                Some(alloc)
+                if self.view_box.contains_point(position.as_vec3()) {
+                    self.view_delta_add_pos.push(position);
+                }
+                ChunkMeshEntry::new(index as u32, alloc)
             } else {
-                None
+                ChunkMeshEntry::new_empty(index as u32)
             };
-            let mesh_entry = ChunkMeshEntry::new(*header, face_alloc);
-
-            if self.view_box.contains_point(position.as_vec3()) && non_empty {
-                self.view_delta_add_pos.push(position);
-            }
 
             // deallocate pre-existing mesh and remove from view if needed
             if let Some(prev) = self.chunks.insert_index(index, position, mesh_entry) {

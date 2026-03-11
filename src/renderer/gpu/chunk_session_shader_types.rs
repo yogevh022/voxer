@@ -44,8 +44,6 @@ pub struct GPUDrawIndirectArgs {
 pub struct GPUChunkMeshEntry {
     pub index: u32,
     pub face_alloc: u32,
-    // face_alloc: 31b,
-    // meshing_flag: 1b,
 }
 
 impl GpuIndexedItem for GPUChunkMeshEntry {
@@ -55,15 +53,11 @@ impl GpuIndexedItem for GPUChunkMeshEntry {
         self.index as usize
     }
 
-    fn init(mut self) -> Self {
-        // meshing flag as true
-        self.face_alloc |= 1 << 31;
+    fn init(self) -> Self {
         self
     }
 
-    fn reused(mut self) -> Self {
-        // meshing flag as false
-        self.face_alloc &= !(1 << 31);
+    fn reused(self) -> Self {
         self
     }
 
@@ -165,30 +159,50 @@ pub struct GPUVoxelFaceData {
     // world_x + (world_z lower 12b) in instance_index
     word_a: u32,
     // voxel: 16b
-    // top_left_R: 6b
-    // top_left_G: 6b
+    // face_x: 4b
+    // face_y: 4b
+    // face_z: 4b
     // face_id: 3b
     // 1b free
     word_b: u32,
-    // face_y: 4b
-    // top_left_B: 6b
-    // top_left_AO: 2b
-    // top_right_R: 6b
-    // top_right_G: 6b
-    // top_right_B: 6b
-    // top_right_AO: 2b
-    word_c: u32,
-    // face_x: 4b
-    // face_z: 4b
     // chunk_y: 8b
     // chunk_z_upper: 8b
-    // bottom_left_R: 6b
+    // top_left_AO: 2b
+    // top_right_AO: 2b
     // bottom_left_AO: 2b
-    word_d: u32,
-    // bottom_left_G: 6b
-    // bottom_left_B: 6b
-    // bottom_right_R: 6b
-    // bottom_right_G: 6b
-    // bottom_right_B: 6b
     // bottom_right_AO: 2b
 }
+
+// #[repr(C, align(4))]
+// #[derive(ShaderType)]
+// pub struct GPUVoxelFaceData {
+//     // world_x + (world_z lower 12b) in instance_index
+//     word_a: u32,
+//     // voxel: 16b
+//     // top_left_R: 6b
+//     // top_left_G: 6b
+//     // face_id: 3b
+//     // 1b free
+//     word_b: u32,
+//     // face_y: 4b
+//     // top_left_B: 6b
+//     // top_left_AO: 2b
+//     // top_right_R: 6b
+//     // top_right_G: 6b
+//     // top_right_B: 6b
+//     // top_right_AO: 2b
+//     word_c: u32,
+//     // face_x: 4b
+//     // face_z: 4b
+//     // chunk_y: 8b
+//     // chunk_z_upper: 8b
+//     // bottom_left_R: 6b
+//     // bottom_left_AO: 2b
+//     word_d: u32,
+//     // bottom_left_G: 6b
+//     // bottom_left_B: 6b
+//     // bottom_right_R: 6b
+//     // bottom_right_G: 6b
+//     // bottom_right_B: 6b
+//     // bottom_right_AO: 2b
+// }

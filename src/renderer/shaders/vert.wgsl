@@ -21,7 +21,6 @@ fn vs_main(
 
     let face_data = face_data_buffer[face_index];
     let face_voxel = unpack_face_voxel(face_data);
-    let face_lighting = unpack_face_lighting(face_data);
     let face_ao = unpack_face_ao(face_data);
 
     let face_position = vec3<f32>(unpack_face_position(face_data));
