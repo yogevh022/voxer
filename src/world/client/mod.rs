@@ -47,7 +47,7 @@ impl ClientWorld<'_> {
         let temp_server_addr = SocketAddr::from(([127, 0, 0, 1], 3100));
 
         let network_handle = NetworkHandle::bind(socket_addr, MIB * 4);
-        let mut network = ClientWorldNetwork::new(network_handle);
+        let mut network = ClientWorldNetwork::new(network_handle, config.render_distance as u32);
         network.set_server_addr(temp_server_addr); // fixme temp
         Self {
             config,

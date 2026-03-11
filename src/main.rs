@@ -15,7 +15,7 @@ use vtypes::{CameraController, VObject};
 use winit::event_loop::ControlFlow;
 
 fn run_app() {
-    const SIMULATION_AND_RENDER_DISTANCE: usize = 12;
+    const SIMULATION_AND_RENDER_DISTANCE: usize = 24;
 
     let server_config = ServerWorldConfig {
         simulation_distance: SIMULATION_AND_RENDER_DISTANCE,
@@ -56,7 +56,6 @@ fn debug() {
     };
     use glam::{IVec3, Vec3};
     use rustc_hash::{FxHashMap, FxHashSet};
-    use smallhash;
     use std::hint::black_box;
     use std::time::Duration;
     use std::time::Instant;

@@ -1,4 +1,4 @@
-use glam::IVec3;
+use glam::{IVec3, UVec3};
 use std::time::{Duration, Instant};
 
 pub trait Throttler {
@@ -32,9 +32,7 @@ impl Throttler for BaseThrottler {
         debug_assert!(key < self.max_pending);
         let can_request = self.now.duration_since(self.queue[key]) >= self.throttle_duration;
         if can_request {
-            unsafe {
-                *self.queue.get_unchecked_mut(key) = self.now;
-            };
+            self.queue[key] = self.now;
         }
         can_request
     }
@@ -44,25 +42,30 @@ impl Throttler for BaseThrottler {
     }
 }
 
-pub struct PositionThrottler {
+pub struct SpatialThrottler {
     throttler: BaseThrottler,
+    spatial_dim: IVec3,
 }
 
-impl Throttler for PositionThrottler {
-    type Key = IVec3;
-
-    fn new(max_pending: usize, throttle_duration: Duration) -> Self {
+impl SpatialThrottler {
+    pub(crate) fn new(spatial_dim: UVec3, throttle_duration: Duration) -> Self {
+        let max_pending = spatial_dim.element_product() as usize;
         Self {
             throttler: BaseThrottler::new(max_pending, throttle_duration),
+            spatial_dim: spatial_dim.as_ivec3(),
         }
     }
 
-    fn request(&mut self, key: Self::Key) -> bool {
-        let throttle_idx = smallhash::u32x3_to_18_bits(key.to_array());
-        self.throttler.request(throttle_idx as usize)
+    pub(crate) fn request(&mut self, key: IVec3) -> bool {
+        let (dim_x, dim_y, dim_z) = (self.spatial_dim.x, self.spatial_dim.y, self.spatial_dim.z);
+        let x = key.x.rem_euclid(dim_x);
+        let y = key.y.rem_euclid(dim_y);
+        let z = key.z.rem_euclid(dim_z);
+        let index = ((x * dim_y + y) * dim_z + z) as usize;
+        self.throttler.request(index)
     }
 
-    fn set_now(&mut self, now: Instant) {
+    pub(crate) fn set_now(&mut self, now: Instant) {
         self.throttler.set_now(now);
     }
 }
