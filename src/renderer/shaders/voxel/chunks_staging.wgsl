@@ -7,8 +7,10 @@ var<storage, read_write> chunks_data_a_buffer: array<GPUVoxelChunkContent>;
 var<storage, read_write> chunks_data_b_buffer: array<GPUVoxelChunkAdjContent>;
 @group(0) @binding(3)
 var<storage, read_write> chunks_meta_buffer: array<GPUVoxelChunkHeader>;
+@group(0) @binding(4)
+var<storage, read_write> meshing_batch_buffer: array<GPUChunkMeshEntry>;
 
-var<push_constant>  input_length: u32;
+var<push_constant> input_length: u32;
 
 @compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_1D)
 fn chunks_staging_entry(
@@ -19,8 +21,10 @@ fn chunks_staging_entry(
     if (src_index < input_length) {
         let chunk = chunks_staging_buffer[src_index];
         let dst_index = chunk.header.index;
+        let face_alloc = chunk.header.face_alloc;
         chunks_data_a_buffer[dst_index] = chunk.content;
         chunks_data_b_buffer[dst_index] = chunk.adj_content;
         chunks_meta_buffer[dst_index] = chunk.header;
+        meshing_batch_buffer[lid.x] = GPUChunkMeshEntry(dst_index, face_alloc);
     }
 }

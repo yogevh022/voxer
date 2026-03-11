@@ -138,6 +138,7 @@ impl GpuChunkSessionResources {
         dst_data_a_size: BufferSize,
         dst_data_b_size: BufferSize,
         dst_meta_size: BufferSize,
+        mesh_queue_size: BufferSize,
     ) -> BindGroupLayout {
         device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some("Chunk Write Bind Group Layout"),
@@ -182,6 +183,16 @@ impl GpuChunkSessionResources {
                     },
                     count: None,
                 },
+                BindGroupLayoutEntry {
+                    binding: 4, //  mesh queue
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(mesh_queue_size),
+                    },
+                    count: None,
+                },
             ],
         })
     }
@@ -190,7 +201,6 @@ impl GpuChunkSessionResources {
         device: &Device,
         indirect_size: BufferSize,
         packed_indirect_size: BufferSize,
-        meshing_batch_size: BufferSize,
         chunks_meta_size: BufferSize,
         chunks_view_size: BufferSize,
         camera_size: BufferSize,
@@ -219,17 +229,7 @@ impl GpuChunkSessionResources {
                     count: None,
                 },
                 BindGroupLayoutEntry {
-                    binding: 2, // meshing batch
-                    visibility: ShaderStages::COMPUTE,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: Some(meshing_batch_size),
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 3, // chunks meta
+                    binding: 2, // chunks meta
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Storage { read_only: true },
@@ -239,7 +239,7 @@ impl GpuChunkSessionResources {
                     count: None,
                 },
                 BindGroupLayoutEntry {
-                    binding: 4, // chunks in view
+                    binding: 3, // chunks in view
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Storage { read_only: false },
@@ -249,7 +249,7 @@ impl GpuChunkSessionResources {
                     count: None,
                 },
                 BindGroupLayoutEntry {
-                    binding: 5, // depth texture array
+                    binding: 4, // depth texture array
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::StorageTexture {
                         access: StorageTextureAccess::ReadOnly,
@@ -259,7 +259,7 @@ impl GpuChunkSessionResources {
                     count: None,
                 },
                 BindGroupLayoutEntry {
-                    binding: 6, // camera
+                    binding: 5, // camera
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,

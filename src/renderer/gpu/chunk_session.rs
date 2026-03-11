@@ -4,12 +4,12 @@ use crate::compute::utils::free_ptr;
 use crate::renderer::gpu::chunk_session_mesh_data::{TRANSPARENT_LAYER_BLOCKS, chunk_mesh_data};
 use crate::renderer::gpu::chunk_session_resources::GpuChunkSessionResources;
 use crate::renderer::gpu::chunk_session_shader_types::{
-    GPUChunkMeshEntry, GPUPackedIndirectArgsAtomic, GPUVoxelChunkHeader,
+    GPUChunkMeshEntry, GPUIndirectArgsAtomic, GPUVoxelChunkHeader,
 };
 use crate::renderer::gpu::chunk_session_types::ChunkMeshEntry;
 use crate::renderer::gpu::vx_gpu_sync_vec::VxGpuSyncVec;
 use crate::renderer::gpu::{
-    CPUVoxelChunk, GPUChunkMeshEntryWrite, GPUDispatchIndirectArgsAtomic, GPUVoxelChunk,
+    CPUVoxelChunk, GPUChunkMeshEntryWrite, GPUVoxelChunk,
     GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData,
 };
 use crate::renderer::resources::vx_buffer::VxBuffer;
@@ -18,9 +18,7 @@ use crate::world::block::VoxelBlock;
 use crate::world::chunk::VoxelChunk;
 use crate::world::{CHUNK_DIM, VoxelChunkAdjBlocks};
 use glam::{IVec3, UVec3};
-use rustc_hash::FxHashSet;
 use spatialmap::SpatialMap;
-use std::io::Write;
 use suballoc::SubAllocator;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupLayout, BindingResource, BufferUsages, ComputePass,
@@ -48,7 +46,7 @@ struct GPUResources {
     chunks_write_buffer: VxBuffer,
     meshing_buffer: VxBuffer,
     voxel_face_buffer: VxBuffer,
-    packed_indirect_buffer: VxBuffer,
+    indirect_draw_count_buffer: VxBuffer,
 
     mdi_args_pipeline: ComputePipeline,
     mdi_args_bind_group: BindGroup,
@@ -120,10 +118,10 @@ impl GPUResources {
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
 
-        let packed_indirect_buffer = renderer
+        let indirect_draw_count_buffer = renderer
             .device
-            .create_vx_buffer::<GPUPackedIndirectArgsAtomic>(
-                "ChunkSession Draw Count And Dispatch Indirect Buffer",
+            .create_vx_buffer::<GPUIndirectArgsAtomic>(
+                "ChunkSession Draw Count Indirect Buffer",
                 1,
                 BufferUsages::INDIRECT | BufferUsages::STORAGE | BufferUsages::COPY_DST,
             );
@@ -131,8 +129,7 @@ impl GPUResources {
         let mdi_args_bgl = GpuChunkSessionResources::mdi_args_bgl(
             &renderer.device,
             renderer.indirect_buffer.buffer_size,
-            packed_indirect_buffer.buffer_size,
-            chunk_mesh_batch_buffer.buffer_size,
+            indirect_draw_count_buffer.buffer_size,
             chunks_meta_buffer.buffer_size,
             chunk_view_buffer.buffer_size,
             camera_buffer.buffer_size,
@@ -144,8 +141,7 @@ impl GPUResources {
             layout: &mdi_args_bgl,
             entries: &resources::utils::bind_entries([
                 renderer.indirect_buffer.as_entire_binding(),
-                packed_indirect_buffer.as_entire_binding(),
-                chunk_mesh_batch_buffer.as_entire_binding(),
+                indirect_draw_count_buffer.as_entire_binding(),
                 chunks_meta_buffer.as_entire_binding(),
                 chunk_view_buffer.as_entire_binding(),
                 BindingResource::TextureView(&renderer.depth.mip_texture_array_view),
@@ -159,6 +155,7 @@ impl GPUResources {
             chunks_data_a_buffer.buffer_size,
             chunks_data_b_buffer.buffer_size,
             chunks_meta_buffer.buffer_size,
+            chunk_mesh_batch_buffer.buffer_size,
         );
         let chunk_write_pipeline = GpuChunkSessionResources::chunks_staging_pipeline(
             &renderer.device,
@@ -172,6 +169,7 @@ impl GPUResources {
                 chunks_data_a_buffer.as_entire_binding(),
                 chunks_data_b_buffer.as_entire_binding(),
                 chunks_meta_buffer.as_entire_binding(),
+                chunk_mesh_batch_buffer.as_entire_binding(),
             ]),
         });
 
@@ -231,7 +229,7 @@ impl GPUResources {
             chunks_write_buffer: chunks_staging_buffer,
             meshing_buffer: chunk_mesh_batch_buffer,
             voxel_face_buffer,
-            packed_indirect_buffer,
+            indirect_draw_count_buffer,
 
             mdi_args_pipeline,
             mdi_args_bind_group,
@@ -305,7 +303,9 @@ impl CPUResources {
             let face_count = mesh_meta.total_faces();
             let non_empty = face_count != 0;
             let face_alloc = if non_empty {
-                Some(self.mesh_allocator.allocate(face_count).unwrap())
+                let alloc = self.mesh_allocator.allocate(face_count).unwrap();
+                header.face_alloc = alloc;
+                Some(alloc)
             } else {
                 None
             };
@@ -445,9 +445,14 @@ impl GpuChunkSession {
         compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
         let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_2d);
         compute_pass.dispatch_workgroups(wg_count, 1, 1);
+
+        // mesh new chunks
+        compute_pass.set_pipeline(&self.gpu.meshing_pipeline);
+        compute_pass.set_bind_group(0, &self.gpu.meshing_bind_group, &[]);
+        compute_pass.dispatch_workgroups(batch_size, 1, 1);
     }
 
-    pub fn compute_chunk_visibility_and_meshing(
+    pub fn compute_chunk_visibility(
         &mut self,
         renderer: &Renderer<'_>,
         compute_pass: &mut ComputePass,
@@ -471,26 +476,20 @@ impl GpuChunkSession {
         }
 
         // reset indirect args
-        let dispatch_indirect = GPUDispatchIndirectArgsAtomic::new(0, 1, 1);
-        let packed_indirect_args = GPUPackedIndirectArgsAtomic::new(0u32, dispatch_indirect);
+        let packed_indirect_args = GPUIndirectArgsAtomic::new(0u32);
         renderer.write_buffer(
-            &self.gpu.packed_indirect_buffer,
+            &self.gpu.indirect_draw_count_buffer,
             0,
             packed_indirect_args.as_bytes(),
         );
 
-        // update mdi args and meshing queue
+        // update mdi args
         compute_pass.set_pipeline(&self.gpu.mdi_args_pipeline);
         compute_pass.set_bind_group(0, &self.gpu.mdi_args_bind_group, &[]);
         let batch_size = self.cpu.view_chunks.cpu_len() as u32;
         compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
         let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_2d);
         compute_pass.dispatch_workgroups(wg_count, 1, 1);
-
-        // handle meshing queue
-        compute_pass.set_pipeline(&self.gpu.meshing_pipeline);
-        compute_pass.set_bind_group(0, &self.gpu.meshing_bind_group, &[]);
-        compute_pass.dispatch_workgroups_indirect(&self.gpu.packed_indirect_buffer, 4 * 4);
     }
 
     pub fn render_chunks(&mut self, renderer: &Renderer<'_>, render_pass: &mut RenderPass) {
@@ -501,7 +500,7 @@ impl GpuChunkSession {
         render_pass.multi_draw_indirect_count(
             &renderer.indirect_buffer,
             0,
-            &self.gpu.packed_indirect_buffer,
+            &self.gpu.indirect_draw_count_buffer,
             0,
             self.config.max_indirect_count,
         );

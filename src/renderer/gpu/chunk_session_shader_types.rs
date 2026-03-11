@@ -8,41 +8,25 @@ type ShaderAtomic<T> = T;
 
 #[repr(C)]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
-pub struct GPUPackedIndirectArgsAtomic {
+pub struct GPUIndirectArgsAtomic {
     draw: ShaderAtomic<u32>,
     _padding0: u32, // cpu and gpu padding
     _padding1: u32,
     _padding2: u32,
-    dispatch: GPUDispatchIndirectArgsAtomic,
 }
 
-impl GPUPackedIndirectArgsAtomic {
-    pub fn new(draw: u32, dispatch: GPUDispatchIndirectArgsAtomic) -> Self {
+impl GPUIndirectArgsAtomic {
+    pub fn new(draw: u32) -> Self {
         Self {
             draw,
             _padding0: 0,
             _padding1: 0,
             _padding2: 0,
-            dispatch,
         }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
         bytemuck::bytes_of(self)
-    }
-}
-
-#[repr(C)]
-#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
-pub struct GPUDispatchIndirectArgsAtomic {
-    x: ShaderAtomic<u32>,
-    y: ShaderAtomic<u32>,
-    z: ShaderAtomic<u32>,
-}
-
-impl GPUDispatchIndirectArgsAtomic {
-    pub fn new(x: u32, y: u32, z: u32) -> Self {
-        Self { x, y, z }
     }
 }
 
@@ -121,7 +105,8 @@ pub struct GPUVoxelChunkAdjContent {
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkHeader {
     pub index: u32,
-    _cpu_padding0: [u32; 3],
+    pub face_alloc: u32,
+    _cpu_padding0: [u32; 2],
     pub faces_positive: UVec3,
     _cpu_padding1: u32,
     pub faces_negative: UVec3,
@@ -134,7 +119,8 @@ impl GPUVoxelChunkHeader {
     pub fn new(index: u32, position: IVec3) -> Self {
         Self {
             index,
-            _cpu_padding0: [0; 3],
+            face_alloc: 0,
+            _cpu_padding0: [0; 2],
             faces_positive: UVec3::ZERO,
             _cpu_padding1: 0,
             faces_negative: UVec3::ZERO,
