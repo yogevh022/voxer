@@ -8,41 +8,25 @@ type ShaderAtomic<T> = T;
 
 #[repr(C)]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
-pub struct GPUPackedIndirectArgsAtomic {
+pub struct GPUIndirectArgsAtomic {
     draw: ShaderAtomic<u32>,
     _padding0: u32, // cpu and gpu padding
     _padding1: u32,
     _padding2: u32,
-    dispatch: GPUDispatchIndirectArgsAtomic,
 }
 
-impl GPUPackedIndirectArgsAtomic {
-    pub fn new(draw: u32, dispatch: GPUDispatchIndirectArgsAtomic) -> Self {
+impl GPUIndirectArgsAtomic {
+    pub fn new(draw: u32) -> Self {
         Self {
             draw,
             _padding0: 0,
             _padding1: 0,
             _padding2: 0,
-            dispatch,
         }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
         bytemuck::bytes_of(self)
-    }
-}
-
-#[repr(C)]
-#[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
-pub struct GPUDispatchIndirectArgsAtomic {
-    x: ShaderAtomic<u32>,
-    y: ShaderAtomic<u32>,
-    z: ShaderAtomic<u32>,
-}
-
-impl GPUDispatchIndirectArgsAtomic {
-    pub fn new(x: u32, y: u32, z: u32) -> Self {
-        Self { x, y, z }
     }
 }
 
@@ -60,8 +44,6 @@ pub struct GPUDrawIndirectArgs {
 pub struct GPUChunkMeshEntry {
     pub index: u32,
     pub face_alloc: u32,
-    // face_alloc: 31b,
-    // meshing_flag: 1b,
 }
 
 impl GpuIndexedItem for GPUChunkMeshEntry {
@@ -71,15 +53,11 @@ impl GpuIndexedItem for GPUChunkMeshEntry {
         self.index as usize
     }
 
-    fn init(mut self) -> Self {
-        // meshing flag as true
-        self.face_alloc |= 1 << 31;
+    fn init(self) -> Self {
         self
     }
 
-    fn reused(mut self) -> Self {
-        // meshing flag as false
-        self.face_alloc &= !(1 << 31);
+    fn reused(self) -> Self {
         self
     }
 
@@ -121,7 +99,8 @@ pub struct GPUVoxelChunkAdjContent {
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkHeader {
     pub index: u32,
-    _cpu_padding0: [u32; 3],
+    pub face_alloc: u32,
+    _cpu_padding0: [u32; 2],
     pub faces_positive: UVec3,
     _cpu_padding1: u32,
     pub faces_negative: UVec3,
@@ -134,7 +113,8 @@ impl GPUVoxelChunkHeader {
     pub fn new(index: u32, position: IVec3) -> Self {
         Self {
             index,
-            _cpu_padding0: [0; 3],
+            face_alloc: 0,
+            _cpu_padding0: [0; 2],
             faces_positive: UVec3::ZERO,
             _cpu_padding1: 0,
             faces_negative: UVec3::ZERO,
@@ -179,30 +159,50 @@ pub struct GPUVoxelFaceData {
     // world_x + (world_z lower 12b) in instance_index
     word_a: u32,
     // voxel: 16b
-    // top_left_R: 6b
-    // top_left_G: 6b
+    // face_x: 4b
+    // face_y: 4b
+    // face_z: 4b
     // face_id: 3b
     // 1b free
     word_b: u32,
-    // face_y: 4b
-    // top_left_B: 6b
-    // top_left_AO: 2b
-    // top_right_R: 6b
-    // top_right_G: 6b
-    // top_right_B: 6b
-    // top_right_AO: 2b
-    word_c: u32,
-    // face_x: 4b
-    // face_z: 4b
     // chunk_y: 8b
     // chunk_z_upper: 8b
-    // bottom_left_R: 6b
+    // top_left_AO: 2b
+    // top_right_AO: 2b
     // bottom_left_AO: 2b
-    word_d: u32,
-    // bottom_left_G: 6b
-    // bottom_left_B: 6b
-    // bottom_right_R: 6b
-    // bottom_right_G: 6b
-    // bottom_right_B: 6b
     // bottom_right_AO: 2b
 }
+
+// #[repr(C, align(4))]
+// #[derive(ShaderType)]
+// pub struct GPUVoxelFaceData {
+//     // world_x + (world_z lower 12b) in instance_index
+//     word_a: u32,
+//     // voxel: 16b
+//     // top_left_R: 6b
+//     // top_left_G: 6b
+//     // face_id: 3b
+//     // 1b free
+//     word_b: u32,
+//     // face_y: 4b
+//     // top_left_B: 6b
+//     // top_left_AO: 2b
+//     // top_right_R: 6b
+//     // top_right_G: 6b
+//     // top_right_B: 6b
+//     // top_right_AO: 2b
+//     word_c: u32,
+//     // face_x: 4b
+//     // face_z: 4b
+//     // chunk_y: 8b
+//     // chunk_z_upper: 8b
+//     // bottom_left_R: 6b
+//     // bottom_left_AO: 2b
+//     word_d: u32,
+//     // bottom_left_G: 6b
+//     // bottom_left_B: 6b
+//     // bottom_right_R: 6b
+//     // bottom_right_G: 6b
+//     // bottom_right_B: 6b
+//     // bottom_right_AO: 2b
+// }

@@ -1,9 +1,13 @@
+use crate::compute::geo::Plane;
+use crate::renderer::gpu::vx_gpu_camera::VxGPUCamera;
+use crate::renderer::gpu::{
+    GPUChunkMeshEntry, GPUChunkMeshEntryWrite, GPUDrawIndirectArgs, GPUIndirectArgsAtomic,
+    GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelChunkContentWithAdj,
+    GPUVoxelChunkHeader, GPUVoxelFaceData,
+};
+use crate::world::{CHUNK_DIM, CHUNK_DIM_HALF};
 use std::borrow::Cow;
 use wgpu::ShaderSource;
-use crate::compute::geo::Plane;
-use crate::renderer::gpu::{GPUVoxelChunk, GPUVoxelChunkAdjContent, GPUVoxelChunkContent, GPUVoxelFaceData, GPUDrawIndirectArgs, GPUChunkMeshEntry, GPUVoxelChunkHeader, GPUDispatchIndirectArgsAtomic, GPUPackedIndirectArgsAtomic, GPUChunkMeshEntryWrite, GPUVoxelChunkContentWithAdj};
-use crate::renderer::gpu::vx_gpu_camera::VxGPUCamera;
-use crate::world::{CHUNK_DIM, CHUNK_DIM_HALF};
 
 macro_rules! include_shaders {
     ($($name:ident => $file:literal), * $(,)?) => (
@@ -103,10 +107,7 @@ fn globals() -> String {
     let consts = include_shader_consts!(
         VOID_OFFSET: u32 = 1;
     );
-    concat_shaders!(
-        &consts,
-        F_MASK_INDEX,
-    )
+    concat_shaders!(&consts, F_MASK_INDEX,)
 }
 
 pub const MAX_WORKGROUP_DIM_2D: u32 = 16;
@@ -121,17 +122,14 @@ fn cfg_constants() -> String {
 }
 
 fn geo_types() -> String {
-    include_shader_types!(
-        Plane
-    )
+    include_shader_types!(Plane)
 }
 
 fn meta_types() -> String {
     include_shader_types!(
         VxGPUCamera,
         GPUDrawIndirectArgs,
-        GPUDispatchIndirectArgsAtomic,
-        GPUPackedIndirectArgsAtomic,
+        GPUIndirectArgsAtomic,
     )
 }
 
@@ -229,15 +227,15 @@ pub fn depth_mip_one_wgsl() -> String {
 }
 
 pub fn depth_mip_x_wgsl() -> String {
-    concat_shaders!(
-        &cfg_constants(),
-        VX_DEPTH_MIP_COMMON,
-        VX_DEPTH_MIP_X_ENTRY,
-    )
+    concat_shaders!(&cfg_constants(), VX_DEPTH_MIP_COMMON, VX_DEPTH_MIP_X_ENTRY,)
 }
 
 // fixme better place for this
-pub fn create_shader(device: &wgpu::Device, source: Cow<str>, label: &'static str) -> wgpu::ShaderModule {
+pub fn create_shader(
+    device: &wgpu::Device,
+    source: Cow<str>,
+    label: &'static str,
+) -> wgpu::ShaderModule {
     device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label),
         source: ShaderSource::Wgsl(source),

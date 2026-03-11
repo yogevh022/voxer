@@ -30,6 +30,11 @@ impl WorldGenerator for EarthGen {
         ground_level.add(ridges.build()).build()
     }
     fn chunk(&self, position: IVec3) -> VoxelChunk {
+        // fixme temp
+        if position == IVec3::new(0, 2, 0) {
+            return test_house_chunk(position);
+        }
+
         let noise = self.chunk_noise(position);
         let (voxel_count, voxels) = self.chunk_voxels(noise);
         VoxelChunk::new(position, voxels, voxel_count)
@@ -86,4 +91,91 @@ impl EarthGen {
             _ => VoxelBlock::EMPTY,
         }
     }
+}
+
+// fixme temp
+fn test_house_chunk(position: IVec3) -> VoxelChunk {
+    let mut blocks: VoxelChunkBlocks = [[[VoxelBlock::EMPTY; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM];
+
+    let solid_block = VoxelBlock { value: 1u16 << 15 };
+
+    let floor_height = 2;
+    let wall_height = 3;
+
+    // floor
+    for z in 0..CHUNK_DIM {
+        for y in 0..=floor_height {
+            for x in 0..CHUNK_DIM {
+                blocks[z][y][x] = solid_block;
+            }
+        }
+    }
+
+    // walls
+    for wall_y in (floor_height + 1)..(floor_height + 1 + wall_height) {
+        for wall_x in 2..CHUNK_DIM - 2 {
+            blocks[2][wall_y][wall_x] = solid_block;
+            blocks[CHUNK_DIM - 2 - 1][wall_y][wall_x] = solid_block;
+        }
+        for wall_z in 2..CHUNK_DIM - 2 {
+            blocks[wall_z][wall_y][2] = solid_block;
+            blocks[wall_z][wall_y][CHUNK_DIM - 2 - 1] = solid_block;
+        }
+    }
+    for door_y_delta in 0..2 {
+        let y = floor_height + 1 + door_y_delta;
+        for door_x_delta in 0..2 {
+            let x = (CHUNK_DIM / 2) - door_x_delta;
+            blocks[2][y][x] = VoxelBlock::EMPTY;
+        }
+    }
+
+    // ceiling
+    for y_delta in 0..=7 {
+        let y = floor_height + 1 + wall_height + y_delta;
+        for x in (1 + y_delta)..CHUNK_DIM - (1 + y_delta) {
+            blocks[1 + y_delta][y][x] = solid_block;
+            blocks[CHUNK_DIM - 1 - (1 + y_delta)][y][x] = solid_block;
+            blocks[x][y][1 + y_delta] = solid_block;
+            blocks[x][y][CHUNK_DIM - 1 - (1 + y_delta)] = solid_block;
+        }
+    }
+
+    // chimney
+    for y in 0..CHUNK_DIM - 1 {
+        blocks[2][y][2] = solid_block;
+        blocks[2][y][3] = solid_block;
+        blocks[3][y][2] = solid_block;
+        blocks[3][y][3] = solid_block;
+    }
+    for x in 1..5 {
+        blocks[1][CHUNK_DIM - 1][x] = solid_block;
+        blocks[4][CHUNK_DIM - 1][x] = solid_block;
+        blocks[x][CHUNK_DIM - 1][1] = solid_block;
+        blocks[x][CHUNK_DIM - 1][4] = solid_block;
+    }
+
+    // junk
+    for y_delta in 0..3 {
+        let y = floor_height + 2 + (y_delta * 2);
+        for x_delta in 0..2 {
+            let x = 4 + (x_delta * 2);
+            for z_delta in 0..2 {
+                let z = 4 + (z_delta * 2);
+                blocks[z][y][x] = solid_block;
+                blocks[z][y][CHUNK_DIM - 1 - x] = solid_block;
+                blocks[CHUNK_DIM - 1 - z][y][x] = solid_block;
+                blocks[CHUNK_DIM - 1 - z][y][CHUNK_DIM - 1 - x] = solid_block;
+            }
+        }
+    }
+
+    let voxel_count = blocks
+        .iter()
+        .flatten()
+        .flatten()
+        .filter(|b| b.is_transparent())
+        .count() as u32;
+
+    VoxelChunk::new(position, blocks, voxel_count)
 }
