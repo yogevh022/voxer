@@ -120,14 +120,13 @@ impl<'a> ApplicationHandler for App<'a> {
                 });
 
                 let mut encoder = client
-                    .session
-                    .app_renderer
+                    .renderer
                     .renderer
                     .create_encoder("Main Encoder");
                 client.tick(&mut encoder);
                 let voxel_culling_distance = self.client_config.render_distance * CHUNK_DIM;
                 let window_size = window.inner_size();
-                let render_result = client.session.app_renderer.submit_render_pass(
+                let render_result = client.renderer.submit_render_pass(
                     encoder,
                     &self.v.camera,
                     voxel_culling_distance as u32,
@@ -198,16 +197,15 @@ impl<'a> App<'a> {
                 move_vec * MOVE_SPEED * sprint_mul * self.v.time.dt();
         }
 
-        let culling_camera = &self.v.camera;
-        let safe_voxel_rdist = ((self.client_config.render_distance - 1) * CHUNK_DIM) as f32;
-        let safe_culling_vp =
-            culling_camera.projection_with_far(safe_voxel_rdist) * culling_camera.view_matrix();
-        let safe_culling_vf = Frustum::planes(safe_culling_vp);
-        let camera_position = self.v.camera.transform.position;
+        // let culling_camera = &self.v.camera;
+        // let safe_voxel_rdist = ((self.client_config.render_distance - 1) * CHUNK_DIM) as f32;
+        // let safe_culling_vp =
+        //     culling_camera.projection_with_far(safe_voxel_rdist) * culling_camera.view_matrix();
+        // let safe_culling_vf = Frustum::planes(safe_culling_vp);
+        // let camera_position = self.v.camera.transform.position;
 
         let m_client = self.client.as_mut().unwrap();
-        m_client.temp_set_player_position(camera_position);
-        m_client.temp_set_view_frustum(safe_culling_vf);
+        m_client.temp_set_camera(self.v.camera.clone());
 
         call_every!(CLIENT_POS_SEND, 20, || {
             m_client.temp_send_player_position()

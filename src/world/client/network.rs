@@ -1,4 +1,4 @@
-use crate::compute::throttler::{SpatialThrottler, Throttler};
+use crate::compute::throttler::SpatialThrottler;
 use crate::world::network::{
     MsgChunkDataRequest, MsgConnectRequest, MsgSetPositionRequest, NetworkHandle, ServerMessage,
 };

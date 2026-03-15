@@ -1,8 +1,11 @@
 mod network;
 mod session;
 
+use crate::app::app_renderer::AppRenderer;
 use crate::compute::MIB;
-use crate::compute::geo::{Plane, world_to_chunk_pos};
+use crate::compute::geo::{Frustum, Plane, world_to_chunk_pos};
+use crate::vtypes::Camera;
+use crate::world::CHUNK_DIM;
 use crate::world::client::network::ClientWorldNetwork;
 use crate::world::client::session::ClientWorldSession;
 use crate::world::network::{
@@ -25,7 +28,8 @@ pub struct ClientWorldConfig {
 
 pub struct ClientWorld<'window> {
     pub config: ClientWorldConfig,
-    pub session: ClientWorldSession<'window>,
+    pub session: ClientWorldSession,
+    pub renderer: AppRenderer<'window>,
 
     player: PlayerSession,
 
@@ -51,23 +55,17 @@ impl ClientWorld<'_> {
         network.set_server_addr(temp_server_addr); // fixme temp
         Self {
             config,
-            session: ClientWorldSession::new(
-                window,
-                config,
-                world_to_chunk_pos(player.location.position),
-            ),
+            session: ClientWorldSession::new(config, world_to_chunk_pos(player.location.position)),
+            renderer: AppRenderer::new(window, config.render_distance),
             network,
             player,
             temp_server_addr,
         }
     }
 
-    pub(crate) fn temp_set_player_position(&mut self, position: Vec3) {
-        self.player.location.position = position;
-    }
-
-    pub(crate) fn temp_set_view_frustum(&mut self, frustum: [Plane; 6]) {
-        self.session.view_frustum = frustum;
+    pub(crate) fn temp_set_camera(&mut self, camera: Camera) {
+        self.player.location.position = camera.transform.position;
+        self.session.camera = camera;
     }
 
     pub(crate) fn temp_send_req_conn(&self) {
@@ -75,7 +73,8 @@ impl ClientWorld<'_> {
     }
 
     pub(crate) fn temp_send_player_position(&self) {
-        self.network.send_player_position(self.player.location.position);
+        self.network
+            .send_player_position(self.player.location.position);
     }
 
     fn request_interest_chunks(&mut self, origin: IVec3) {
@@ -92,11 +91,22 @@ impl ClientWorld<'_> {
             Self::handle_network_message(&mut self.session, msg);
         });
         let player_ch_pos = world_to_chunk_pos(self.player.location.position);
-        self.session.tick(encoder, player_ch_pos);
+        self.session.tick(player_ch_pos);
+
+        // render fixme move logic to renderer
+        let safe_voxel_rdist = ((self.config.render_distance - 1) * CHUNK_DIM) as f32;
+        let safe_culling_vp = self.session.camera.projection_with_far(safe_voxel_rdist)
+            * self.session.camera.view_matrix();
+        let view_planes = Frustum::planes(safe_culling_vp);
+
+        let mesh_chunks = self.session.chunk_meshing_batch();
+        self.renderer
+            .update_chunk_meshes(encoder, mesh_chunks, player_ch_pos, &view_planes);
+
         self.request_interest_chunks(player_ch_pos);
     }
 
-    fn handle_network_message(session: &mut ClientWorldSession<'_>, message: ServerMessage) {
+    fn handle_network_message(session: &mut ClientWorldSession, message: ServerMessage) {
         match message.tag {
             ServerMessageTag::ChunkData => {
                 let chunk_data_msg = MsgChunkData::deserialize(message.message.data);

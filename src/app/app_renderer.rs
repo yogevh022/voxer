@@ -1,20 +1,25 @@
+use crate::compute::geo::Plane;
 use crate::renderer::Renderer;
 use crate::renderer::gpu::chunk_session::{GpuChunkSession, GpuChunkSessionConfig};
+use crate::renderer::gpu::vx_gpu_camera::VxGPUCamera;
 use crate::renderer::resources;
 use crate::renderer::resources::shader::{MAX_WORKGROUP_DIM_1D, MAX_WORKGROUP_DIM_2D};
 use crate::renderer::resources::texture::get_atlas_image;
 use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::vtypes::Camera;
+use crate::world::chunk::VoxelChunk;
+use glam::IVec3;
 use std::borrow::Cow;
 use std::sync::Arc;
-use wgpu::{BindGroup, BufferUsages, CommandEncoder, RenderPipeline};
+use wgpu::{
+    BindGroup, BufferUsages, CommandEncoder, ComputePass, ComputePassDescriptor, RenderPipeline,
+};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
-use crate::renderer::gpu::vx_gpu_camera::VxGPUCamera;
 
 pub struct AppRenderer<'window> {
     pub renderer: Renderer<'window>,
-    pub chunk_session: GpuChunkSession, // fixme temp
+    chunk_session: GpuChunkSession,
     render_pipeline: RenderPipeline,
     atlas_bind_group: BindGroup,
     view_projection_buffer: VxBuffer,
@@ -101,6 +106,32 @@ impl AppRenderer<'_> {
 
         frame.present();
         Ok(())
+    }
+
+    fn update_depth_mips(&self, compute_pass: &mut ComputePass) {
+        self.renderer.depth.generate_depth_mips(compute_pass);
+    }
+
+    pub fn update_chunk_meshes<'a>(
+        &mut self,
+        encoder: &mut CommandEncoder,
+        chunks: impl Iterator<Item = &'a VoxelChunk>,
+        view_origin: IVec3,
+        view_planes: &[Plane; 6],
+    ) {
+        let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+            label: Some("Client Compute Pass"),
+            timestamp_writes: None,
+        });
+
+        self.update_depth_mips(&mut compute_pass);
+
+        self.chunk_session.set_view_box(&view_planes, view_origin);
+
+        self.chunk_session
+            .compute_chunk_writes(&self.renderer, &mut compute_pass, chunks);
+        self.chunk_session
+            .compute_chunk_visibility(&self.renderer, &mut compute_pass);
     }
 }
 

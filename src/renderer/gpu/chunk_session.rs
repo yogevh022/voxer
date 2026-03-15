@@ -425,7 +425,8 @@ impl GpuChunkSession {
         compute_pass: &mut ComputePass,
         chunks: impl Iterator<Item = &'a VoxelChunk>,
     ) {
-        self.cpu.prepare_chunk_writes(chunks);
+        self.cpu
+            .prepare_chunk_writes(chunks.take(self.config.max_write_count));
         if self.cpu.chunks_write.is_empty() {
             return;
         }
