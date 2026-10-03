@@ -216,6 +216,7 @@ impl GPUResources {
                 &renderer.device,
                 camera_buffer,
                 &voxel_face_buffer,
+                &chunks_meta_buffer,
             );
 
         Self {

@@ -15,12 +15,14 @@ impl GpuChunkSessionResources {
         device: &Device,
         camera_buffer: &VxBuffer,
         face_data_buffer: &VxBuffer,
+        chunks_meta_buffer: &VxBuffer,
     ) -> (BindGroupLayout, BindGroup) {
         let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some("Chunk Render Bind Group Layout"),
             entries: &[
                 camera_buffer.bind_layout_entry(0, false, ShaderStages::VERTEX),
                 face_data_buffer.bind_layout_entry(1, true, ShaderStages::VERTEX),
+                chunks_meta_buffer.bind_layout_entry(2, true, ShaderStages::VERTEX),
             ],
         });
 
@@ -30,6 +32,7 @@ impl GpuChunkSessionResources {
             entries: &resources::utils::bind_entries([
                 camera_buffer.as_entire_binding(),
                 face_data_buffer.as_entire_binding(),
+                chunks_meta_buffer.as_entire_binding(),
             ]),
         });
         (layout, bind_group)

@@ -156,7 +156,7 @@ pub struct GPUVoxelChunk {
 #[repr(C, align(4))]
 #[derive(ShaderType)]
 pub struct GPUVoxelFaceData {
-    // world_x + (world_z lower 12b) in instance_index
+    // chunk_meta index in instance_index
     word_a: u32,
     // voxel: 16b
     // face_x: 4b
@@ -164,14 +164,27 @@ pub struct GPUVoxelFaceData {
     // face_z: 4b
     // face_id: 3b
     // 1b free
-    word_b: u32,
-    // chunk_y: 8b
-    // chunk_z_upper: 8b
-    // top_left_AO: 2b
-    // top_right_AO: 2b
-    // bottom_left_AO: 2b
-    // bottom_right_AO: 2b
 }
+
+// #[repr(C, align(4))]
+// #[derive(ShaderType)]
+// pub struct GPUVoxelFaceData {
+//     // world_x + (world_z lower 12b) in instance_index
+//     word_a: u32,
+//     // voxel: 16b
+//     // face_x: 4b
+//     // face_y: 4b
+//     // face_z: 4b
+//     // face_id: 3b
+//     // 1b free
+//     word_b: u32,
+//     // chunk_y: 8b
+//     // chunk_z_upper: 8b
+//     // top_left_AO: 2b
+//     // top_right_AO: 2b
+//     // bottom_left_AO: 2b
+//     // bottom_right_AO: 2b
+// }
 
 // #[repr(C, align(4))]
 // #[derive(ShaderType)]

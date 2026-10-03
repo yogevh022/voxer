@@ -52,6 +52,7 @@ fn write_culled_mdi(
 
     update_local_fid_draws(
         chunk_header,
+        chunk_index,
         camera_chunk_pos,
         draw_mask,
     );
@@ -73,12 +74,12 @@ struct FidDraw {
     draw: bool,
 }
 
-fn update_local_fid_draws(chunk_header: GPUVoxelChunkHeader, camera_chunk_pos: vec3<i32>, draw_mask: u32) {
+fn update_local_fid_draws(chunk_header: GPUVoxelChunkHeader, chunk_index: u32, camera_chunk_pos: vec3<i32>, draw_mask: u32) {
     let fid_camera_facings = fids_facing_camera(camera_chunk_pos, chunk_header.position);
     let fid_counts: array<u32, 6> = mesh_entry_face_counts(chunk_header.faces_positive, chunk_header.faces_negative);
     let fid_offsets = mesh_entry_face_offsets(chunk_header.face_alloc, fid_counts);
 
-    let packed_xy: u32 = bitcast<u32>((chunk_header.position.x & 0xFFFFF) | ((chunk_header.position.z & 0xFFF) << 20));
+//    let packed_xy: u32 = bitcast<u32>((chunk_header.position.x & 0xFFFFF) | ((chunk_header.position.z & 0xFFF) << 20));
     for (var fid = 0u; fid < 6u; fid++) {
         let axis_has_faces: bool = fid_counts[fid] > 0u;
         let axis_faces_camera: bool = fid_camera_facings[fid];
@@ -88,7 +89,7 @@ fn update_local_fid_draws(chunk_header: GPUVoxelChunkHeader, camera_chunk_pos: v
             fid_counts[fid] * 6u,      // vertex_count
             1u,                        // instance_count
             fid_offsets[fid] * 6u,     // first_vertex
-            packed_xy,                 // first_instance
+            chunk_index,               // first_instance
         );
         pr_fid_draws[fid] = FidDraw(draw_args, fid_draw_idx, bool(fid_draw_mask));
     }

@@ -17,14 +17,14 @@ fn face_data(
         | (face_position.y << 20)
         | (face_position.z << 24)
         | (fid << 28);
-    let word_b = chunk_y_pos
-        | (chunk_z_pos_upper_8bits >> 4) // value started offset << 12
-        | (ocl_count.x << 16)
-        | (ocl_count.y << 18)
-        | (ocl_count.z << 20)
-        | (ocl_count.w << 22);
+//    let word_b = chunk_y_pos
+//        | (chunk_z_pos_upper_8bits >> 4) // value started offset << 12
+//        | (ocl_count.x << 16)
+//        | (ocl_count.y << 18)
+//        | (ocl_count.z << 20)
+//        | (ocl_count.w << 22);
 
-    return GPUVoxelFaceData(word_a, word_b);
+    return GPUVoxelFaceData(word_a);//, word_b);
 }
 
 struct FaceDrawMask {
