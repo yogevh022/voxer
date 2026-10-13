@@ -1,5 +1,5 @@
 use crate::renderer::gpu::vx_gpu_sync_vec::GpuIndexedItem;
-use crate::world::{CHUNK_DIM, CHUNK_DIM_HALF, VoxelChunkAdjBlocks, VoxelChunkBlocks};
+use crate::world::{CHUNK_DIM, VoxelChunkAdjBlocks, VoxelChunkBlocks};
 use bytemuck::{Pod, Zeroable};
 use glam::{IVec3, UVec3};
 use voxer_macros::ShaderType;
@@ -79,20 +79,20 @@ pub struct GPUChunkMeshEntryWrite {
 #[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkContent {
-    blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; CHUNK_DIM],
+    blocks: [[[u16; CHUNK_DIM]; CHUNK_DIM]; CHUNK_DIM],
 }
 
 #[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkContentWithAdj {
-    blocks: [[[u32; CHUNK_DIM_HALF + 2]; CHUNK_DIM + 2]; CHUNK_DIM + 2],
+    blocks: [[[u16; CHUNK_DIM + 2]; CHUNK_DIM + 2]; CHUNK_DIM + 2],
 }
 
 #[repr(C, align(4))]
 #[derive(ShaderType, Clone, Copy, Debug, Pod, Zeroable)]
 pub struct GPUVoxelChunkAdjContent {
-    next_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
-    prev_blocks: [[[u32; CHUNK_DIM_HALF]; CHUNK_DIM]; 3],
+    next_blocks: [[[u16; CHUNK_DIM]; CHUNK_DIM]; 3],
+    prev_blocks: [[[u16; CHUNK_DIM]; CHUNK_DIM]; 3],
 }
 
 #[repr(C, align(4))] // pad-aligned to 16
@@ -156,7 +156,6 @@ pub struct GPUVoxelChunk {
 #[repr(C, align(4))]
 #[derive(ShaderType)]
 pub struct GPUVoxelFaceData {
-    // world_x + (world_z lower 12b) in instance_index
     word_a: u32,
     // voxel: 16b
     // face_x: 4b
@@ -164,45 +163,4 @@ pub struct GPUVoxelFaceData {
     // face_z: 4b
     // face_id: 3b
     // 1b free
-    word_b: u32,
-    // chunk_y: 8b
-    // chunk_z_upper: 8b
-    // top_left_AO: 2b
-    // top_right_AO: 2b
-    // bottom_left_AO: 2b
-    // bottom_right_AO: 2b
 }
-
-// #[repr(C, align(4))]
-// #[derive(ShaderType)]
-// pub struct GPUVoxelFaceData {
-//     // world_x + (world_z lower 12b) in instance_index
-//     word_a: u32,
-//     // voxel: 16b
-//     // top_left_R: 6b
-//     // top_left_G: 6b
-//     // face_id: 3b
-//     // 1b free
-//     word_b: u32,
-//     // face_y: 4b
-//     // top_left_B: 6b
-//     // top_left_AO: 2b
-//     // top_right_R: 6b
-//     // top_right_G: 6b
-//     // top_right_B: 6b
-//     // top_right_AO: 2b
-//     word_c: u32,
-//     // face_x: 4b
-//     // face_z: 4b
-//     // chunk_y: 8b
-//     // chunk_z_upper: 8b
-//     // bottom_left_R: 6b
-//     // bottom_left_AO: 2b
-//     word_d: u32,
-//     // bottom_left_G: 6b
-//     // bottom_left_B: 6b
-//     // bottom_right_R: 6b
-//     // bottom_right_G: 6b
-//     // bottom_right_B: 6b
-//     // bottom_right_AO: 2b
-// }

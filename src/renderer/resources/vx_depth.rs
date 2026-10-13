@@ -5,7 +5,7 @@ use wgpu::wgt::TextureDescriptor;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, ComputePass, ComputePipeline,
-    ComputePipelineDescriptor, Device, Extent3d, PipelineLayoutDescriptor, PushConstantRange,
+    ComputePipelineDescriptor, Device, Extent3d, PipelineLayoutDescriptor,
     ShaderStages, StorageTextureAccess, Texture, TextureDimension, TextureFormat,
     TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
 };
@@ -43,9 +43,9 @@ impl VxDepth {
         let mip_views = Self::mip_views(&mip_texture_array, mip_count);
 
         let mip_one_compute_bgl = depth_mip_one_bgl(device);
-        let mip_one_compute_pipeline = depth_mip_one_pipeline(device, &[&mip_one_compute_bgl]);
+        let mip_one_compute_pipeline = depth_mip_one_pipeline(device, &[Some(&mip_one_compute_bgl)]);
         let mip_x_compute_bgl = depth_mip_x_bgl(device);
-        let mip_x_compute_pipeline = depth_mip_x_pipeline(device, &[&mip_x_compute_bgl]);
+        let mip_x_compute_pipeline = depth_mip_x_pipeline(device, &[Some(&mip_x_compute_bgl)]);
 
         let mip_bind_groups = Self::mip_bind_groups(
             device,
@@ -152,7 +152,7 @@ impl VxDepth {
         let mip_height = self.surface_extent.height >> 1;
         let groups_x = ceil_div(mip_width, MAX_WORKGROUP_DIM_2D);
         let groups_y = ceil_div(mip_height, MAX_WORKGROUP_DIM_2D);
-        compute_pass.set_push_constants(0, bytemuck::cast_slice(&[mip_width, mip_height]));
+        compute_pass.set_immediates(0, bytemuck::cast_slice(&[mip_width, mip_height]));
         compute_pass.dispatch_workgroups(groups_x, groups_y, 1);
     }
 
@@ -167,7 +167,7 @@ impl VxDepth {
             let mip_height = (self.surface_extent.height >> mip).max(1);
             let groups_x = ceil_div(mip_width, MAX_WORKGROUP_DIM_2D);
             let groups_y = ceil_div(mip_height, MAX_WORKGROUP_DIM_2D);
-            compute_pass.set_push_constants(0, bytemuck::cast_slice(&[mip_width, mip_height]));
+            compute_pass.set_immediates(0, bytemuck::cast_slice(&[mip_width, mip_height]));
             compute_pass.dispatch_workgroups(groups_x, groups_y, 1);
         }
     }
@@ -260,7 +260,7 @@ fn depth_mip_x_bgl(device: &Device) -> BindGroupLayout {
 
 fn depth_mip_one_pipeline(
     device: &Device,
-    bind_group_layouts: &[&BindGroupLayout],
+    bind_group_layouts: &[Option<&BindGroupLayout>],
 ) -> ComputePipeline {
     let shader = resources::shader::create_shader(
         device,
@@ -270,10 +270,7 @@ fn depth_mip_one_pipeline(
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Depth Mip 1 Pipeline Layout"),
         bind_group_layouts,
-        push_constant_ranges: &[PushConstantRange {
-            stages: ShaderStages::COMPUTE,
-            range: 0..8,
-        }],
+        immediate_size: 8,
     });
 
     device.create_compute_pipeline(&ComputePipelineDescriptor {
@@ -288,7 +285,7 @@ fn depth_mip_one_pipeline(
 
 fn depth_mip_x_pipeline(
     device: &Device,
-    bind_group_layouts: &[&BindGroupLayout],
+    bind_group_layouts: &[Option<&BindGroupLayout>],
 ) -> ComputePipeline {
     let shader = resources::shader::create_shader(
         device,
@@ -298,10 +295,7 @@ fn depth_mip_x_pipeline(
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Depth Mip X Pipeline Layout"),
         bind_group_layouts,
-        push_constant_ranges: &[PushConstantRange {
-            stages: ShaderStages::COMPUTE,
-            range: 0..8,
-        }],
+        immediate_size: 8,
     });
 
     device.create_compute_pipeline(&ComputePipelineDescriptor {

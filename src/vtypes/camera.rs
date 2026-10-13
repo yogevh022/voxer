@@ -1,5 +1,6 @@
 use crate::vtypes::scene_object::VoxerObject;
 use crate::vtypes::{Transform, Voxer};
+use glam::camera::rh::{proj, view};
 use glam::{Mat4, Quat};
 
 #[derive(Default, Clone)]
@@ -14,7 +15,7 @@ impl Camera {
     }
 
     pub fn view_matrix(&self) -> Mat4 {
-        Mat4::look_to_rh(
+        view::look_to_mat4(
             self.transform.position,
             self.transform.forward(),
             self.transform.up(),
@@ -22,7 +23,7 @@ impl Camera {
     }
 
     pub fn projection_matrix(&self) -> Mat4 {
-        Mat4::perspective_rh(
+        proj::directx::perspective(
             self.frustum.fov,
             self.frustum.aspect_ratio,
             self.frustum.near,
@@ -35,7 +36,7 @@ impl Camera {
     }
 
     pub fn projection_with_far(&self, far: f32) -> Mat4 {
-        Mat4::perspective_rh(
+        proj::directx::perspective(
             self.frustum.fov,
             self.frustum.aspect_ratio,
             self.frustum.near,
@@ -105,11 +106,11 @@ impl CameraController {
 impl VoxerObject for CameraController {
     fn update(&mut self, voxer: &mut Voxer) {
         let input = voxer.input.read();
-        // self.look((
-        //     input.mouse.delta[0] * self.sensitivity,
-        //     input.mouse.delta[1] * self.sensitivity,
-        // ));
-        self.yaw *= Quat::from_axis_angle(glam::Vec3::Y, 0.02);
+        self.look((
+            input.mouse.delta[0] * self.sensitivity,
+            input.mouse.delta[1] * self.sensitivity,
+        ));
+        // self.yaw *= Quat::from_axis_angle(glam::Vec3::Y, 0.02);
         voxer.camera.transform.rotation = self.get_rotation();
     }
 }

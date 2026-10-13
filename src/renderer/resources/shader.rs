@@ -96,12 +96,14 @@ include_shaders!(
 include_shaders!(
     VOXEL_CONST => "voxel/const.wgsl",
     VOXEL_CHUNK_MESH_ENTRY => "voxel/chunk_mesh_entry.wgsl",
-    VOXEL_CHUNK_MESH_FACES => "voxel/chunk_mesh_faces.wgsl",
+    VOXEL_CHUNK_MESH_FACES => "voxel/chunk_mesh.wgsl",
     VOXEL_CHUNK_MESH_VAO => "voxel/chunk_mesh_vao.wgsl",
     VOXEL_CHUNK_STAGING_ENTRY => "voxel/chunks_staging.wgsl",
     VOXEL_CHUNK_VIEW_STAGING_ENTRY => "voxel/chunks_view_staging.wgsl",
     VOXEL_CHUNK_CULL_ENTRY => "voxel/chunk_mdi_args.wgsl",
 );
+
+const ENABLE_WGPU_INT16: &str = "enable wgpu_int16;";
 
 fn globals() -> String {
     let consts = include_shader_consts!(
@@ -153,23 +155,33 @@ fn voxel_common() -> String {
     concat_shaders!(&consts, &types)
 }
 
-pub fn render_wgsl() -> String {
+pub fn vertex_wgsl() -> String {
+    let consts = include_shader_consts!(
+        CHUNK_DIM: u32 = CHUNK_DIM;
+    );
+    let types = include_shader_types!(
+        VxGPUCamera,
+        GPUVoxelFaceData,
+        GPUVoxelChunkHeader,
+    );
     concat_shaders!(
-        &cfg_constants(),
-        &meta_types(),
+        ENABLE_WGPU_INT16,
+        &consts,
         &geo_types(),
-        &voxel_common(),
+        &types,
         VOXEL_CONST,
-        VOXEL_CHUNK_MESH_VAO,
-        VERTEX_SHADER_ENTRY,
-        FRAGMENT_SHADER_ENTRY,
-        F_BITWISE,
         F_UNPACK_GPU_VOXEL_FACE_DATA,
+        VERTEX_SHADER_ENTRY,
     )
+}
+
+pub fn fragment_wgsl() -> String {
+    concat_shaders!(ENABLE_WGPU_INT16, FRAGMENT_SHADER_ENTRY)
 }
 
 pub fn chunk_meshing_wgsl() -> String {
     concat_shaders!(
+        ENABLE_WGPU_INT16,
         &cfg_constants(),
         &voxel_common(),
         &globals(),
@@ -185,6 +197,7 @@ pub fn chunk_meshing_wgsl() -> String {
 
 pub fn chunk_mdi_args_wgsl() -> String {
     concat_shaders!(
+        ENABLE_WGPU_INT16,
         &cfg_constants(),
         &meta_types(),
         &geo_types(),
@@ -202,6 +215,7 @@ pub fn chunk_mdi_args_wgsl() -> String {
 
 pub fn chunk_staging_wgsl() -> String {
     concat_shaders!(
+        ENABLE_WGPU_INT16,
         &cfg_constants(),
         &voxel_common(),
         F_THREAD_MAPPING,
@@ -211,6 +225,7 @@ pub fn chunk_staging_wgsl() -> String {
 
 pub fn chunks_view_staging_wgsl() -> String {
     concat_shaders!(
+        ENABLE_WGPU_INT16,
         &cfg_constants(),
         &voxel_common(),
         F_THREAD_MAPPING,
@@ -220,6 +235,7 @@ pub fn chunks_view_staging_wgsl() -> String {
 
 pub fn depth_mip_one_wgsl() -> String {
     concat_shaders!(
+        ENABLE_WGPU_INT16,
         &cfg_constants(),
         VX_DEPTH_MIP_COMMON,
         VX_DEPTH_MIP_ONE_ENTRY,
@@ -227,7 +243,12 @@ pub fn depth_mip_one_wgsl() -> String {
 }
 
 pub fn depth_mip_x_wgsl() -> String {
-    concat_shaders!(&cfg_constants(), VX_DEPTH_MIP_COMMON, VX_DEPTH_MIP_X_ENTRY,)
+    concat_shaders!(
+        ENABLE_WGPU_INT16,
+        &cfg_constants(),
+        VX_DEPTH_MIP_COMMON,
+        VX_DEPTH_MIP_X_ENTRY,
+    )
 }
 
 // fixme better place for this

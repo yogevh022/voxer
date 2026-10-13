@@ -3,17 +3,18 @@
 var<uniform> vx_camera: VxGPUCamera;
 @group(1) @binding(1)
 var<storage, read> face_data_buffer: array<GPUVoxelFaceData>;
+@group(1) @binding(2)
+var<storage, read> chunks_meta_buffer: array<GPUVoxelChunkHeader>;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
-    @location(1) ao: f32,
 };
 
 @vertex
 fn vs_main(
     @builtin(vertex_index) draw_vertex_index: u32,
-    @builtin(instance_index) packed_xz: u32,
+    @builtin(instance_index) chunk_meta_index: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
     let face_index = draw_vertex_index / 6;
@@ -21,16 +22,14 @@ fn vs_main(
 
     let face_data = face_data_buffer[face_index];
     let face_voxel = unpack_face_voxel(face_data);
-    let face_ao = unpack_face_ao(face_data);
 
     let face_position = vec3<f32>(unpack_face_position(face_data));
-    let chunk_position = unpack_chunk_position(face_data, packed_xz);
+    let chunk_position = chunks_meta_buffer[chunk_meta_index].position;
     let world_position = vec3<f32>(chunk_position * i32(CHUNK_DIM));
     let vertex_position = world_position + face_position + QUAD_VERTICES[face_voxel.face_id][vertex_index];
 
     out.position = vx_camera.view_vp * vec4<f32>(vertex_position, 1.0);
     out.tex_coords = TEX_COORDS[vertex_index];
-    out.ao = occlusion_count_to_ao(face_ao[vertex_index]);
 
     return out;
 }

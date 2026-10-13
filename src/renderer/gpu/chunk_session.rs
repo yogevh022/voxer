@@ -133,7 +133,7 @@ impl GPUResources {
             camera_buffer.buffer_size,
         );
         let mdi_args_pipeline =
-            GpuChunkSessionResources::mdi_args_pipeline(&renderer.device, &[&mdi_args_bgl]);
+            GpuChunkSessionResources::mdi_args_pipeline(&renderer.device, &[Some(&mdi_args_bgl)]);
         let mdi_args_bind_group = renderer.device.create_bind_group(&BindGroupDescriptor {
             label: Some("Chunk MDI Args Bind Group"),
             layout: &mdi_args_bgl,
@@ -157,7 +157,7 @@ impl GPUResources {
         );
         let chunk_write_pipeline = GpuChunkSessionResources::chunks_staging_pipeline(
             &renderer.device,
-            &[&chunks_staging_bgl],
+            &[Some(&chunks_staging_bgl)],
         );
         let chunks_staging_bg = renderer.device.create_bind_group(&BindGroupDescriptor {
             label: Some("Chunks Staging Bind Group"),
@@ -178,7 +178,7 @@ impl GPUResources {
         );
         let view_chunks_write_pipeline = GpuChunkSessionResources::chunks_view_staging_pipeline(
             &renderer.device,
-            &[&view_chunks_write_bgl],
+            &[Some(&view_chunks_write_bgl)],
         );
         let view_chunks_write_bg = renderer.device.create_bind_group(&BindGroupDescriptor {
             label: Some("Chunk Visible Candidate Write Bind Group"),
@@ -198,7 +198,7 @@ impl GPUResources {
             chunk_mesh_batch_buffer.buffer_size,
         );
         let meshing_pipeline =
-            GpuChunkSessionResources::chunk_meshing_pipeline(&renderer.device, &[&meshing_bgl]);
+            GpuChunkSessionResources::chunk_meshing_pipeline(&renderer.device, &[Some(&meshing_bgl)]);
         let meshing_bind_group = renderer.device.create_bind_group(&BindGroupDescriptor {
             label: Some("Chunk Meshing Bind Group"),
             layout: &meshing_bgl,
@@ -216,6 +216,7 @@ impl GPUResources {
                 &renderer.device,
                 camera_buffer,
                 &voxel_face_buffer,
+                &chunks_meta_buffer,
             );
 
         Self {
@@ -279,9 +280,12 @@ impl CPUResources {
         // first pass: insert adj blocks, prepare gpu write,
         self.chunks_write.clear();
         for chunk in chunks {
-            let index = self.chunks.index(chunk.position);
-            self.chunks_adj
-                .insert_index(index, chunk.position, chunk.blocks_as_adj());
+            let index = self.chunks.index(chunk.position.to_array());
+            self.chunks_adj.insert_index(
+                index,
+                chunk.position.to_array(),
+                chunk.blocks_as_adj(),
+            );
             let header = GPUVoxelChunkHeader::new(index as u32, chunk.position);
             self.chunks_write
                 .push(CPUVoxelChunk::new(header, chunk.blocks));
@@ -311,7 +315,7 @@ impl CPUResources {
             };
 
             // deallocate pre-existing mesh and remove from view if needed
-            if let Some(prev) = self.chunks.insert_index(index, position, mesh_entry) {
+            if let Some(prev) = self.chunks.insert_index(index, position.to_array(), mesh_entry) {
                 if !prev.value.is_empty() {
                     let alloc = prev.value.face_alloc();
                     self.mesh_allocator.deallocate(alloc).unwrap();
@@ -347,7 +351,7 @@ impl CPUResources {
         }
 
         for pos in free_ptr(&mut self.view_delta_add_pos).drain(..) {
-            if let Some(mesh_entry_cell) = self.chunks.get_exact_mut(pos) {
+            if let Some(mesh_entry_cell) = self.chunks.get_exact_mut(pos.to_array()) {
                 let mesh_entry = &mut mesh_entry_cell.value;
                 if !mesh_entry.is_visible() {
                     mesh_entry.set_visible(true);
@@ -369,7 +373,7 @@ impl CPUResources {
     }
 
     fn adj_or_transparent(&self, position: IVec3, index: usize) -> [[VoxelBlock; 16]; 16] {
-        match self.chunks_adj.get_exact(position) {
+        match self.chunks_adj.get_exact(position.to_array()) {
             Some(adj) => adj.value[index],
             None => TRANSPARENT_LAYER_BLOCKS,
         }
@@ -438,7 +442,7 @@ impl GpuChunkSession {
         compute_pass.set_pipeline(&self.gpu.chunk_write_pipeline);
         compute_pass.set_bind_group(0, &self.gpu.chunk_write_bind_group, &[]);
         let batch_size = self.cpu.chunks_write.len() as u32;
-        compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
+        compute_pass.set_immediates(0, bytemuck::bytes_of(&batch_size));
         let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_2d);
         compute_pass.dispatch_workgroups(wg_count, 1, 1);
 
@@ -465,7 +469,7 @@ impl GpuChunkSession {
             // write view candidates delta
             compute_pass.set_pipeline(&self.gpu.view_chunks_write_pipeline);
             compute_pass.set_bind_group(0, &self.gpu.view_chunks_write_bg, &[]);
-            compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
+            compute_pass.set_immediates(0, bytemuck::bytes_of(&batch_size));
 
             let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_1d);
             compute_pass.dispatch_workgroups(wg_count, 1, 1);
@@ -483,7 +487,7 @@ impl GpuChunkSession {
         compute_pass.set_pipeline(&self.gpu.mdi_args_pipeline);
         compute_pass.set_bind_group(0, &self.gpu.mdi_args_bind_group, &[]);
         let batch_size = self.cpu.view_chunks.cpu_len() as u32;
-        compute_pass.set_push_constants(0, bytemuck::bytes_of(&batch_size));
+        compute_pass.set_immediates(0, bytemuck::bytes_of(&batch_size));
         let wg_count = ceil_div(batch_size, self.config.max_workgroup_size_2d);
         compute_pass.dispatch_workgroups(wg_count, 1, 1);
     }

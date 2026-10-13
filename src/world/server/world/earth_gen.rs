@@ -17,12 +17,19 @@ pub struct EarthGen {
 impl WorldGenerator for EarthGen {
     fn noise(&self) -> GeneratorWrapper<SafeNode> {
         let ground_level = prelude::perlin()
+            .with_feature_scale(1.0)
             .domain_scale(0.02)
             .remap(-1.0, 1.0, -3.0, 3.0)
-            .add(prelude::position_output([0.0, 1.0, 0.0, 0.0], [0.0; 4]).build());
+            .add(
+                prelude::gradient()
+                    .with_multipliers([0.0, 1.0, 0.0, 0.0])
+                    .with_offsets([0.0; 4])
+                    .build(),
+            );
         let ridges = prelude::perlin()
+            .with_feature_scale(1.0)
             .domain_scale(0.1)
-            .ridged(2.0, 3.0, 3, 2.5)
+            .ridged(0.5, 0.0, 3, 2.5)
             .remap(-1.0, 1.0, 1.0, 0.0)
             .powi(2)
             .remap(0.0, 1.0, -1.0, 2.0);
@@ -50,12 +57,24 @@ impl EarthGen {
         let mut noise_out: [MaybeUninit<f32>; CHUNK_VOLUME] = [MaybeUninit::uninit(); CHUNK_VOLUME];
         let out = unsafe { &mut *(noise_out.as_mut_ptr() as *mut [f32; CHUNK_VOLUME]) };
 
-        let start = position * CHUNK_DIM as i32;
-        let dim = CHUNK_DIM as i32;
         let scale = self.config.noise_scale as f32;
+        let start = position.as_vec3() * (CHUNK_DIM as f32 * scale);
+        let dim = CHUNK_DIM as i32;
         let seed = self.config.seed;
         let noise = self.noise();
-        noise.gen_uniform_grid_3d(out, start.z, start.y, start.x, dim, dim, dim, scale, seed);
+        noise.gen_uniform_grid_3d(
+            out,
+            start.z,
+            start.y,
+            start.x,
+            dim,
+            dim,
+            dim,
+            scale,
+            scale,
+            scale,
+            seed,
+        );
 
         // SAFETY: certainly initialized after noise generation
         unsafe { std::mem::transmute(noise_out) }

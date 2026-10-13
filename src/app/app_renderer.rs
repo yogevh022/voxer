@@ -9,10 +9,10 @@ use crate::renderer::resources::vx_buffer::VxBuffer;
 use crate::vtypes::Camera;
 use crate::world::chunk::VoxelChunk;
 use glam::IVec3;
-use std::borrow::Cow;
 use std::sync::Arc;
 use wgpu::{
-    BindGroup, BufferUsages, CommandEncoder, ComputePass, ComputePassDescriptor, RenderPipeline,
+    BindGroup, BufferUsages, CommandEncoder, ComputePass, ComputePassDescriptor,
+    CurrentSurfaceTexture, RenderPipeline, SurfaceStatus,
 };
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -54,10 +54,9 @@ impl AppRenderer<'_> {
 
         let render_pipeline = make_render_pipeline(
             &renderer,
-            resources::shader::render_wgsl().into(),
             &[
-                &atlas_layout,               // 0
-                &chunk_session.render_bgl(), // 1
+                Some(&atlas_layout),               // 0
+                Some(&chunk_session.render_bgl()), // 1
             ],
         );
 
@@ -83,8 +82,17 @@ impl AppRenderer<'_> {
         main_camera: &Camera,
         voxel_culling_distance: u32,
         window_size: PhysicalSize<u32>,
-    ) -> Result<(), wgpu::SurfaceError> {
-        let frame = self.renderer.surface.get_current_texture()?;
+    ) -> Result<(), SurfaceStatus> {
+        let frame = match self.renderer.surface.get_current_texture() {
+            CurrentSurfaceTexture::Success(frame) | CurrentSurfaceTexture::Suboptimal(frame) => {
+                frame
+            }
+            CurrentSurfaceTexture::Timeout => return Err(SurfaceStatus::Timeout),
+            CurrentSurfaceTexture::Occluded => return Err(SurfaceStatus::Occluded),
+            CurrentSurfaceTexture::Outdated => return Err(SurfaceStatus::Outdated),
+            CurrentSurfaceTexture::Lost => return Err(SurfaceStatus::Lost),
+            CurrentSurfaceTexture::Validation => return Err(SurfaceStatus::Validation),
+        };
         let view = frame.texture.create_view(&Default::default());
 
         let camera_view = VxGPUCamera::new(main_camera, voxel_culling_distance, window_size);
@@ -103,8 +111,7 @@ impl AppRenderer<'_> {
         }
 
         self.renderer.queue.submit(Some(encoder.finish()));
-
-        frame.present();
+        self.renderer.queue.present(frame);
         Ok(())
     }
 
@@ -137,18 +144,25 @@ impl AppRenderer<'_> {
 
 pub fn make_render_pipeline(
     renderer: &Renderer<'_>,
-    shader_source: Cow<str>,
-    bind_group_layouts: &[&wgpu::BindGroupLayout],
+    bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
 ) -> RenderPipeline {
-    let shader =
-        resources::shader::create_shader(&renderer.device, shader_source, "render pipeline shader");
+    let vertex_shader = resources::shader::create_shader(
+        &renderer.device,
+        resources::shader::vertex_wgsl().into(),
+        "vertex shader",
+    );
+    let fragment_shader = resources::shader::create_shader(
+        &renderer.device,
+        resources::shader::fragment_wgsl().into(),
+        "fragment shader",
+    );
     let render_pipeline_layout =
         &renderer
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render_pipeline_layout"),
                 bind_group_layouts,
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
     renderer
@@ -157,13 +171,13 @@ pub fn make_render_pipeline(
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &shader,
+                module: &vertex_shader,
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader,
+                module: &fragment_shader,
                 entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
@@ -180,13 +194,13 @@ pub fn make_render_pipeline(
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: Default::default(),
                 bias: Default::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         })
 }

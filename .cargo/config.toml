@@ -1,0 +1,4 @@
+[env]
+# fastnoise2-sys builds the C++ library from this tree. The copy drops MSVC /permissive-,
+# which fails to compile FastNoise2's SIMD generators on VS 2022.
+FASTNOISE2_SOURCE_DIR = { value = "third_party/FastNoise2", relative = true }

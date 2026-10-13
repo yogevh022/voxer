@@ -10,7 +10,7 @@ var<storage, read_write> chunks_meta_buffer: array<GPUVoxelChunkHeader>;
 @group(0) @binding(4)
 var<storage, read_write> meshing_batch_buffer: array<GPUChunkMeshEntry>;
 
-var<push_constant> input_length: u32;
+var<immediate> input_length: u32;
 
 @compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_1D)
 fn chunks_staging_entry(

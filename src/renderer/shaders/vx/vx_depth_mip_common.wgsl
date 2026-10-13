@@ -6,7 +6,7 @@ struct DepthTextureData {
     mip_w: u32,
     mip_h: u32,
 }
-var<push_constant> depth_tex_data: DepthTextureData;
+var<immediate> depth_tex_data: DepthTextureData;
 
 struct MipSrcIndices {
     tl_idx: vec2<i32>,

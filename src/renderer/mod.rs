@@ -30,28 +30,10 @@ pub(crate) struct Renderer<'window> {
 }
 
 impl<'window> Renderer<'window> {
-    const DXC_DLL_PATH: Option<&'static str> = Some(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/renderer/resources/dxc/bin/x64/dxcompiler.dll"
-    ));
-    fn instance(backends: Backends) -> Instance {
-        Instance::new(&wgpu::InstanceDescriptor {
-            backends,
-            flags: Default::default(),
-            memory_budget_thresholds: Default::default(),
-            backend_options: wgpu::BackendOptions {
-                gl: Default::default(),
-                dx12: wgpu::Dx12BackendOptions {
-                    shader_compiler: wgpu::Dx12Compiler::DynamicDxc {
-                        dxc_path: Self::DXC_DLL_PATH.unwrap_or_default().to_string(),
-                        max_shader_model: wgpu::DxcShaderModel::V6_0,
-                    },
-                    presentation_system: Default::default(),
-                    latency_waitable_object: Default::default(),
-                },
-                noop: Default::default(),
-            },
-        })
+    fn instance() -> Instance {
+        let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+        descriptor.backends = Backends::VULKAN;
+        Instance::new(descriptor)
     }
 
     fn high_perf_adapter(instance: &Instance, surface: &Surface) -> Adapter {
@@ -59,6 +41,7 @@ impl<'window> Renderer<'window> {
             power_preference: wgpu::PowerPreference::HighPerformance,
             force_fallback_adapter: false,
             compatible_surface: Some(surface),
+            apply_limit_buckets: false,
         }))
         .unwrap()
     }
@@ -86,6 +69,7 @@ impl<'window> Renderer<'window> {
         SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format: surface_capabilities.formats[0],
+            color_space: wgpu::SurfaceColorSpace::Auto,
             width: size.width,
             height: size.height,
             present_mode: surface_capabilities.present_modes[0],
@@ -96,7 +80,7 @@ impl<'window> Renderer<'window> {
     }
 
     pub fn new(window: Arc<Window>) -> Self {
-        let instance = Renderer::instance(Backends::VULKAN);
+        let instance = Renderer::instance();
         let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = Renderer::high_perf_adapter(&instance, &surface);
         let (device, queue) = Renderer::request_device(
@@ -104,11 +88,12 @@ impl<'window> Renderer<'window> {
             Features::VERTEX_WRITABLE_STORAGE
                 | Features::INDIRECT_FIRST_INSTANCE
                 | Features::MULTI_DRAW_INDIRECT_COUNT
-                | Features::PUSH_CONSTANTS,
+                | Features::IMMEDIATES
+                | Features::SHADER_I16,
             Limits {
-                max_storage_buffer_binding_size: (compute::GIB * 2) as u32 - 1,
+                max_storage_buffer_binding_size: (compute::GIB as u64 * 2) - 4,
                 max_buffer_size: (compute::GIB as u64 * 2) - 1,
-                max_push_constant_size: 128,
+                max_immediate_size: 128,
                 ..Default::default()
             },
         );
@@ -185,6 +170,7 @@ impl<'window> Renderer<'window> {
             }),
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         })
     }
 }

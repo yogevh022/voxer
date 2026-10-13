@@ -4,7 +4,7 @@ use crate::renderer::resources::vx_buffer::VxBuffer;
 use wgpu::{
     BindGroup, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
     BufferBindingType, BufferSize, ComputePipeline, ComputePipelineDescriptor, Device,
-    PipelineLayoutDescriptor, PushConstantRange, ShaderStages, StorageTextureAccess, TextureFormat,
+    PipelineLayoutDescriptor, ShaderStages, StorageTextureAccess, TextureFormat,
     TextureViewDimension,
 };
 
@@ -15,12 +15,14 @@ impl GpuChunkSessionResources {
         device: &Device,
         camera_buffer: &VxBuffer,
         face_data_buffer: &VxBuffer,
+        chunks_meta_buffer: &VxBuffer,
     ) -> (BindGroupLayout, BindGroup) {
         let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some("Chunk Render Bind Group Layout"),
             entries: &[
                 camera_buffer.bind_layout_entry(0, false, ShaderStages::VERTEX),
                 face_data_buffer.bind_layout_entry(1, true, ShaderStages::VERTEX),
+                chunks_meta_buffer.bind_layout_entry(2, true, ShaderStages::VERTEX),
             ],
         });
 
@@ -30,6 +32,7 @@ impl GpuChunkSessionResources {
             entries: &resources::utils::bind_entries([
                 camera_buffer.as_entire_binding(),
                 face_data_buffer.as_entire_binding(),
+                chunks_meta_buffer.as_entire_binding(),
             ]),
         });
         (layout, bind_group)
@@ -274,7 +277,7 @@ impl GpuChunkSessionResources {
 
     pub(crate) fn mdi_args_pipeline(
         device: &Device,
-        bind_group_layouts: &[&BindGroupLayout],
+        bind_group_layouts: &[Option<&BindGroupLayout>],
     ) -> ComputePipeline {
         let shader = resources::shader::create_shader(
             device,
@@ -284,10 +287,7 @@ impl GpuChunkSessionResources {
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Chunk Culled MDI Args Pipeline Layout"),
             bind_group_layouts,
-            push_constant_ranges: &[PushConstantRange {
-                stages: ShaderStages::COMPUTE,
-                range: 0..4,
-            }],
+            immediate_size: 4,
         });
 
         device.create_compute_pipeline(&ComputePipelineDescriptor {
@@ -302,7 +302,7 @@ impl GpuChunkSessionResources {
 
     pub(crate) fn chunk_meshing_pipeline(
         device: &Device,
-        bind_group_layouts: &[&BindGroupLayout],
+        bind_group_layouts: &[Option<&BindGroupLayout>],
     ) -> ComputePipeline {
         let shader = resources::shader::create_shader(
             device,
@@ -312,7 +312,7 @@ impl GpuChunkSessionResources {
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Chunk Meshing Pipeline Layout"),
             bind_group_layouts,
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         device.create_compute_pipeline(&ComputePipelineDescriptor {
@@ -327,7 +327,7 @@ impl GpuChunkSessionResources {
 
     pub(crate) fn chunks_staging_pipeline(
         device: &Device,
-        bind_group_layouts: &[&BindGroupLayout],
+        bind_group_layouts: &[Option<&BindGroupLayout>],
     ) -> ComputePipeline {
         let shader = resources::shader::create_shader(
             device,
@@ -337,10 +337,7 @@ impl GpuChunkSessionResources {
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Chunk Staging Pipeline Layout"),
             bind_group_layouts,
-            push_constant_ranges: &[PushConstantRange {
-                stages: ShaderStages::COMPUTE,
-                range: 0..4,
-            }],
+            immediate_size: 4,
         });
 
         device.create_compute_pipeline(&ComputePipelineDescriptor {
@@ -355,7 +352,7 @@ impl GpuChunkSessionResources {
 
     pub(crate) fn chunks_view_staging_pipeline(
         device: &Device,
-        bind_group_layouts: &[&BindGroupLayout],
+        bind_group_layouts: &[Option<&BindGroupLayout>],
     ) -> ComputePipeline {
         let shader = resources::shader::create_shader(
             device,
@@ -365,10 +362,7 @@ impl GpuChunkSessionResources {
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Chunks View Staging Pipeline Layout"),
             bind_group_layouts,
-            push_constant_ranges: &[PushConstantRange {
-                stages: ShaderStages::COMPUTE,
-                range: 0..4,
-            }],
+            immediate_size: 4,
         });
 
         device.create_compute_pipeline(&ComputePipelineDescriptor {

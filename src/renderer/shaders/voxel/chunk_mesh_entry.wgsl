@@ -1,5 +1,3 @@
-const MAX_DIR_FACES_PER_THREAD: u32 = CHUNK_DIM + VOID_OFFSET;
-
 @group(0) @binding(0)
 var<storage, read> chunks_data_a_buffer: array<GPUVoxelChunkContent>;
 @group(0) @binding(1)
@@ -16,7 +14,7 @@ var<workgroup> wg_chunk_content: GPUVoxelChunkContentWithAdj;
 var<workgroup> wg_chunk_position: vec3<i32>;
 var<workgroup> wg_chunk_index: u32;
 
-var<private> pr_face_data: array<array<GPUVoxelFaceData, MAX_DIR_FACES_PER_THREAD>, 6>;
+var<private> pr_face_data: array<array<GPUVoxelFaceData, CHUNK_DIM>, 6>;
 var<private> pr_face_counts: array<u32, 6> = array<u32, 6>(0u, 0u, 0u, 0u, 0u, 0u);
 
 @compute @workgroup_size(CHUNK_DIM, CHUNK_DIM, 1)
@@ -43,25 +41,22 @@ fn mesh_chunks_entry(
     workgroupBarrier();
 
     // initialize 3d arr with adj blocks included
-    let half_y = lid.y / 2;
-    let y_bit_pos = lid.y & 1u;
-    let offs_x = lid.x + 1;
-    let offs_y = lid.y + 1;
-    let half_offs_y = (lid.y + 2) / 2;
+    let x = lid.x;
+    let y = lid.y;
+    let offs_x = x + 1u;
+    let offs_y = y + 1u;
 
-    if (y_bit_pos == 0u) {
-        wg_chunk_content.blocks[0][offs_x][half_offs_y] = chunks_data_b_buffer[wg_chunk_index].prev_blocks[0u][lid.x][half_y];
-        wg_chunk_content.blocks[offs_x][0][half_offs_y] = chunks_data_b_buffer[wg_chunk_index].prev_blocks[1u][lid.x][half_y];
-        wg_chunk_content.blocks[CHUNK_DIM + 1][offs_x][half_offs_y] = chunks_data_b_buffer[wg_chunk_index].next_blocks[0u][lid.x][half_y];
-        wg_chunk_content.blocks[offs_x][CHUNK_DIM + 1][half_offs_y] = chunks_data_b_buffer[wg_chunk_index].next_blocks[1u][lid.x][half_y];
-    }
-    wg_chunk_content.blocks[offs_x][offs_y][0] = get_u16(chunks_data_b_buffer[wg_chunk_index].prev_blocks[2u][lid.x][half_y], y_bit_pos) >> 16;
-    wg_chunk_content.blocks[offs_x][offs_y][CHUNK_DIM_HALF + 1] = get_u16(chunks_data_b_buffer[wg_chunk_index].next_blocks[2u][lid.x][half_y], y_bit_pos);
+    wg_chunk_content.blocks[0][offs_x][offs_y] = chunks_data_b_buffer[wg_chunk_index].prev_blocks[0][x][y];
+    wg_chunk_content.blocks[offs_x][0][offs_y] = chunks_data_b_buffer[wg_chunk_index].prev_blocks[1][x][y];
+    wg_chunk_content.blocks[CHUNK_DIM + 1u][offs_x][offs_y] = chunks_data_b_buffer[wg_chunk_index].next_blocks[0][x][y];
+    wg_chunk_content.blocks[offs_x][CHUNK_DIM + 1u][offs_y] = chunks_data_b_buffer[wg_chunk_index].next_blocks[1][x][y];
+    wg_chunk_content.blocks[offs_x][offs_y][0] = chunks_data_b_buffer[wg_chunk_index].prev_blocks[2][x][y];
+    wg_chunk_content.blocks[offs_x][offs_y][CHUNK_DIM + 1u] = chunks_data_b_buffer[wg_chunk_index].next_blocks[2][x][y];
 
-    for (var half_z = 0u; half_z < CHUNK_DIM_HALF; half_z++) {
-        wg_chunk_content.blocks[offs_x][offs_y][half_z + 1] = chunks_data_a_buffer[wg_chunk_index].blocks[lid.x][lid.y][half_z];
+    for (var z = 0u; z < CHUNK_DIM; z++) {
+        wg_chunk_content.blocks[offs_x][offs_y][z + 1u] = chunks_data_a_buffer[wg_chunk_index].blocks[x][y][z];
     }
     workgroupBarrier();
 
-    meshing_pass_at(lid.x, lid.y);
+    meshing_pass(lid.x, lid.y);
 }

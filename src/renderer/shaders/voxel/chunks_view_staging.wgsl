@@ -4,7 +4,7 @@ var<storage, read> chunks_view_staging_buffer: array<GPUChunkMeshEntryWrite>;
 @group(0) @binding(1)
 var<storage, read_write> chunks_view_buffer: array<GPUChunkMeshEntry>;
 
-var<push_constant> input_length: u32;
+var<immediate> input_length: u32;
 
 @compute @workgroup_size(CFG_MAX_WORKGROUP_DIM_1D)
 fn chunks_view_staging_entry(
